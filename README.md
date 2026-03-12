@@ -3,8 +3,13 @@
 #### 介绍
 沉香溯源系统app（测试版本控制）
 
-#### 软件架构
-项目主要文件夹结构：
+#### 技术栈
+- 开发语言: 100% Kotlin
+- UI 框架: Jetpack Compose (完全弃用传统的 XML 布局)
+- 架构思想: 单 Activity 架构 (Single Activity Architecture) + 声明式 UI
+
+
+#### 项目目录结构：
 \---com
     \---example
         \---cxsysys
@@ -49,39 +54,44 @@
                         Type.kt
 
 文件解释：
-1.children文件夹：底部Tab“幼苗”“苗木”模块
-ChildrenDetailScreen.kt 幼苗详情页
-ChildrenScreen.kt 幼苗档案管理页
-PlantDetailScreen.kt 苗木详情页
-PlantingScreen.kt 苗木档案管理页
+1.  children文件夹：底部Tab“幼苗”“苗木”模块
 
-2.home文件夹：底部Tab“工作台”模块
-HomeScreen.kt 主页（工作台）页面
+- ChildrenDetailScreen.kt 幼苗详情页
+- ChildrenScreen.kt 幼苗档案管理页
+- PlantDetailScreen.kt 苗木详情页
+- PlantingScreen.kt 苗木档案管理页
 
-3.mine文件夹：底部Tab“我的”模块
-MineScreen.kt 个人主页（我的）页面
 
-4.mother文件夹：底部Tab“母树”模块
-MotherDetailScreen.kt 母树详情页
-MotherScreen.kt 母树资源库页
+2.  home文件夹：底部Tab“工作台”模块
+- HomeScreen.kt 主页（工作台）页面
 
-5.plantation 文件夹：管理工作台页面里的模块
-DiseasePestEntryScreen.kt 病虫害信息录入页
-FertilizerEntryScreen.kt 施肥作业录入页
-GrowthEntryScreen.kt 生长记录录入页
-HarvestEntryScreen.kt 采收香木录入页
-IrrigationEntryScreen.kt 灌溉记录录入页
-PesticideEntryScreen.kt 施药信息录入页
-PlantingEntryScreen.kt 苗木定植录入页
-PruningEntryScreen.kt 剪枝信息录入页
-PunchEntryScreen.kt 打孔结香录入页
-SaplingEntryScreen.kt 幼苗培育录入页
-AgInputManagerScreen.kt 药肥（包括供应商）信息录入页 
-* 包含：供应商录入、农药信息入库、肥料信息入库
-* @param mode 模式: "supplier", "pesticide", "fertilizer"
+3.  mine文件夹：底部Tab“我的”模块
+- MineScreen.kt 个人主页（我的）页面
 
-6.MainScreen.kt 主入口路由配置
+4.  mother文件夹：底部Tab“母树”模块
 
+- MotherDetailScreen.kt 母树详情页
+- MotherScreen.kt 母树资源库页
+- 
+
+5.  plantation 文件夹：管理工作台页面里的模块
+
+- DiseasePestEntryScreen.kt 病虫害信息录入页
+- FertilizerEntryScreen.kt 施肥作业录入页
+- GrowthEntryScreen.kt 生长记录录入页
+- HarvestEntryScreen.kt 采收香木录入页
+- IrrigationEntryScreen.kt 灌溉记录录入页
+- PesticideEntryScreen.kt 施药信息录入页
+- PlantingEntryScreen.kt 苗木定植录入页
+- PruningEntryScreen.kt 剪枝信息录入页
+- PunchEntryScreen.kt 打孔结香录入页
+- SaplingEntryScreen.kt 幼苗培育录入页
+- AgInputManagerScreen.kt 药肥（包括供应商）信息录入页 
+- * 包含：供应商录入、农药信息入库、肥料信息入库
+- * @param mode 模式: "supplier", "pesticide", "fertilizer"
+
+
+6.  MainScreen.kt 主入口路由配置
 
 #### 安装教程
 
