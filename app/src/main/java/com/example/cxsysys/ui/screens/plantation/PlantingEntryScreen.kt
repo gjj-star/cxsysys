@@ -1,0 +1,385 @@
+package com.example.cxsysys.ui.screens.plantation
+
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.cxsysys.ui.theme.AgGreenPrimary
+import com.example.cxsysys.ui.theme.BgGray
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlantingEntryScreen(onBackClick: () -> Unit) {
+    val context = LocalContext.current
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+
+    // --- 表单状态 (对应 V10 plant 表字段) ---
+    // [删除] qrCode 状态 (根据要求删去“苗木二维码”模块)
+    var motherTreeQrCode by remember { mutableStateOf("") } // (V10: mother_tree_qr_code 母树二维码)
+
+    // 沉香品种 (V10: subspecies_id 沉香品种细分id: 0-野生沉香，1-人工白木香，2-人工奇楠沉香)
+    var subspeciesIdLabel by remember { mutableStateOf("2-人工奇楠沉香") }
+    val subspeciesOptions = listOf("0-野生沉香", "1-人工白木香", "2-人工奇楠沉香")
+
+    var generation by remember { mutableStateOf("1") }    // 代数 [后续修改标签为"苗木代数"]
+
+    // (V10: generation_way 育苗方法: 嫁接/扦插/圈枝/组培/其他)
+    var generationWay by remember { mutableStateOf("嫁接") }
+    val generationWayOptions = listOf("嫁接", "扦插", "圈枝", "组培", "其他")
+
+    var plantationField by remember { mutableStateOf("") } // 定植地块 (被移至顶部)
+
+    // 种植规格
+    var caveDepth by remember { mutableStateOf("") }      // 穴深
+    var caveWidth by remember { mutableStateOf("") }      // 穴宽
+    var plantSpacing by remember { mutableStateOf("") }   // 种植间距
+    var plantCount by remember { mutableStateOf("") }     // [新增] 定植数量
+
+    // 定植日期
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+    var plantingDate by remember { mutableStateOf(dateFormat.format(Date())) }
+
+    // UI 状态
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+    var isScanning by remember { mutableStateOf(false) }
+
+    // 模拟扫码
+    fun simulateScan(target: String) {
+        scope.launch {
+            isScanning = true
+            val msg = when(target) {
+                "mother" -> "正在识别母树二维码..."
+                "field" -> "正在识别地块二维码..."
+                else -> "正在识别..."
+            }
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            delay(1500)
+            isScanning = false
+            when(target) {
+                "mother" -> motherTreeQrCode = "MOTHER-2012-A001"
+                "field" -> plantationField = "FIELD-A-03"
+            }
+            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        plantingDate = dateFormat.format(Date(millis))
+                    }
+                    showDatePicker = false
+                }) { Text("确定", color = AgGreenPrimary) }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("取消", color = Color.Gray) } }
+        ) {
+            DatePicker(state = datePickerState, showModeToggle = false)
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("苗木定植录入", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+            )
+        },
+        bottomBar = {
+            Surface(shadowElevation = 8.dp) {
+                Button(
+                    onClick = {
+                        // 简单校验
+                        if (plantationField.isEmpty()) {
+                            Toast.makeText(context, "请扫码或输入地块自编码", Toast.LENGTH_SHORT).show()
+                        } else if (plantCount.isEmpty()) {
+                            Toast.makeText(context, "请输入定植数量", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "苗木定植信息保存成功！", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                ) {
+                    Icon(Icons.Default.Save, contentDescription = null) // 图标改为保存
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("保存信息", fontSize = 16.sp) // 保存信息
+                }
+            }
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BgGray)
+                .padding(padding)
+                .verticalScroll(scrollState)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 1. 扫码关联
+            PlantingScanSection(
+                isScanning = isScanning,
+                onScanClick = { simulateScan("field") } // [修改] 触发地块扫码
+            )
+
+            // 2. 基础信息
+            Text("基础档案", fontWeight = FontWeight.Bold, color = Color.Gray)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // [修改] 将底部的“定植地块”移至此处，替换原来的“苗木二维码”
+                    PlantingInputWithScanField(
+                        label = "定植地块",
+                        value = plantationField,
+                        onValueChange = { plantationField = it },
+                        onScanClick = { simulateScan("field") },
+                        placeholder = "手动输入地块自编码"
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 母树二维码
+                    PlantingInputWithScanField(
+                        label = "母树二维码 (选填)", // (V10: mother_tree_qr_code)
+                        value = motherTreeQrCode,
+                        onValueChange = { motherTreeQrCode = it },
+                        onScanClick = { simulateScan("mother") },
+                        placeholder = "选填，关联母树档案"
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 品种细分
+                    PlantingSelectDropdown(
+                        label = "品种细分",
+                        selectedValue = subspeciesIdLabel,
+                        options = subspeciesOptions,
+                        onValueChange = { subspeciesIdLabel = it }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 育苗方法
+                    PlantingSelectDropdown(
+                        label = "育苗方法",
+                        selectedValue = generationWay,
+                        options = generationWayOptions,
+                        onValueChange = { generationWay = it }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 代数
+                    OutlinedTextField(
+                        value = generation,
+                        onValueChange = { generation = it },
+                        label = { Text("苗木代数") }, // [修改] “代数”改为“苗木代数”
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 定植日期
+                    OutlinedTextField(
+                        value = plantingDate,
+                        onValueChange = { plantingDate = it },
+                        label = { Text("定植日期") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
+                        trailingIcon = {
+                            IconButton(onClick = { showDatePicker = true }) {
+                                Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary)
+                            }
+                        }
+                    )
+                }
+            }
+
+            // 3. 种植规格
+            Text("种植规格", fontWeight = FontWeight.Bold, color = Color.Gray)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // 穴深
+                        OutlinedTextField(
+                            value = caveDepth,
+                            onValueChange = { if (it.all { c -> c.isDigit() }) caveDepth = it },
+                            label = { Text("穴深") },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            trailingIcon = { Text("cm", color = Color.Gray) },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        )
+                        // 穴宽
+                        OutlinedTextField(
+                            value = caveWidth,
+                            onValueChange = { if (it.all { c -> c.isDigit() }) caveWidth = it },
+                            label = { Text("穴宽") },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            trailingIcon = { Text("cm", color = Color.Gray) },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 种植间距
+                    OutlinedTextField(
+                        value = plantSpacing,
+                        onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) plantSpacing = it },
+                        label = { Text("种植间距") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        trailingIcon = { Text("m (米)", color = Color.Gray) },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // [新增] 定植数量
+                    OutlinedTextField(
+                        value = plantCount,
+                        onValueChange = { if (it.all { c -> c.isDigit() }) plantCount = it },
+                        label = { Text("定植数量") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        trailingIcon = { Text("株", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                    )
+                }
+            }
+
+            // [删除] 第 4 模块 "定植位置" 卡片（因为定植地块已被移至上方）
+
+            // 提示信息
+            PlantingInfoTip(text = "系统将根据‘地块自编码’关联生成定植档案。若该苗木为采购幼苗，请确保已在育苗阶段完成基础信息录入。")
+
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
+// =================================================================
+// ⬇️ 组件定义
+// =================================================================
+
+@Composable
+private fun PlantingScanSection(isScanning: Boolean, onScanClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().height(180.dp).clickable { if (!isScanning) onScanClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF263238))
+    ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (isScanning) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = AgGreenPrimary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("识别中...", color = Color.White)
+                }
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.QrCodeScanner, "Scan", tint = Color.White, modifier = Modifier.size(56.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("点击扫描地块二维码", color = Color.White, fontWeight = FontWeight.Medium, fontSize = 16.sp) // [修改] 扫描苗木二维码改为扫描地块二维码
+                    Text("直接关联地块信息", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlantingInputWithScanField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    onScanClick: () -> Unit,
+    placeholder: String = ""
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        placeholder = { Text(placeholder, color = Color.Gray) },
+        modifier = Modifier.fillMaxWidth(),
+        trailingIcon = {
+            IconButton(onClick = onScanClick) {
+                Icon(Icons.Default.DocumentScanner, contentDescription = "Scan", tint = AgGreenPrimary)
+            }
+        },
+        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+    )
+}
+
+// 通用选择下拉框
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlantingSelectDropdown(label: String, selectedValue: String, options: List<String>, onValueChange: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = selectedValue, onValueChange = {}, readOnly = true, label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
+            modifier = Modifier.fillMaxWidth().menuAnchor()
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
+            options.forEach { option ->
+                DropdownMenuItem(text = { Text(option) }, onClick = { onValueChange(option); expanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlantingInfoTip(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFE3F2FD), RoundedCornerShape(8.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(Icons.Default.Info, null, tint = Color(0xFF1976D2), modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = text, color = Color(0xFF0D47A1), fontSize = 12.sp, lineHeight = 18.sp)
+    }
+}
