@@ -39,7 +39,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     // --- 表单状态 ---
-    // [新增] 录入模式：0-个别录入(苗木), 1-批量录入(地块)。生长记录默认多为个别录入
+    // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。生长记录默认多为个别录入
     var inputMode by remember { mutableIntStateOf(0) }
 
     var plant_id by remember { mutableStateOf("") }
@@ -50,7 +50,8 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
 
     // 生长数据
     var treeHeight by remember { mutableStateOf("") }
-    var treeDiameter by remember { mutableStateOf("") } // [修改] 原“地径/直径”改为“树直径”
+    var treeDiameter by remember { mutableStateOf("") }
+    var plantQuantity by remember { mutableStateOf("") } // [新增] 植株主干分枝数
 
     var remark by remember { mutableStateOf("") }
 
@@ -133,7 +134,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // [新增] 1. 模式切换器 (个别/批量)
+            // 1. 模式切换器 (个别/批量)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -175,7 +176,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // [新增] 2. 顶部扫码区 (风格统一，支持动态切换)
+            // 2. 顶部扫码区 (风格统一，支持动态切换)
             GrowthScanSection(
                 isScanning = isScanning,
                 inputMode = inputMode,
@@ -189,7 +190,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // [修改] 关联对象输入：根据模式动态切换标签与扫码提示
+                    // 关联对象输入：根据模式动态切换标签与扫码提示
                     if (inputMode == 0) {
                         GrowthInputWithScanField(
                             label = "苗木二维码",
@@ -233,7 +234,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // [修改] 使用 Row 和 weight(1f) 保证“树高”与“树直径”在视觉上高度一致、完美对齐
+                    // 使用 Row 和 weight(1f) 保证“树高”与“树直径”在视觉上高度一致、完美对齐
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -253,17 +254,31 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                         OutlinedTextField(
                             value = treeDiameter,
                             onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) treeDiameter = it },
-                            label = { Text("树直径") }, // [修改] “地径/直径” 改为 “树直径”
+                            label = { Text("树直径") },
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
                             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // [新增] 植株主干分枝数
+                    OutlinedTextField(
+                        value = plantQuantity,
+                        onValueChange = { if (it.all { c -> c.isDigit() }) plantQuantity = it },
+                        label = { Text("植株主干分枝数") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        trailingIcon = { Text("个", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                    )
                 }
             }
 
-            Text("现场照片", fontWeight = FontWeight.Bold, color = Color.Gray)
+            // [修改] 标题修改为“照片与补充说明”
+            Text("照片与补充说明", fontWeight = FontWeight.Bold, color = Color.Gray)
 
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -298,7 +313,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
 // ⬇️ 内部组件 (前缀 Growth)
 // =================================================================
 
-// [新增] 统一风格的顶部扫码模块
+// 统一风格的顶部扫码模块
 @Composable
 private fun GrowthScanSection(isScanning: Boolean, inputMode: Int, onScanClick: () -> Unit) {
     Card(
@@ -327,7 +342,7 @@ private fun GrowthScanSection(isScanning: Boolean, inputMode: Int, onScanClick: 
     }
 }
 
-// [修改] 统一格式的带扫码功能输入框，移除了原有的 leadingIcon 保持全系统统一
+// 统一格式的带扫码功能输入框，移除了原有的 leadingIcon 保持全系统统一
 @Composable
 private fun GrowthInputWithScanField(
     label: String,
@@ -369,7 +384,8 @@ private fun GrowthPhotoUploadBox(onClick: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.AddAPhoto, contentDescription = "Upload", tint = Color.Gray, modifier = Modifier.size(36.dp))
             Spacer(modifier = Modifier.height(8.dp))
-            Text("点击上传现场照片", color = Color.Gray, fontSize = 14.sp)
+            // [修改] 文本修改为苗木生长状态照片
+            Text("点击上传苗木生长状态照片", color = Color.Gray, fontSize = 14.sp)
         }
     }
 }

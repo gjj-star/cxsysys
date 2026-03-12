@@ -2,9 +2,6 @@ package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,7 +10,6 @@ import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -26,7 +22,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cxsysys.ui.theme.AgGreenPrimary
@@ -65,10 +60,14 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     var irrigation_date by remember { mutableStateOf(dateFormat.format(Date())) }
 
+    // [新增] 灌溉时段 (time_slot)
+    var time_slot by remember { mutableStateOf("9-11时") }
+    val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时")
+
     var irrigation_method by remember { mutableStateOf("滴灌") }
     val methodOptions = listOf("滴灌", "喷灌", "浇灌", "漫灌", "水肥一体化", "其他")
 
-    var water_amount by remember { mutableStateOf("") } // 灌溉量
+    // [删除] var water_amount by remember { mutableStateOf("") } (已删去灌溉量)
     var remark by remember { mutableStateOf("") }
 
     // UI 控制状态
@@ -92,7 +91,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
 
             // 回填逻辑
             if (inputMode == 0) {
-                plant_id = "TREE-IRR-V10-001"
+                plant_id = "TREE-IRR-001"
             } else {
                 if (target == "seedbed") {
                     seedbed_id = "BED-012"
@@ -142,9 +141,8 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                             Toast.makeText(context, "请扫码或输入苗木二维码", Toast.LENGTH_SHORT).show()
                         } else if (inputMode == 1 && (plantation_name.isEmpty() || region_type.isEmpty() || region_id.isEmpty())) {
                             Toast.makeText(context, "请完整选择灌溉区域信息", Toast.LENGTH_SHORT).show()
-                        } else if (water_amount.isEmpty()) {
-                            Toast.makeText(context, "请输入灌溉量", Toast.LENGTH_SHORT).show()
                         } else {
+                            // [删除] 对 water_amount 的非空校验
                             Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
                         }
                     },
@@ -220,7 +218,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                         // 批量记录模式：级联选择
                         // 第一级：种植园
                         IrrigationSelectDropdown(
-                            label = "种植园", // [修改] 去除了 (前置必选)
+                            label = "种植园",
                             selectedValue = plantation_name,
                             options = plantationOptions,
                             onValueChange = {
@@ -237,7 +235,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                             Column {
                                 Spacer(modifier = Modifier.height(16.dp))
                                 IrrigationSelectDropdown(
-                                    label = "区域类型", // [修改] 去除了 (二选一)
+                                    label = "区域类型",
                                     selectedValue = region_type,
                                     options = regionTypeOptions,
                                     onValueChange = {
@@ -267,7 +265,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                         AnimatedVisibility(visible = region_type == "大棚") {
                             Column {
                                 Spacer(modifier = Modifier.height(16.dp))
-                                // [修改] 增加 enabled 限制，大棚编号未填时，苗床编号不可输入且扫码按钮不可用
+                                // 增加 enabled 限制，大棚编号未填时，苗床编号不可输入且扫码按钮不可用
                                 IrrigationInputWithScanField(
                                     label = "苗床编号",
                                     value = seedbed_id,
@@ -295,6 +293,16 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                         },
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // [新增] 灌溉时段
+                    IrrigationSelectDropdown(
+                        label = "灌溉时段",
+                        selectedValue = time_slot,
+                        options = timeSlotOptions,
+                        onValueChange = { time_slot = it }
+                    )
                 }
             }
 
@@ -313,18 +321,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                         onValueChange = { irrigation_method = it }
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 灌溉量
-                    OutlinedTextField(
-                        value = water_amount,
-                        onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) water_amount = it },
-                        label = { Text("灌溉量") },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        trailingIcon = { Text("m³/L", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
-                    )
+                    // [删除] 灌溉量 (water_amount) 输入框相关代码
                 }
             }
 
@@ -383,7 +380,7 @@ private fun IrrigationScanSection(isScanning: Boolean, inputMode: Int, onScanCli
     }
 }
 
-// [修改] 增加 enabled 参数，控制组件是否可点击和输入
+// 增加 enabled 参数，控制组件是否可点击和输入
 @Composable
 private fun IrrigationInputWithScanField(
     label: String,

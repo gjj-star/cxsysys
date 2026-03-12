@@ -45,7 +45,7 @@ data class Pesticide(
 @Composable
 fun PesticideEntryScreen(
     onBackClick: () -> Unit,
-    onNavigateToPesticideAdd: () -> Unit = {} // [新增] 用于跳转至农药信息入库页面
+    onNavigateToPesticideAdd: () -> Unit = {} // 用于跳转至农药信息入库页面
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -69,9 +69,15 @@ fun PesticideEntryScreen(
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     var apply_date by remember { mutableStateOf(dateFormat.format(Date())) }
 
-    var dosage by remember { mutableStateOf("") } // 用量
+    // [新增] 施药时段
+    var pesticide_time by remember { mutableStateOf("9-11时") }
+    val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时")
+
+    // [修改] 剂量与浓度字段
+    var dosage_ml_per_plant by remember { mutableStateOf("") } // 单株用量（ml）
     var method by remember { mutableStateOf("喷雾") } // 施药方式
-    var dilution_ratio by remember { mutableStateOf("") } // 稀释比例
+    var concentration_ppm by remember { mutableStateOf("") } // 稀释浓度（ppm）
+
     var remark by remember { mutableStateOf("") }
 
     // UI 控制
@@ -264,6 +270,16 @@ fun PesticideEntryScreen(
                         },
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // [新增] 施药时段
+                    PesticideDropdownField(
+                        label = "施药时段",
+                        selectedValue = pesticide_time,
+                        options = timeSlotOptions,
+                        onValueChange = { pesticide_time = it }
+                    )
                 }
             }
 
@@ -303,13 +319,14 @@ fun PesticideEntryScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 施药剂量
+                    // [修改] 单株用量
                     OutlinedTextField(
-                        value = dosage,
-                        onValueChange = { dosage = it },
-                        label = { Text("单株/单位剂量") },
+                        value = dosage_ml_per_plant,
+                        onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) dosage_ml_per_plant = it },
+                        label = { Text("单株用量") },
                         modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = { Text("ml/g", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        trailingIcon = { Text("ml", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
                     )
 
@@ -325,13 +342,15 @@ fun PesticideEntryScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 稀释比例
+                    // [修改] 稀释浓度
                     OutlinedTextField(
-                        value = dilution_ratio,
-                        onValueChange = { dilution_ratio = it },
-                        label = { Text("稀释比例") },
-                        placeholder = { Text("如 1:1000", color = Color.Gray) },
+                        value = concentration_ppm,
+                        onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) concentration_ppm = it },
+                        label = { Text("稀释浓度") },
+                        placeholder = { Text("如 1000", color = Color.Gray) },
                         modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        trailingIcon = { Text("ppm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
                     )
                 }
@@ -455,7 +474,7 @@ fun PesticideSelectDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // === 修改点：三个等宽按钮 (顺序：新增 -> 删除 -> 取消) ===
+                // 三个等宽按钮 (顺序：新增 -> 删除 -> 取消)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)

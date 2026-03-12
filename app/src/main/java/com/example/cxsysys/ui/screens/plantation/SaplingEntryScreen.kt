@@ -13,11 +13,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow // [新增] 导入溢出处理
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cxsysys.ui.theme.AgGreenPrimary
@@ -232,12 +235,15 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
 
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         // 代数 (手动输入)
+                        // [修改] 限制在一行显示，超长截断，缩小文字，防止和右边重叠导致换行
                         OutlinedTextField(
                             value = generation,
                             onValueChange = { if (it.length <= 2) generation = it },
-                            label = { Text("代数") },
-                            placeholder = { Text("如: 1") },
+                            label = { Text("代数", maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp) },
+                            placeholder = { Text("如: 1", maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp) },
                             modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
                         )
@@ -308,8 +314,6 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // [修改] 移除了底部的批量生成说明文字
-
             Spacer(modifier = Modifier.height(40.dp))
         }
     }
@@ -334,13 +338,16 @@ private fun SaplingDropdownField(
         onExpandedChange = { if (enabled) expanded = !expanded },
         modifier = Modifier.fillMaxWidth()
     ) {
+        // [修改] 添加 singleLine, maxLines = 1 和 字体大小调整以兼容小屏
         OutlinedTextField(
             value = value,
             onValueChange = {},
-            label = { Text(label) },
-            placeholder = { Text(placeholder) },
+            label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp) },
+            placeholder = { Text(placeholder, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp) },
             readOnly = true,
+            singleLine = true,
             enabled = enabled,
+            textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
             modifier = Modifier.fillMaxWidth().menuAnchor(),
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = OutlinedTextFieldDefaults.colors(
