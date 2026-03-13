@@ -24,7 +24,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
 import kotlinx.coroutines.delay
@@ -32,6 +31,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+// 引入刚刚提取的顶部大卡片公共组件
+import com.example.cxsysys.ui.components.TopScanCard
 
 // --- 数据模型 (模拟数据库表结构) ---
 
@@ -96,8 +97,6 @@ fun FertilizerEntryScreen(
 
     var showSelectFertilizerDialog by remember { mutableStateOf(false) }
 
-    // [删除] showMenu, showAddSupplierDialog, showAddFertilizerDialog 的状态声明
-
     // 选项数据
     val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时", "其他")
     val methodOptions = listOf("穴施", "沟施", "撒施", "环状施肥", "放射状施肥", "打洞填埋", "滴灌", "浇灌", "水肥一体化", "叶面施肥", "涂枝干", "其他")
@@ -132,7 +131,7 @@ fun FertilizerEntryScreen(
         ) { DatePicker(state = datePickerState, showModeToggle = false) }
     }
 
-    // [修改] 肥料选择弹窗逻辑更新
+    // 肥料选择弹窗逻辑更新
     if (showSelectFertilizerDialog) {
         SelectFertilizerDialog(
             suppliers = suppliers,
@@ -144,7 +143,7 @@ fun FertilizerEntryScreen(
             },
             onAddClick = {
                 showSelectFertilizerDialog = false
-                onNavigateToFertilizerAdd() // [新增] 触发跳转
+                onNavigateToFertilizerAdd()
             }
         )
     }
@@ -156,7 +155,6 @@ fun FertilizerEntryScreen(
                 navigationIcon = {
                     IconButton(onClick = onBackClick) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
-                // [删除] 右侧的 actions 块（三个点及下拉菜单全被移除）
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
@@ -194,13 +192,15 @@ fun FertilizerEntryScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. 顶部扫码区
-            FertilizerScanSection(
+            // 1. 顶部扫码区 (复用 TopScanCard)
+            TopScanCard(
                 isScanning = isScanning,
+                title = "点击扫描地块二维码",
+                subtitle = "自动录入关联地块信息",
                 onScanClick = { simulateScan() }
             )
 
-            // 提示信息 (已根据删除右上角菜单做出对应文案调整)
+            // 提示信息
             Row(
                 modifier = Modifier.fillMaxWidth().background(Color(0xFFE8F5E9), RoundedCornerShape(8.dp)).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -217,6 +217,7 @@ fun FertilizerEntryScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    // 注意：这里没有替换为 ScanCodeInputField，保留您原有的单行扫描逻辑
                     FertilizerInputWithScanField(
                         label = "地块 (field_id)",
                         value = field_id,
@@ -266,7 +267,7 @@ fun FertilizerEntryScreen(
                         Text("肥料列表", fontWeight = FontWeight.Bold)
                         TextButton(onClick = { showSelectFertilizerDialog = true }) {
                             Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
-                            Text("选择肥料", color = AgGreenPrimary) // [修改] 文本由“添加肥料”改为“选择肥料”
+                            Text("选择肥料", color = AgGreenPrimary)
                         }
                     }
 
@@ -349,31 +350,7 @@ fun FertilizerEntryScreen(
 // ⬇️ 组件定义 (统一前缀以区分)
 // =================================================================
 
-@Composable
-private fun FertilizerScanSection(isScanning: Boolean, onScanClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().height(180.dp).clickable { if (!isScanning) onScanClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF263238))
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (isScanning) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = AgGreenPrimary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("识别中...", color = Color.White)
-                }
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.QrCodeScanner, null, tint = Color.White, modifier = Modifier.size(56.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("点击扫描地块二维码", color = Color.White, fontWeight = FontWeight.Medium, fontSize = 16.sp)
-                    Text("自动录入关联地块信息", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                }
-            }
-        }
-    }
-}
+// 【删除处】原先的 FertilizerScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
 
 @Composable
 private fun FertilizerInputWithScanField(
@@ -398,9 +375,6 @@ private fun FertilizerInputWithScanField(
     )
 }
 
-// [删除] 原有的 AddSupplierDialog 和 AddFertilizerInfoDialog 及其相关代码
-
-// [修改] 选择肥料弹窗 (更新了标题和底部的三个统一风格按钮)
 @Composable
 fun SelectFertilizerDialog(
     suppliers: List<Supplier>,

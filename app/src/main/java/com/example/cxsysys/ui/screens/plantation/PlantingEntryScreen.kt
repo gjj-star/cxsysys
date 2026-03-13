@@ -31,6 +31,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+// 引入提取的顶部大卡片公共组件
+import com.example.cxsysys.ui.components.TopScanCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,26 +42,25 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     // --- 表单状态 (对应 V10 plant 表字段) ---
-    // [删除] qrCode 状态 (根据要求删去“苗木二维码”模块)
     var motherTreeQrCode by remember { mutableStateOf("") } // (V10: mother_tree_qr_code 母树二维码)
 
     // 沉香品种 (V10: subspecies_id 沉香品种细分id: 0-野生沉香，1-人工白木香，2-人工奇楠沉香)
     var subspeciesIdLabel by remember { mutableStateOf("2-人工奇楠沉香") }
     val subspeciesOptions = listOf("0-野生沉香", "1-人工白木香", "2-人工奇楠沉香")
 
-    var generation by remember { mutableStateOf("1") }    // 代数 [后续修改标签为"苗木代数"]
+    var generation by remember { mutableStateOf("1") }    // 苗木代数
 
     // (V10: generation_way 育苗方法: 嫁接/扦插/圈枝/组培/其他)
     var generationWay by remember { mutableStateOf("嫁接") }
     val generationWayOptions = listOf("嫁接", "扦插", "圈枝", "组培", "其他")
 
-    var plantationField by remember { mutableStateOf("") } // 定植地块 (被移至顶部)
+    var plantationField by remember { mutableStateOf("") } // 定植地块
 
     // 种植规格
     var caveDepth by remember { mutableStateOf("") }      // 穴深
     var caveWidth by remember { mutableStateOf("") }      // 穴宽
     var plantSpacing by remember { mutableStateOf("") }   // 种植间距
-    var plantCount by remember { mutableStateOf("") }     // [新增] 定植数量
+    var plantCount by remember { mutableStateOf("") }     // 定植数量
 
     // 定植日期
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
@@ -134,9 +135,9 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null) // 图标改为保存
+                    Icon(Icons.Default.Save, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存信息", fontSize = 16.sp) // 保存信息
+                    Text("保存信息", fontSize = 16.sp)
                 }
             }
         }
@@ -150,10 +151,12 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. 扫码关联
-            PlantingScanSection(
+            // 1. 扫码关联 (复用公共组件 TopScanCard)
+            TopScanCard(
                 isScanning = isScanning,
-                onScanClick = { simulateScan("field") } // [修改] 触发地块扫码
+                title = "点击扫描地块二维码",
+                subtitle = "直接关联地块信息",
+                onScanClick = { simulateScan("field") }
             )
 
             // 2. 基础信息
@@ -163,7 +166,6 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // [修改] 将底部的“定植地块”移至此处，替换原来的“苗木二维码”
                     PlantingInputWithScanField(
                         label = "定植地块",
                         value = plantationField,
@@ -175,7 +177,7 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
 
                     // 母树二维码
                     PlantingInputWithScanField(
-                        label = "母树二维码 (选填)", // (V10: mother_tree_qr_code)
+                        label = "母树二维码 (选填)",
                         value = motherTreeQrCode,
                         onValueChange = { motherTreeQrCode = it },
                         onScanClick = { simulateScan("mother") },
@@ -205,7 +207,7 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                     OutlinedTextField(
                         value = generation,
                         onValueChange = { generation = it },
-                        label = { Text("苗木代数") }, // [修改] “代数”改为“苗木代数”
+                        label = { Text("苗木代数") },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
@@ -286,8 +288,6 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // [删除] 第 4 模块 "定植位置" 卡片（因为定植地块已被移至上方）
-
             // 提示信息
             PlantingInfoTip(text = "系统将根据‘地块自编码’关联生成定植档案。若该苗木为采购幼苗，请确保已在育苗阶段完成基础信息录入。")
 
@@ -300,31 +300,7 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
 // ⬇️ 组件定义
 // =================================================================
 
-@Composable
-private fun PlantingScanSection(isScanning: Boolean, onScanClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().height(180.dp).clickable { if (!isScanning) onScanClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF263238))
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (isScanning) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = AgGreenPrimary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("识别中...", color = Color.White)
-                }
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.QrCodeScanner, "Scan", tint = Color.White, modifier = Modifier.size(56.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("点击扫描地块二维码", color = Color.White, fontWeight = FontWeight.Medium, fontSize = 16.sp) // [修改] 扫描苗木二维码改为扫描地块二维码
-                    Text("直接关联地块信息", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                }
-            }
-        }
-    }
-}
+// 【删除处】原有的 PlantingScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
 
 @Composable
 private fun PlantingInputWithScanField(

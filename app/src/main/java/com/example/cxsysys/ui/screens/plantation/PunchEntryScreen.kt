@@ -33,6 +33,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+// 引入刚刚提取的公共扫码组件
+import com.example.cxsysys.ui.components.ScanCodeInputField
 
 /**
  * 打孔结香录入页面
@@ -186,7 +188,8 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     if (inputMode == 0) {
-                        PunchingInputWithScanField(
+                        // 【替换处1】使用提取出的公共组件
+                        ScanCodeInputField(
                             label = "苗木二维码",
                             value = plant_id,
                             onValueChange = { plant_id = it },
@@ -194,7 +197,8 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
                             placeholder = "手动输入苗木二维码"
                         )
                     } else {
-                        PunchingInputWithScanField(
+                        // 【替换处2】使用提取出的公共组件
+                        ScanCodeInputField(
                             label = "定植地块",
                             value = field_id,
                             onValueChange = { field_id = it },
@@ -305,7 +309,7 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
 }
 
 // =================================================================
-// ⬇️ 内部组件 (前缀 Punching)
+// ⬇️ 内部组件
 // =================================================================
 
 @Composable
@@ -336,28 +340,7 @@ private fun PunchingScanSection(isScanning: Boolean, inputMode: Int, onScanClick
     }
 }
 
-@Composable
-private fun PunchingInputWithScanField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    onScanClick: () -> Unit,
-    placeholder: String = ""
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        placeholder = { Text(placeholder, color = Color.Gray) },
-        modifier = Modifier.fillMaxWidth(),
-        trailingIcon = {
-            IconButton(onClick = onScanClick) {
-                Icon(Icons.Default.DocumentScanner, contentDescription = "Scan", tint = AgGreenPrimary)
-            }
-        },
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
-    )
-}
+// 【删除处】原先的 PunchingInputWithScanField 已经被删除，转为调用引入的公共组件
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

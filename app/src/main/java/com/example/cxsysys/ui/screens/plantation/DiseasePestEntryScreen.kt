@@ -30,8 +30,11 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+// 引入两项公共扫码组件
+import com.example.cxsysys.ui.components.ScanCodeInputField
+import com.example.cxsysys.ui.components.TopScanCard
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) // [修改] 添加 ExperimentalLayoutApi 以支持 FlowRow
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
     val context = LocalContext.current
@@ -46,7 +49,7 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
     var field_id by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
 
-    // [新增] 虫害复选框状态
+    // 虫害复选框状态
     val diseasePestTypes = listOf("蚜虫", "白粉虱", "螨虫", "叶斑病", "屌丝虫", "炭疽病", "卷叶虫", "黄野螟", "枯萎病", "天牛", "根结线虫", "根腐病", "其他")
     val selectedPests = remember { mutableStateListOf<String>() }
 
@@ -62,10 +65,15 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
     fun simulateScan() {
         scope.launch {
             isScanning = true
-            Toast.makeText(context, "正在识别苗木二维码...", Toast.LENGTH_SHORT).show()
+            val msg = if (inputMode == 0) "正在识别苗木二维码..." else "正在识别地块二维码..."
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             delay(1500)
             isScanning = false
-            plant_id = "TREE-2023-PEST-001"
+            if (inputMode == 0) {
+                plant_id = "TREE-2023-PEST-001"
+            } else {
+                field_id = "FIELD-PEST-002"
+            }
             Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
         }
     }
@@ -109,11 +117,10 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         }
 
                         if (!isValid) {
-                            val msg = if (inputMode == 0) "请填写苗木ID" else "请选择地块"
+                            val msg = if (inputMode == 0) "请填写苗木ID" else "请选择或扫码地块"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else {
                             val target = if (inputMode == 0) "苗木: $plant_id" else "地块: $field_id"
-                            // [修改] Toast 显示选中的虫害
                             val pestInfo = if (selectedPests.isNotEmpty()) "虫害: ${selectedPests.joinToString(",")}" else "未选虫害"
                             Toast.makeText(context, "保存成功！\n$target\n$pestInfo", Toast.LENGTH_SHORT).show()
                         }
@@ -181,13 +188,17 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 2. 根据模式动态显示内容
+            // 2. 顶部扫码大图区 (使用我们新抽离的公共组件 TopScanCard)
+            TopScanCard(
+                isScanning = isScanning,
+                title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
+                subtitle = if (inputMode == 0) "关联苗木ID" else "关联地块编码",
+                onScanClick = { simulateScan() }
+            )
+
+            // 3. 根据模式动态显示内容
             if (inputMode == 0) {
                 // --- 模式A: 按苗木个别录入 ---
-
-                // 扫码卡片
-                DiseaseScanSection(isScanning = isScanning, onScanClick = { simulateScan() })
-
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(12.dp)
@@ -196,8 +207,8 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         Text("关联苗木", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AgGreenPrimary)
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // plant_id 输入框
-                        DiseaseInputWithScanField(
+                        // 使用公共扫码组件
+                        ScanCodeInputField(
                             label = "苗木ID / 二维码",
                             value = plant_id,
                             onValueChange = { plant_id = it },
@@ -216,12 +227,13 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         Text("关联地块", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AgGreenPrimary)
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // field_id 下拉框
-                        DiseaseDropdownField(
-                            label = "选择地块 (field_id)",
+                        // 批量录入同样使用的公共扫码组件
+                        ScanCodeInputField(
+                            label = "定植地块自编码 / 二维码",
                             value = field_id,
-                            placeholder = "请选择发生病害的地块",
-                            onClick = { Toast.makeText(context, "地块下拉框开发中", Toast.LENGTH_SHORT).show() }
+                            onValueChange = { field_id = it },
+                            onScanClick = { simulateScan() },
+                            placeholder = "扫码或手动输入地块编码"
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -236,7 +248,7 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 3. 公共字段 (日期、描述、照片)
+            // 4. 公共字段 (日期、描述、照片)
             Text("详细信息", fontWeight = FontWeight.Bold, color = Color.Gray)
 
             Card(
@@ -259,7 +271,7 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // [新增] 虫害复选框区域
+                    // 虫害复选框区域
                     Text("主要病虫害（可多选）", fontWeight = FontWeight.Medium, color = Color.Gray)
                     Spacer(modifier = Modifier.height(8.dp))
                     FlowRow(
@@ -310,74 +322,9 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
     }
 }
 
-// === 内部组件 (前缀 Disease) ===
+// === 内部组件 ===
 
-@Composable
-private fun DiseaseScanSection(isScanning: Boolean, onScanClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(160.dp)
-            .clickable { if (!isScanning) onScanClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF263238)) // 深色背景
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (isScanning) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = AgGreenPrimary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("识别中...", color = Color.White)
-                }
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.QrCodeScanner,
-                        contentDescription = "Scan",
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "点击扫描苗木二维码",
-                        color = Color.White,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 16.sp
-                    )
-                    Text(
-                        text = "关联苗木ID",
-                        color = Color.Gray,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DiseaseInputWithScanField(label: String, value: String, onValueChange: (String) -> Unit, onScanClick: () -> Unit, placeholder: String) {
-    OutlinedTextField(
-        value = value, onValueChange = onValueChange, label = { Text(label) }, placeholder = { Text(placeholder, color = Color.Gray) },
-        modifier = Modifier.fillMaxWidth(),
-        trailingIcon = { IconButton(onClick = onScanClick) { Icon(Icons.Default.QrCodeScanner, null, tint = AgGreenPrimary) } },
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
-    )
-}
-
-@Composable
-private fun DiseaseDropdownField(label: String, value: String, placeholder: String, onClick: () -> Unit) {
-    OutlinedTextField(
-        value = value, onValueChange = {}, label = { Text(label) }, placeholder = { Text(placeholder) }, readOnly = true,
-        modifier = Modifier.fillMaxWidth(),
-        trailingIcon = { Icon(Icons.Default.ArrowDropDown, null) },
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-        interactionSource = remember { MutableInteractionSource() }.also { src ->
-            LaunchedEffect(src) { src.interactions.collect { if (it is PressInteraction.Release) onClick() } }
-        }
-    )
-}
+// 【已删除原有的 DiseaseScanSection 私有方法，全面使用通用组件 TopScanCard】
 
 @Composable
 private fun DiseasePhotoUploadBox(onClick: () -> Unit) {

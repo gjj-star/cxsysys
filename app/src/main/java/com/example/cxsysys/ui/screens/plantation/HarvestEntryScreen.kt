@@ -32,6 +32,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+// 引入刚刚提取的顶部大卡片公共组件
+import com.example.cxsysys.ui.components.TopScanCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -203,11 +205,22 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 2. 顶部扫码区 (动态切换)
-            HarvestScanSection(
+            // 2. 顶部扫码区 (复用公共组件 TopScanCard)
+            val scanTitle = when {
+                inputMode == 1 -> "点击扫描地块二维码"
+                individualTargetType == "苗木" -> "点击扫描苗木二维码"
+                else -> "点击扫描打孔枝干二维码"
+            }
+            val scanSubtitle = when {
+                inputMode == 1 -> "批量录入关联地块采收记录"
+                individualTargetType == "苗木" -> "录入整株苗木采收记录"
+                else -> "录入单个打孔枝干采收记录"
+            }
+
+            TopScanCard(
                 isScanning = isScanning,
-                inputMode = inputMode,
-                individualTargetType = individualTargetType, // 传入具体类型以便动态改文字
+                title = scanTitle,
+                subtitle = scanSubtitle,
                 onScanClick = { simulateScan() }
             )
 
@@ -323,44 +336,7 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
 // ⬇️ 内部组件 (前缀 Harvest)
 // =================================================================
 
-// 顶部扫码模块：根据不同层级准确匹配文本
-@Composable
-private fun HarvestScanSection(isScanning: Boolean, inputMode: Int, individualTargetType: String, onScanClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().height(180.dp).clickable { if (!isScanning) onScanClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF263238))
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (isScanning) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = AgGreenPrimary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("识别中...", color = Color.White)
-                }
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.QrCodeScanner, null, tint = Color.White, modifier = Modifier.size(56.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val title = when {
-                        inputMode == 1 -> "点击扫描地块二维码"
-                        individualTargetType == "苗木" -> "点击扫描苗木二维码"
-                        else -> "点击扫描打孔枝干二维码"
-                    }
-                    Text(title, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 16.sp)
-
-                    val subtitle = when {
-                        inputMode == 1 -> "批量录入关联地块采收记录"
-                        individualTargetType == "苗木" -> "录入整株苗木采收记录"
-                        else -> "录入单个打孔枝干采收记录"
-                    }
-                    Text(subtitle, color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                }
-            }
-        }
-    }
-}
+// 【删除处】原有的 HarvestScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
 
 @Composable
 private fun HarvestInputWithScanField(

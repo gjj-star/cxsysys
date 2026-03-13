@@ -31,6 +31,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+// 引入刚刚提取的顶部大卡片公共组件
+import com.example.cxsysys.ui.components.TopScanCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -190,10 +192,11 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 2. 顶部扫码区
-            IrrigationScanSection(
+            // 2. 顶部扫码区 (复用公共组件 TopScanCard)
+            TopScanCard(
                 isScanning = isScanning,
-                inputMode = inputMode,
+                title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描区域二维码",
+                subtitle = if (inputMode == 0) "直接录入苗木灌溉记录" else "批量录入区域(地块/大棚)灌溉记录",
                 onScanClick = { simulateScan() }
             )
 
@@ -352,33 +355,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
 // ⬇️ 内部组件 (前缀 Irrigation)
 // =================================================================
 
-@Composable
-private fun IrrigationScanSection(isScanning: Boolean, inputMode: Int, onScanClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().height(180.dp).clickable { if (!isScanning) onScanClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF263238))
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (isScanning) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = AgGreenPrimary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("识别中...", color = Color.White)
-                }
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.QrCodeScanner, null, tint = Color.White, modifier = Modifier.size(56.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    val title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描区域二维码"
-                    Text(title, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 16.sp)
-                    val subtitle = if (inputMode == 0) "直接录入苗木灌溉记录" else "批量录入区域(地块/大棚)灌溉记录"
-                    Text(subtitle, color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                }
-            }
-        }
-    }
-}
+// 【删除处】原有的 IrrigationScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
 
 // 增加 enabled 参数，控制组件是否可点击和输入
 @Composable

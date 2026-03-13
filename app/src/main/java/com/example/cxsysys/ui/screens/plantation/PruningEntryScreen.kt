@@ -30,6 +30,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+// 引入提取的顶部大卡片公共组件
+import com.example.cxsysys.ui.components.TopScanCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -184,10 +186,11 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 2. 顶部扫码区 (风格统一)
-            PruningScanSection(
+            // 2. 顶部扫码区 (复用公共组件 TopScanCard)
+            TopScanCard(
                 isScanning = isScanning,
-                inputMode = inputMode,
+                title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
+                subtitle = if (inputMode == 0) "直接录入苗木剪枝信息" else "批量录入地块剪枝信息",
                 onScanClick = { simulateScan() }
             )
 
@@ -309,33 +312,7 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
 // ⬇️ 内部组件 (前缀 Pruning)
 // =================================================================
 
-@Composable
-private fun PruningScanSection(isScanning: Boolean, inputMode: Int, onScanClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().height(180.dp).clickable { if (!isScanning) onScanClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF263238))
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (isScanning) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = AgGreenPrimary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("识别中...", color = Color.White)
-                }
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.QrCodeScanner, null, tint = Color.White, modifier = Modifier.size(56.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    val title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码"
-                    Text(title, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 16.sp)
-                    val subtitle = if (inputMode == 0) "直接录入苗木剪枝信息" else "批量录入地块剪枝信息"
-                    Text(subtitle, color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                }
-            }
-        }
-    }
-}
+// 【删除处】原有的 PruningScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
 
 @Composable
 private fun PruningInputWithScanField(
