@@ -1,22 +1,18 @@
 package com.example.cxsysys.ui.screens.children
 
-import android.widget.Toast
-import androidx.compose.foundation.BorderStroke // [修复] 添加 BorderStroke 引用
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,109 +21,84 @@ import com.example.cxsysys.ui.theme.BgGray
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChildrenDetailScreen(saplingId: String, onBackClick: () -> Unit) {
-    val context = LocalContext.current
+fun ChildrenDetailScreen(seedbedId: String, onBackClick: () -> Unit) {
 
-    // --- 模拟数据状态 ---
-    var qrCode by remember { mutableStateOf(saplingId) } // 幼苗二维码
-    var motherTreeName by remember { mutableStateOf("母树-2012-A001") } // [修改] 中文前缀
-    var generation by remember { mutableStateOf("1") } // 代数
-    var generationWay by remember { mutableStateOf("嫁接") } // 育苗方法
-    var subspeciesName by remember { mutableStateOf("金丝油 (奇楠)") } // 品种
-    var saplingDate by remember { mutableStateOf("2023-10-01") } // 育苗日期
-    var greenhouseName by remember { mutableStateOf("1号智能温室") } // 种植大棚
+    // --- 模拟：联表查询结果 (seedbed + sapling_seedbed) ---
+    // 在真实开发中，这里会由 ViewModel 根据传入的 seedbedId 向后端请求数据
+    val seedbedCode = "SB-001"
+    val greenhouseCode = "GH-A01"
+    val status = 1 // 0空闲 1有苗占用 2停用
+    val length = "10.0"
+    val width = "1.5"
 
-    // 状态: 0正常, 1冻结/售出, 2注销/死亡
-    var status by remember { mutableIntStateOf(0) }
-
-    // 修改弹窗控制
-    var showEditDialog by remember { mutableStateOf(false) }
-    var showStatusDialog by remember { mutableStateOf(false) }
-
-    // 状态描述映射
-    val statusMap = mapOf(0 to "正常/存活", 1 to "冻结/售出", 2 to "注销/死亡")
-    val statusColors = mapOf(0 to AgGreenPrimary, 1 to Color(0xFFFFA000), 2 to Color.Red)
-
-    // 基本信息修改弹窗
-    if (showEditDialog) {
-        AlertDialog(
-            onDismissRequest = { showEditDialog = false },
-            title = { Text("修改幼苗信息") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = greenhouseName,
-                        onValueChange = { greenhouseName = it },
-                        label = { Text("所在大棚") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = generationWay,
-                        onValueChange = { generationWay = it },
-                        label = { Text("育苗方式") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(onClick = { showEditDialog = false; Toast.makeText(context, "已保存修改", Toast.LENGTH_SHORT).show() }, colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)) { Text("保存") }
-            },
-            dismissButton = { TextButton(onClick = { showEditDialog = false }) { Text("取消") } }
-        )
-    }
-
-    // 状态修改弹窗
-    if (showStatusDialog) {
-        AlertDialog(
-            onDismissRequest = { showStatusDialog = false },
-            title = { Text("变更幼苗状态") },
-            text = {
-                Column {
-                    statusMap.forEach { (key, value) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { status = key }
-                                .padding(vertical = 8.dp)
-                        ) {
-                            RadioButton(selected = (status == key), onClick = { status = key })
-                            Text(text = value, modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = { showStatusDialog = false; Toast.makeText(context, "状态已更新", Toast.LENGTH_SHORT).show() }, colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)) { Text("确定") }
-            },
-            dismissButton = { TextButton(onClick = { showStatusDialog = false }) { Text("取消") } }
-        )
-    }
+    // 仅当 status == 1 时才有意义的当前批次数据
+    val speciesName = "白木香"
+    val generation = "1"
+    val generationWay = "扦插"
+    val initialQty = 5000
+    val currentQty = 4850
+    val motherTreeQr = "MT-778899"
+    val saplingDate = "2026-01-15"
+    val entryDate = "2026-02-01"
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("幼苗详情", fontWeight = FontWeight.Bold) },
+                title = { Text("苗床详情", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
-        containerColor = BgGray
-    ) { padding ->
+        bottomBar = {
+            // 底部操作栏：只有在“有苗占用”时才能记录损耗或批量出棚
+            if (status == 1) {
+                Surface(
+                    color = Color.White,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { /* TODO: 弹窗记录死亡损耗 */ },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                        ) {
+                            Text("登记损耗")
+                        }
+                        Button(
+                            onClick = { /* TODO: 批量出棚转移/定植 */ },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                        ) {
+                            Text("出棚/定植")
+                        }
+                    }
+                }
+            }
+        }
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .background(BgGray)
+                .padding(paddingValues)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. 顶部状态卡片
+            // --- 区块 1：苗床硬件档案 ---
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -135,91 +106,107 @@ fun ChildrenDetailScreen(saplingId: String, onBackClick: () -> Unit) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text(subspeciesName, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = AgGreenPrimary)
-                            Text(qrCode, color = Color.Gray, fontSize = 14.sp)
-                        }
-                        // 状态标签 (可点击修改)
-                        Surface(
-                            color = statusColors[status]?.copy(alpha = 0.1f) ?: Color.Gray,
-                            shape = RoundedCornerShape(16.dp),
-                            border = BorderStroke(1.dp, statusColors[status] ?: Color.Gray), // [修复] 使用正确的 BorderStroke
-                            modifier = Modifier.clickable { showStatusDialog = true }
+                        Text("基本信息", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if(status==1) "有苗占用" else if(status==0) "空闲" else "停用",
+                            color = if(status==1) Color(0xFF2196F3) else Color.Gray,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = BgGray)
+
+                    InfoRow("苗床编码", seedbedCode)
+                    InfoRow("所属大棚", greenhouseCode)
+                    InfoRow("规格尺寸", "长 ${length}m × 宽 ${width}m")
+                }
+            }
+
+            // --- 区块 2：当前幼苗批次信息 (有苗时显示) ---
+            if (status == 1) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("当前批次信息", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = BgGray)
+
+                        // 重点数据突出展示
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceAround
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = statusMap[status] ?: "未知",
-                                    color = statusColors[status] ?: Color.Gray,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(Icons.Default.Edit, null, tint = statusColors[status] ?: Color.Gray, modifier = Modifier.size(12.dp))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("初始入棚(株)", fontSize = 12.sp, color = Color.Gray)
+                                Text("$initialQty", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("当前存量(株)", fontSize = 12.sp, color = Color.Gray)
+                                Text("$currentQty", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = AgGreenPrimary)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("耗损率", fontSize = 12.sp, color = Color.Gray)
+                                val lossRate = ((initialQty - currentQty).toFloat() / initialQty * 100)
+                                Text(String.format("%.1f%%", lossRate), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Red)
                             }
                         }
+                        HorizontalDivider(color = BgGray)
+
+                        InfoRow("品种细分", speciesName)
+                        InfoRow("育苗方式", generationWay)
+                        InfoRow("代数", "$generation 代")
+                        InfoRow("母树来源", motherTreeQr)
+                        InfoRow("育苗日期", saplingDate)
+                        InfoRow("入棚日期", entryDate)
                     }
                 }
-            }
 
-            // 2. 详细信息卡片
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("基本档案", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        IconButton(onClick = { showEditDialog = true }, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.Default.Edit, "Edit", tint = Color.Gray)
-                        }
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = BgGray) // [修复] 使用 HorizontalDivider
-
-                    InfoRow("母树来源", motherTreeName)
-                    InfoRow("代数", "$generation 代")
-                    InfoRow("育苗方式", generationWay)
-                    InfoRow("育苗日期", saplingDate)
-                    InfoRow("所属大棚", greenhouseName)
+                // 提示区
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFE3F2FD), RoundedCornerShape(8.dp))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(Icons.Default.Info, null, tint = Color(0xFF1976D2), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "幼苗死亡损耗请及时点击下方“登记损耗”更新数量。待幼苗长成定植移出大棚时，系统会自动记录出棚日期。",
+                        color = Color(0xFF0D47A1),
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
                 }
-            }
-
-            // 3. 提示区
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFE3F2FD), RoundedCornerShape(8.dp))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                Icon(Icons.Default.Info, null, tint = Color(0xFF1976D2), modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "幼苗二维码一经生成不可更改。若幼苗死亡或售出，请点击右上角状态标签进行变更。",
-                    color = Color(0xFF0D47A1),
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp
-                )
+            } else if (status == 0) {
+                // 空闲状态提示
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("当前苗床空闲，等待新批次入棚", color = Color.Gray, fontSize = 14.sp)
+                }
             }
         }
     }
 }
 
+// 辅助组件：渲染详情行
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, color = Color.Gray, fontSize = 14.sp)
-        Text(value, color = Color.DarkGray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(text = label, fontSize = 14.sp, color = Color.Gray)
+        Text(text = value, fontSize = 15.sp, color = Color(0xFF333333), fontWeight = FontWeight.Medium)
     }
 }

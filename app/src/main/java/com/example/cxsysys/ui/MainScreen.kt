@@ -43,7 +43,8 @@ const val ROUTE_MINE = "mine"
 
 // 详情页路由
 const val ROUTE_PLANT_DETAIL = "plant_detail/{plantId}"
-const val ROUTE_SAPLING_DETAIL = "sapling_detail/{saplingId}"
+// [只修改这里] 将参数名改为 seedbedId
+const val ROUTE_SAPLING_DETAIL = "sapling_detail/{seedbedId}"
 const val ROUTE_MOTHER_DETAIL = "mother_detail/{motherId}"
 
 // 作业录入路由
@@ -140,7 +141,8 @@ fun MainScreen() {
             }
             composable(ROUTE_CHILDREN) {
                 ChildrenScreen(
-                    onNavigateToDetail = { saplingId -> navController.navigate("sapling_detail/$saplingId") }
+                    // [只修改这里] 传入 seedbedId
+                    onNavigateToDetail = { seedbedId -> navController.navigate("sapling_detail/$seedbedId") }
                 )
             }
             composable(ROUTE_PLANTING) {
@@ -184,10 +186,11 @@ fun MainScreen() {
 
             composable(
                 route = ROUTE_SAPLING_DETAIL,
-                arguments = listOf(navArgument("saplingId") { type = NavType.StringType })
+                // [只修改这里] 接收参数名改为 seedbedId
+                arguments = listOf(navArgument("seedbedId") { type = NavType.StringType })
             ) { backStackEntry ->
-                val saplingId = backStackEntry.arguments?.getString("saplingId") ?: ""
-                ChildrenDetailScreen(saplingId = saplingId, onBackClick = { navController.popBackStack() })
+                val seedbedId = backStackEntry.arguments?.getString("seedbedId") ?: ""
+                ChildrenDetailScreen(seedbedId = seedbedId, onBackClick = { navController.popBackStack() })
             }
 
             composable(
