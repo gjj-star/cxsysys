@@ -52,8 +52,18 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
 
     // 生长数据
     var treeHeight by remember { mutableStateOf("") }
-    var treeDiameter by remember { mutableStateOf("") }
-    var plantQuantity by remember { mutableStateOf("") } // [新增] 植株主干分枝数
+    // [修改] 将树直径改为地径和胸径
+    var groundDiameter by remember { mutableStateOf("") } // 地径
+    var brestHeightDiameter by remember { mutableStateOf("") } // 胸径
+    // [新增] 幅冠
+    var crownWidth by remember { mutableStateOf("") }
+
+    var plantQuantity by remember { mutableStateOf("") } // 植株主干分枝数
+
+    // [新增] 主干通直度 (下拉框状态)
+    var straightness by remember { mutableStateOf("") }
+    var straightnessExpanded by remember { mutableStateOf(false) }
+    val straightnessOptions = listOf("1 级：通直", "2 级：轻度弯曲", "3 级：严重弯曲")
 
     var remark by remember { mutableStateOf("") }
 
@@ -193,7 +203,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // 关联对象输入：根据模式动态切换标签与扫码提示 (保留原有的单行扫描逻辑，不使用ScanCodeInputField)
+                    // 关联对象输入：根据模式动态切换标签与扫码提示
                     if (inputMode == 0) {
                         GrowthInputWithScanField(
                             label = "苗木二维码",
@@ -237,7 +247,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // 使用 Row 和 weight(1f) 保证“树高”与“树直径”在视觉上高度一致、完美对齐
+                    // 第一行：树高、地径
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -253,11 +263,11 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
                         )
 
-                        // 树直径
+                        // 地径
                         OutlinedTextField(
-                            value = treeDiameter,
-                            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) treeDiameter = it },
-                            label = { Text("树直径") },
+                            value = groundDiameter,
+                            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) groundDiameter = it },
+                            label = { Text("地径") },
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
@@ -267,7 +277,37 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // [新增] 植株主干分枝数
+                    // 第二行：胸径、幅冠
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // 胸径
+                        OutlinedTextField(
+                            value = brestHeightDiameter,
+                            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) brestHeightDiameter = it },
+                            label = { Text("胸径") },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        )
+
+                        // 幅冠
+                        OutlinedTextField(
+                            value = crownWidth,
+                            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) crownWidth = it },
+                            label = { Text("幅冠") },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            trailingIcon = { Text("m", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 第三行：植株主干分枝数
                     OutlinedTextField(
                         value = plantQuantity,
                         onValueChange = { if (it.all { c -> c.isDigit() }) plantQuantity = it },
@@ -277,10 +317,44 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                         trailingIcon = { Text("个", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 第四行：主干通直度 (下拉框)
+                    ExposedDropdownMenuBox(
+                        expanded = straightnessExpanded,
+                        onExpandedChange = { straightnessExpanded = !straightnessExpanded },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            value = straightness,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("主干通直度") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = straightnessExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = straightnessExpanded,
+                            onDismissRequest = { straightnessExpanded = false },
+                            modifier = Modifier.background(Color.White)
+                        ) {
+                            straightnessOptions.forEach { selectionOption ->
+                                DropdownMenuItem(
+                                    text = { Text(selectionOption) },
+                                    onClick = {
+                                        straightness = selectionOption
+                                        straightnessExpanded = false
+                                    },
+                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
-            // [修改] 标题修改为“照片与补充说明”
             Text("照片与补充说明", fontWeight = FontWeight.Bold, color = Color.Gray)
 
             Card(
@@ -315,8 +389,6 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
 // =================================================================
 // ⬇️ 内部组件 (前缀 Growth)
 // =================================================================
-
-// 【删除处】原有的 GrowthScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
 
 // 统一格式的带扫码功能输入框，移除了原有的 leadingIcon 保持全系统统一
 @Composable
@@ -360,7 +432,6 @@ private fun GrowthPhotoUploadBox(onClick: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.AddAPhoto, contentDescription = "Upload", tint = Color.Gray, modifier = Modifier.size(36.dp))
             Spacer(modifier = Modifier.height(8.dp))
-            // [修改] 文本修改为苗木生长状态照片
             Text("点击上传苗木生长状态照片", color = Color.Gray, fontSize = 14.sp)
         }
     }
