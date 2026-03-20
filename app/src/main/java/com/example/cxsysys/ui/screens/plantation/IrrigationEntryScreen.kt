@@ -2,11 +2,14 @@ package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,8 +34,10 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-// 引入刚刚提取的顶部大卡片公共组件
+
+// 引入公共组件
 import com.example.cxsysys.ui.components.TopScanCard
+import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,8 +50,14 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
     // 录入模式：0-个别录入(苗木), 1-批量记录。默认为1
     var inputMode by remember { mutableIntStateOf(1) }
 
-    // 个别录入字段
-    var plant_id by remember { mutableStateOf("") }
+    // 将原本唯一的模式状态拆分为 3 个独立的状态，互不干扰
+    var isPlantSelfCodeMode by remember { mutableStateOf(false) }
+    var isRegionSelfCodeMode by remember { mutableStateOf(false) }
+    var isSeedbedSelfCodeMode by remember { mutableStateOf(false) }
+
+    // 将所有标识对象拆分为二维码与自编码状态
+    var plantQrCode by remember { mutableStateOf("") }
+    var plantSelfCode by remember { mutableStateOf("") }
 
     // 批量录入层级字段 (种植园 -> 大棚/地块 -> 苗床)
     var plantation_name by remember { mutableStateOf("") }
@@ -55,21 +66,22 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
     var region_type by remember { mutableStateOf("") }
     val regionTypeOptions = listOf("地块", "大棚")
 
-    var region_id by remember { mutableStateOf("") }  // 地块或大棚的编号
-    var seedbed_id by remember { mutableStateOf("") } // 苗床编号 (仅大棚有)
+    var regionQrCode by remember { mutableStateOf("") }
+    var regionSelfCode by remember { mutableStateOf("") }
+
+    var seedbedQrCode by remember { mutableStateOf("") }
+    var seedbedSelfCode by remember { mutableStateOf("") }
 
     // 灌溉基本信息
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     var irrigation_date by remember { mutableStateOf(dateFormat.format(Date())) }
 
-    // [新增] 灌溉时段 (time_slot)
     var time_slot by remember { mutableStateOf("9-11时") }
     val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时")
 
     var irrigation_method by remember { mutableStateOf("滴灌") }
     val methodOptions = listOf("滴灌", "喷灌", "浇灌", "漫灌", "水肥一体化", "其他")
 
-    // [删除] var water_amount by remember { mutableStateOf("") } (已删去灌溉量)
     var remark by remember { mutableStateOf("") }
 
     // UI 控制状态
@@ -77,33 +89,47 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
     var isScanning by remember { mutableStateOf(false) }
 
+    // 【极极极关键修复】：智能判断当前处于哪个输入步骤，跟随它的模式决定是否显示大卡片
+    val showTopScanCard = when {
+        inputMode == 0 -> !isPlantSelfCodeMode // 个别模式：看苗木
+        inputMode == 1 -> {
+            if (region_type == "大棚") {
+                val isRegionFilled = regionQrCode.isNotEmpty() || regionSelfCode.isNotEmpty()
+                if (!isRegionFilled) {
+                    !isRegionSelfCodeMode // 第一步：如果大棚还没填，显隐跟随大棚的模式
+                } else {
+                    !isSeedbedSelfCodeMode // 第二步：如果大棚填完了，显隐跟随苗床的模式
+                }
+            } else {
+                !isRegionSelfCodeMode // 地块模式：只有一步，直接跟随地块模式
+            }
+        }
+        else -> true
+    }
+
     // 模拟扫码逻辑
-    fun simulateScan(target: String = "general") {
+    fun simulateScan() {
+        // 【防御性编程】：如果正在扫描，或者卡片按理说不该显示（防止动画退出期间的幽灵点击），直接拦截
+        if (isScanning || !showTopScanCard) return
+
         scope.launch {
             isScanning = true
-            val msg = when (target) {
-                "plant" -> "正在识别苗木二维码..."
-                "region" -> "正在识别区域二维码..."
-                "seedbed" -> "正在识别苗床二维码..."
-                else -> if (inputMode == 0) "正在识别苗木二维码..." else "正在识别区域二维码..."
-            }
+            val msg = if (inputMode == 0) "正在识别苗木二维码..." else "正在识别区域/苗床二维码..."
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             delay(1500)
             isScanning = false
 
-            // 回填逻辑
+            // 回填逻辑，同时【强制】将对应模式切换回“扫码模式(false)”，确保 UI 一定能渲染出扫出来的 qrCode
             if (inputMode == 0) {
-                plant_id = "TREE-IRR-001"
+                isPlantSelfCodeMode = false
+                plantQrCode = "TREE-IRR-001"
             } else {
-                if (target == "seedbed") {
-                    seedbed_id = "BED-012"
-                } else {
-                    // 批量模式扫主码，自动填满所有层级演示级联效果
-                    plantation_name = "茂名核心种植园"
-                    region_type = "大棚"
-                    region_id = "GH-A-01"
-                    seedbed_id = "BED-012"
-                }
+                isRegionSelfCodeMode = false
+                isSeedbedSelfCodeMode = false
+                plantation_name = "茂名核心种植园"
+                region_type = "大棚"
+                regionQrCode = "GH-A-01"
+                seedbedQrCode = "BED-012"
             }
             Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
         }
@@ -138,13 +164,14 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 简单校验
-                        if (inputMode == 0 && plant_id.isEmpty()) {
-                            Toast.makeText(context, "请扫码或输入苗木二维码", Toast.LENGTH_SHORT).show()
-                        } else if (inputMode == 1 && (plantation_name.isEmpty() || region_type.isEmpty() || region_id.isEmpty())) {
-                            Toast.makeText(context, "请完整选择灌溉区域信息", Toast.LENGTH_SHORT).show()
+                        val isPlantValid = plantQrCode.isNotEmpty() || plantSelfCode.isNotEmpty()
+                        val isRegionValid = regionQrCode.isNotEmpty() || regionSelfCode.isNotEmpty()
+
+                        if (inputMode == 0 && !isPlantValid) {
+                            Toast.makeText(context, "请扫码或输入苗木编码", Toast.LENGTH_SHORT).show()
+                        } else if (inputMode == 1 && (plantation_name.isEmpty() || region_type.isEmpty() || !isRegionValid)) {
+                            Toast.makeText(context, "请完整填写灌溉区域信息", Toast.LENGTH_SHORT).show()
                         } else {
-                            // [删除] 对 water_amount 的非空校验
                             Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
                         }
                     },
@@ -192,13 +219,19 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 2. 顶部扫码区 (复用公共组件 TopScanCard)
-            TopScanCard(
-                isScanning = isScanning,
-                title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描区域二维码",
-                subtitle = if (inputMode == 0) "直接录入苗木灌溉记录" else "批量录入区域(地块/大棚)灌溉记录",
-                onScanClick = { simulateScan() }
-            )
+            // 2. 顶部扫码区 (加入平滑的收起动画)
+            AnimatedVisibility(
+                visible = showTopScanCard, // 使用刚计算出的智能布尔值
+                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+            ) {
+                TopScanCard(
+                    isScanning = isScanning,
+                    title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描区域/苗床二维码",
+                    subtitle = if (inputMode == 0) "直接录入苗木灌溉记录" else "批量录入区域(地块/大棚)灌溉记录",
+                    onScanClick = { simulateScan() }
+                )
+            }
 
             Text("作业基本信息", fontWeight = FontWeight.Bold, color = Color.Gray)
 
@@ -209,16 +242,18 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     // 层级联动的关联对象输入
                     if (inputMode == 0) {
-                        IrrigationInputWithScanField(
-                            label = "苗木二维码",
-                            value = plant_id,
-                            onValueChange = { plant_id = it },
-                            onScanClick = { simulateScan("plant") },
-                            placeholder = "手动输入苗木二维码"
+                        DualModeIdentifierField(
+                            targetName = "苗木",
+                            qrCodeValue = plantQrCode,
+                            onQrCodeChange = { plantQrCode = it },
+                            selfCodeValue = plantSelfCode,
+                            onSelfCodeChange = { plantSelfCode = it },
+                            isSelfCodeMode = isPlantSelfCodeMode,
+                            onModeChange = { isPlantSelfCodeMode = it },// 绑定苗木的独立状态
+                            onScanClick = { simulateScan() }
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                     } else {
-                        // 批量记录模式：级联选择
                         // 第一级：种植园
                         IrrigationSelectDropdown(
                             label = "种植园",
@@ -226,14 +261,18 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                             options = plantationOptions,
                             onValueChange = {
                                 plantation_name = it
-                                // 切换园子时重置下级
+                                // 切换园子时重置所有下级数据和模式
                                 region_type = ""
-                                region_id = ""
-                                seedbed_id = ""
+                                regionQrCode = ""
+                                regionSelfCode = ""
+                                seedbedQrCode = ""
+                                seedbedSelfCode = ""
+                                isRegionSelfCodeMode = false
+                                isSeedbedSelfCodeMode = false
                             }
                         )
 
-                        // 第二级：选择地块或大棚 (前提是已选种植园)
+                        // 第二级：选择地块或大棚
                         AnimatedVisibility(visible = plantation_name.isNotEmpty()) {
                             Column {
                                 Spacer(modifier = Modifier.height(16.dp))
@@ -243,8 +282,12 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                                     options = regionTypeOptions,
                                     onValueChange = {
                                         region_type = it
-                                        region_id = ""
-                                        seedbed_id = ""
+                                        regionQrCode = ""
+                                        regionSelfCode = ""
+                                        seedbedQrCode = ""
+                                        seedbedSelfCode = ""
+                                        isRegionSelfCodeMode = false
+                                        isSeedbedSelfCodeMode = false
                                     }
                                 )
                             }
@@ -254,12 +297,15 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                         AnimatedVisibility(visible = region_type.isNotEmpty()) {
                             Column {
                                 Spacer(modifier = Modifier.height(16.dp))
-                                IrrigationInputWithScanField(
-                                    label = "${region_type}编号",
-                                    value = region_id,
-                                    onValueChange = { region_id = it },
-                                    onScanClick = { simulateScan("region") },
-                                    placeholder = "手动输入或扫码"
+                                DualModeIdentifierField(
+                                    targetName = region_type,
+                                    qrCodeValue = regionQrCode,
+                                    onQrCodeChange = { regionQrCode = it },
+                                    selfCodeValue = regionSelfCode,
+                                    onSelfCodeChange = { regionSelfCode = it },
+                                    isSelfCodeMode = isRegionSelfCodeMode,
+                                    onModeChange = { isRegionSelfCodeMode = it }, // 绑定大棚/地块的独立状态
+                                    onScanClick = { simulateScan() }
                                 )
                             }
                         }
@@ -268,15 +314,32 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                         AnimatedVisibility(visible = region_type == "大棚") {
                             Column {
                                 Spacer(modifier = Modifier.height(16.dp))
-                                // 增加 enabled 限制，大棚编号未填时，苗床编号不可输入且扫码按钮不可用
-                                IrrigationInputWithScanField(
-                                    label = "苗床编号",
-                                    value = seedbed_id,
-                                    onValueChange = { seedbed_id = it },
-                                    onScanClick = { simulateScan("seedbed") },
-                                    placeholder = if (region_id.isEmpty()) "请先输入大棚编号" else "手动输入或扫码",
-                                    enabled = region_id.isNotEmpty()
-                                )
+                                val isRegionFilled = regionQrCode.isNotEmpty() || regionSelfCode.isNotEmpty()
+                                if (isRegionFilled) {
+                                    DualModeIdentifierField(
+                                        targetName = "苗床",
+                                        qrCodeValue = seedbedQrCode,
+                                        onQrCodeChange = { seedbedQrCode = it },
+                                        selfCodeValue = seedbedSelfCode,
+                                        onSelfCodeChange = { seedbedSelfCode = it },
+                                        isSelfCodeMode = isSeedbedSelfCodeMode,
+                                        onModeChange = { isSeedbedSelfCodeMode = it }, // 绑定苗床的独立状态
+                                        onScanClick = { simulateScan() }
+                                    )
+                                } else {
+                                    OutlinedTextField(
+                                        value = "",
+                                        onValueChange = {},
+                                        label = { Text("苗床编号") },
+                                        placeholder = { Text("请先确定上方大棚编号", color = Color.Gray, fontSize = 14.sp) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled = false,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            disabledBorderColor = Color(0xFFE0E0E0),
+                                            disabledLabelColor = Color.Gray
+                                        )
+                                    )
+                                }
                             }
                         }
 
@@ -287,6 +350,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                     OutlinedTextField(
                         value = irrigation_date,
                         onValueChange = { irrigation_date = it },
+                        readOnly = true, // 防止键盘弹起
                         label = { Text("灌溉日期") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
@@ -299,7 +363,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // [新增] 灌溉时段
+                    // 灌溉时段
                     IrrigationSelectDropdown(
                         label = "灌溉时段",
                         selectedValue = time_slot,
@@ -323,8 +387,6 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                         options = methodOptions,
                         onValueChange = { irrigation_method = it }
                     )
-
-                    // [删除] 灌溉量 (water_amount) 输入框相关代码
                 }
             }
 
@@ -349,48 +411,6 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
             Spacer(modifier = Modifier.height(60.dp))
         }
     }
-}
-
-// =================================================================
-// ⬇️ 内部组件 (前缀 Irrigation)
-// =================================================================
-
-// 【删除处】原有的 IrrigationScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
-
-// 增加 enabled 参数，控制组件是否可点击和输入
-@Composable
-private fun IrrigationInputWithScanField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    onScanClick: () -> Unit,
-    placeholder: String = "",
-    enabled: Boolean = true
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        placeholder = { Text(placeholder, color = Color.Gray) },
-        modifier = Modifier.fillMaxWidth(),
-        enabled = enabled,
-        trailingIcon = {
-            IconButton(onClick = onScanClick, enabled = enabled) {
-                Icon(
-                    Icons.Default.DocumentScanner,
-                    contentDescription = "Scan",
-                    tint = if (enabled) AgGreenPrimary else Color.Gray
-                )
-            }
-        },
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = AgGreenPrimary,
-            focusedLabelColor = AgGreenPrimary,
-            disabledBorderColor = Color.LightGray,
-            disabledLabelColor = Color.Gray,
-            disabledTextColor = Color.Gray
-        )
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

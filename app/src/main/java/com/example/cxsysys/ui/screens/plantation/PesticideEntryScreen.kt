@@ -1,6 +1,12 @@
 package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,8 +37,10 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-// 引入提取的顶部大卡片公共组件
+
+// 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
+import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 // --- 数据模型 ---
 data class Pesticide(
@@ -63,19 +71,26 @@ fun PesticideEntryScreen(
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1 (大部分情境为批量)
     var inputMode by remember { mutableIntStateOf(1) }
 
-    var plant_id by remember { mutableStateOf("") } // 苗木ID
-    var field_id by remember { mutableStateOf("") } // 地块ID
+    // 【新增点】：将自编码模式状态上提至父页面
+    var isSelfCodeMode by remember { mutableStateOf(false) }
+
+    // 【修改点】：将原先的 ID 拆分为二维码和自编码
+    var plantQrCode by remember { mutableStateOf("") }
+    var plantSelfCode by remember { mutableStateOf("") }
+
+    var fieldQrCode by remember { mutableStateOf("") }
+    var fieldSelfCode by remember { mutableStateOf("") }
 
     var selectedPesticide by remember { mutableStateOf<Pesticide?>(null) }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     var apply_date by remember { mutableStateOf(dateFormat.format(Date())) }
 
-    // [新增] 施药时段
+    // 施药时段
     var pesticide_time by remember { mutableStateOf("9-11时") }
     val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时")
 
-    // [修改] 剂量与浓度字段
+    // 剂量与浓度字段
     var dosage_ml_per_plant by remember { mutableStateOf("") } // 单株用量（ml）
     var method by remember { mutableStateOf("喷雾") } // 施药方式
     var concentration_ppm by remember { mutableStateOf("") } // 稀释浓度（ppm）
@@ -98,10 +113,11 @@ fun PesticideEntryScreen(
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             delay(1500)
             isScanning = false
+            // 扫码成功填入二维码字段
             if (inputMode == 0) {
-                plant_id = "TREE-PEST-2023-001"
+                plantQrCode = "TREE-PEST-2023-001"
             } else {
-                field_id = "FIELD-PEST-B05"
+                fieldQrCode = "FIELD-PEST-B05"
             }
             Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
         }
@@ -152,9 +168,15 @@ fun PesticideEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        val targetValid = if (inputMode == 0) plant_id.isNotEmpty() else field_id.isNotEmpty()
+                        // 【修改点】：根据拆分后的状态进行校验
+                        val targetValid = if (inputMode == 0) {
+                            plantQrCode.isNotEmpty() || plantSelfCode.isNotEmpty()
+                        } else {
+                            fieldQrCode.isNotEmpty() || fieldSelfCode.isNotEmpty()
+                        }
+
                         if (!targetValid) {
-                            val msg = if (inputMode == 0) "请扫码或输入苗木二维码" else "请扫码或输入地块自编码"
+                            val msg = if (inputMode == 0) "请扫码或输入苗木编码" else "请扫码或输入地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else if (selectedPesticide == null) {
                             Toast.makeText(context, "请选择农药", Toast.LENGTH_SHORT).show()
@@ -224,13 +246,19 @@ fun PesticideEntryScreen(
                 }
             }
 
-            // 2. 顶部扫码区 (复用公共组件 TopScanCard)
-            TopScanCard(
-                isScanning = isScanning,
-                title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
-                subtitle = if (inputMode == 0) "直接录入关联苗木施药记录" else "批量录入关联地块施药记录",
-                onScanClick = { simulateScan() }
-            )
+            // 2. 顶部扫码区 (加入平滑的收起动画)
+            AnimatedVisibility(
+                visible = !isSelfCodeMode,
+                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+            ) {
+                TopScanCard(
+                    isScanning = isScanning,
+                    title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
+                    subtitle = if (inputMode == 0) "直接录入关联苗木施药记录" else "批量录入关联地块施药记录",
+                    onScanClick = { simulateScan() }
+                )
+            }
 
             Text("作业基本信息", fontWeight = FontWeight.Bold, color = Color.Gray)
 
@@ -239,22 +267,28 @@ fun PesticideEntryScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // 关联对象输入：根据模式动态切换标签与扫码逻辑
+                    // 关联对象输入：根据模式动态切换标签与组件
                     if (inputMode == 0) {
-                        PesticideInputWithScanField(
-                            label = "苗木二维码",
-                            value = plant_id,
-                            onValueChange = { plant_id = it },
-                            onScanClick = { simulateScan() },
-                            placeholder = "手动输入苗木二维码"
+                        DualModeIdentifierField(
+                            targetName = "苗木",
+                            qrCodeValue = plantQrCode,
+                            onQrCodeChange = { plantQrCode = it },
+                            selfCodeValue = plantSelfCode,
+                            onSelfCodeChange = { plantSelfCode = it },
+                            isSelfCodeMode = isSelfCodeMode,
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
                         )
                     } else {
-                        PesticideInputWithScanField(
-                            label = "定植地块",
-                            value = field_id,
-                            onValueChange = { field_id = it },
-                            onScanClick = { simulateScan() },
-                            placeholder = "手动输入地块自编码"
+                        DualModeIdentifierField(
+                            targetName = "定植地块",
+                            qrCodeValue = fieldQrCode,
+                            onQrCodeChange = { fieldQrCode = it },
+                            selfCodeValue = fieldSelfCode,
+                            onSelfCodeChange = { fieldSelfCode = it },
+                            isSelfCodeMode = isSelfCodeMode,
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
                         )
                     }
 
@@ -264,6 +298,7 @@ fun PesticideEntryScreen(
                     OutlinedTextField(
                         value = apply_date,
                         onValueChange = { apply_date = it },
+                        readOnly = true, // 防止点开弹出键盘
                         label = { Text("施药日期") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
@@ -276,7 +311,7 @@ fun PesticideEntryScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // [新增] 施药时段
+                    // 施药时段
                     PesticideDropdownField(
                         label = "施药时段",
                         selectedValue = pesticide_time,
@@ -322,7 +357,7 @@ fun PesticideEntryScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // [修改] 单株用量
+                    // 单株用量
                     OutlinedTextField(
                         value = dosage_ml_per_plant,
                         onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) dosage_ml_per_plant = it },
@@ -345,7 +380,7 @@ fun PesticideEntryScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // [修改] 稀释浓度
+                    // 稀释浓度
                     OutlinedTextField(
                         value = concentration_ppm,
                         onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) concentration_ppm = it },
@@ -384,31 +419,7 @@ fun PesticideEntryScreen(
 // ⬇️ 内部组件
 // =================================================================
 
-// 【删除处】原有的 PesticideScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
-
-// 带扫码功能的输入框组件
-@Composable
-private fun PesticideInputWithScanField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    onScanClick: () -> Unit,
-    placeholder: String = ""
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        placeholder = { Text(placeholder, color = Color.Gray) },
-        modifier = Modifier.fillMaxWidth(),
-        trailingIcon = {
-            IconButton(onClick = onScanClick) {
-                Icon(Icons.Default.DocumentScanner, contentDescription = "Scan", tint = AgGreenPrimary)
-            }
-        },
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
-    )
-}
+// 【注】：原有的 PesticideInputWithScanField 已经被删除，复用了统一样式的 DualModeIdentifierField
 
 // 选择药剂弹窗
 @Composable

@@ -30,6 +30,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+// 引入提取的顶部大卡片公共组件
+import com.example.cxsysys.ui.components.TopScanCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,7 +58,9 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
     var greenhouse_name by remember { mutableStateOf("") } // 选中的大棚
     var seedbed_code by remember { mutableStateOf("") }   // 选中的苗床 (seedbed_id)
 
-    var mother_tree_qr by remember { mutableStateOf("") } // mother_tree_qr_code
+    // [修改] 母树自编码
+    var mother_tree_self_code by remember { mutableStateOf("") } // mother_tree_self_code
+
     var generation by remember { mutableStateOf("") }     // 代数
     var subspecies by remember { mutableStateOf("") }     // subspecies_id
     var generation_way by remember { mutableStateOf("") } // generation_way
@@ -76,16 +80,6 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
 
     // 动态获取当前大棚下的苗床列表
     val currentSeedbedOptions = seedbedData[greenhouse_name] ?: emptyList()
-
-    // [新增] 模拟母树扫码功能
-    fun simulateMotherTreeScan() {
-        scope.launch {
-            Toast.makeText(context, "正在识别母树二维码...", Toast.LENGTH_SHORT).show()
-            delay(1500) // 模拟耗时
-            mother_tree_qr = "MT-GEN-2023001" // 模拟扫码结果
-            Toast.makeText(context, "扫码成功：已关联母树", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     // --- 日期选择器逻辑 ---
     if (showSaplingDatePicker) {
@@ -204,20 +198,19 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // [修改] 母树二维码：选填，带扫码功能
+                    // [修改] 母树自编码：选填，改为普通的单行文本输入框，无扫码功能
                     OutlinedTextField(
-                        value = mother_tree_qr,
-                        onValueChange = { mother_tree_qr = it },
-                        label = { Text("母树二维码 (选填)") },
-                        placeholder = { Text("请输入或扫码") },
+                        value = mother_tree_self_code,
+                        onValueChange = { mother_tree_self_code = it },
+                        label = { Text("母树自编码 (选填)") },
+                        placeholder = { Text("选填，关联母树档案", color = Color.Gray, fontSize = 14.sp) },
                         modifier = Modifier.fillMaxWidth(),
-                        // [新增] 扫码按钮
-                        trailingIcon = {
-                            IconButton(onClick = { simulateMotherTreeScan() }) {
-                                Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan", tint = AgGreenPrimary)
-                            }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AgGreenPrimary,
+                            focusedLabelColor = AgGreenPrimary,
+                            unfocusedBorderColor = Color(0xFFE0E0E0)
+                        )
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))

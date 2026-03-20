@@ -33,8 +33,9 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-// 引入刚刚提取的公共扫码组件
-import com.example.cxsysys.ui.components.ScanCodeInputField
+
+// 引入刚刚提取的双模式扫码组件
+import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 /**
  * 打孔结香录入页面
@@ -51,8 +52,15 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1
     var inputMode by remember { mutableIntStateOf(1) }
 
-    var plant_id by remember { mutableStateOf("") }
-    var field_id by remember { mutableStateOf("") }
+    // 【新增点】：将自编码模式状态上提至父页面
+    var isSelfCodeMode by remember { mutableStateOf(false) }
+
+    // 适配新组件，拆分为二维码和自编码状态
+    var plant_qr_code by remember { mutableStateOf("") }
+    var plant_self_code by remember { mutableStateOf("") }
+
+    var field_qr_code by remember { mutableStateOf("") }
+    var field_self_code by remember { mutableStateOf("") }
 
     // punch_date varchar(8) 打孔日期
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
@@ -62,7 +70,7 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
     var time_slot by remember { mutableStateOf("9-11时") }
     val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时")
 
-    // [修改/新增] 结香规格字段
+    // 结香规格字段
     var hole_depth by remember { mutableStateOf("") }      // hole_depth 平均孔深 (cm)
     var hole_diameter by remember { mutableStateOf("") }   // hole_diameter 孔径 (mm)
     var hole_pitch by remember { mutableStateOf("") }      // hole_pitch 平均孔距 (cm)
@@ -83,10 +91,11 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             delay(1500)
             isScanning = false
+            // 扫码成功后，赋值给对应的 qr_code 变量
             if (inputMode == 0) {
-                plant_id = "TREE-PUNCH-V10-099"
+                plant_qr_code = "TREE-PUNCH-V10-099"
             } else {
-                field_id = "FIELD-PUNCH-V10-C03"
+                field_qr_code = "FIELD-PUNCH-V10-C03"
             }
             Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
         }
@@ -121,9 +130,15 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        val targetValid = if (inputMode == 0) plant_id.isNotEmpty() else field_id.isNotEmpty()
+                        // 校验逻辑更新，二维码或自编码填写一项即可
+                        val targetValid = if (inputMode == 0) {
+                            plant_qr_code.isNotEmpty() || plant_self_code.isNotEmpty()
+                        } else {
+                            field_qr_code.isNotEmpty() || field_self_code.isNotEmpty()
+                        }
+
                         if (!targetValid) {
-                            val msg = if (inputMode == 0) "请扫码或输入苗木二维码" else "请扫码或输入地块自编码"
+                            val msg = if (inputMode == 0) "请扫码或输入苗木编码" else "请扫码或输入地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
@@ -174,11 +189,14 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
             }
 
             // 2. 顶部扫码区
-            PunchingScanSection(
-                isScanning = isScanning,
-                inputMode = inputMode,
-                onScanClick = { simulateScan() }
-            )
+            // 【修改点】：只在非自编码模式（即扫码模式）下显示大卡片
+            if (!isSelfCodeMode) {
+                PunchingScanSection(
+                    isScanning = isScanning,
+                    inputMode = inputMode,
+                    onScanClick = { simulateScan() }
+                )
+            }
 
             Text("作业基本信息", fontWeight = FontWeight.Bold, color = Color.Gray)
 
@@ -188,22 +206,27 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     if (inputMode == 0) {
-                        // 【替换处1】使用提取出的公共组件
-                        ScanCodeInputField(
-                            label = "苗木二维码",
-                            value = plant_id,
-                            onValueChange = { plant_id = it },
-                            onScanClick = { simulateScan() },
-                            placeholder = "手动输入苗木二维码"
+                        // 【修改点】：传入 isSelfCodeMode 及其回调，并移除无用的 onScanClick
+                        DualModeIdentifierField(
+                            targetName = "苗木",
+                            qrCodeValue = plant_qr_code,
+                            selfCodeValue = plant_self_code,
+                            onQrCodeChange = { plant_qr_code = it },
+                            onSelfCodeChange = { plant_self_code = it },
+                            isSelfCodeMode = isSelfCodeMode,
+                            onModeChange = { isSelfCodeMode = it }
                         )
                     } else {
-                        // 【替换处2】使用提取出的公共组件
-                        ScanCodeInputField(
-                            label = "定植地块",
-                            value = field_id,
-                            onValueChange = { field_id = it },
-                            onScanClick = { simulateScan() },
-                            placeholder = "手动输入地块自编码"
+                        // 【修改点】：传入 isSelfCodeMode 及其回调，并移除无用的 onScanClick
+                        DualModeIdentifierField(
+                            targetName = "定植地块",
+                            qrCodeValue = field_qr_code,
+                            selfCodeValue = field_self_code,
+                            onQrCodeChange = { field_qr_code = it },
+                            onSelfCodeChange = { field_self_code = it },
+                            isSelfCodeMode = isSelfCodeMode,
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
                         )
                     }
 
@@ -339,8 +362,6 @@ private fun PunchingScanSection(isScanning: Boolean, inputMode: Int, onScanClick
         }
     }
 }
-
-// 【删除处】原先的 PunchingInputWithScanField 已经被删除，转为调用引入的公共组件
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

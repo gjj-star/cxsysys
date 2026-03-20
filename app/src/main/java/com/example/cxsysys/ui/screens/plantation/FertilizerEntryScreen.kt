@@ -1,6 +1,12 @@
 package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,8 +37,10 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-// 引入刚刚提取的顶部大卡片公共组件
+
+// 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
+import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 // --- 数据模型 (模拟数据库表结构) ---
 
@@ -78,7 +86,13 @@ fun FertilizerEntryScreen(
     ) }
 
     // --- 表单状态 ---
-    var field_id by remember { mutableStateOf("") }
+    // 【新增点】：将自编码模式状态上提至父页面
+    var isSelfCodeMode by remember { mutableStateOf(false) }
+
+    // 【修改点】：将原先的 field_id 拆分为二维码和自编码
+    var fieldQrCode by remember { mutableStateOf("") }
+    var fieldSelfCode by remember { mutableStateOf("") }
+
     val selectedFertilizers = remember { mutableStateListOf<Fertilizer>() }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
@@ -108,7 +122,7 @@ fun FertilizerEntryScreen(
             Toast.makeText(context, "正在识别地块二维码...", Toast.LENGTH_SHORT).show()
             delay(1500)
             isScanning = false
-            field_id = "FIELD-V10-B02"
+            fieldQrCode = "FIELD-V10-B02" // 扫码成功填入二维码字段
             Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
         }
     }
@@ -162,8 +176,9 @@ fun FertilizerEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        if (field_id.isEmpty()) {
-                            Toast.makeText(context, "请扫码或输入地块自编码", Toast.LENGTH_SHORT).show()
+                        // 【修改点】：校验逻辑更新
+                        if (fieldQrCode.isEmpty() && fieldSelfCode.isEmpty()) {
+                            Toast.makeText(context, "请扫码或输入地块编码", Toast.LENGTH_SHORT).show()
                         } else if (selectedFertilizers.isEmpty()) {
                             Toast.makeText(context, "请至少选择一种肥料", Toast.LENGTH_SHORT).show()
                         } else if (dosage_gram_per_plant.isEmpty()) {
@@ -192,13 +207,19 @@ fun FertilizerEntryScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. 顶部扫码区 (复用 TopScanCard)
-            TopScanCard(
-                isScanning = isScanning,
-                title = "点击扫描地块二维码",
-                subtitle = "自动录入关联地块信息",
-                onScanClick = { simulateScan() }
-            )
+            // 1. 顶部扫码区 (加入平滑的收起动画)
+            AnimatedVisibility(
+                visible = !isSelfCodeMode,
+                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+            ) {
+                TopScanCard(
+                    isScanning = isScanning,
+                    title = "点击扫描地块二维码",
+                    subtitle = "自动录入关联地块信息",
+                    onScanClick = { simulateScan() }
+                )
+            }
 
             // 提示信息
             Row(
@@ -217,13 +238,16 @@ fun FertilizerEntryScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // 注意：这里没有替换为 ScanCodeInputField，保留您原有的单行扫描逻辑
-                    FertilizerInputWithScanField(
-                        label = "地块 (field_id)",
-                        value = field_id,
-                        onValueChange = { field_id = it },
-                        onScanClick = { simulateScan() },
-                        placeholder = "手动输入地块自编码"
+                    // 【修改点】：使用通用的双模式组件处理地块信息
+                    DualModeIdentifierField(
+                        targetName = "地块",
+                        qrCodeValue = fieldQrCode,
+                        onQrCodeChange = { fieldQrCode = it },
+                        selfCodeValue = fieldSelfCode,
+                        onSelfCodeChange = { fieldSelfCode = it },
+                        isSelfCodeMode = isSelfCodeMode,
+                        onModeChange = { isSelfCodeMode = it },
+                        onScanClick = { simulateScan() }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -231,6 +255,7 @@ fun FertilizerEntryScreen(
                     OutlinedTextField(
                         value = fertilizer_date,
                         onValueChange = { fertilizer_date = it },
+                        readOnly = true, // 防止点开弹出键盘
                         label = { Text("施肥日期") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
@@ -350,30 +375,7 @@ fun FertilizerEntryScreen(
 // ⬇️ 组件定义 (统一前缀以区分)
 // =================================================================
 
-// 【删除处】原先的 FertilizerScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
-
-@Composable
-private fun FertilizerInputWithScanField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    onScanClick: () -> Unit,
-    placeholder: String = ""
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        placeholder = { Text(placeholder, color = Color.Gray) },
-        modifier = Modifier.fillMaxWidth(),
-        trailingIcon = {
-            IconButton(onClick = onScanClick) {
-                Icon(Icons.Default.DocumentScanner, contentDescription = "Scan", tint = AgGreenPrimary)
-            }
-        },
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
-    )
-}
+// 【注】：原先手写的 FertilizerInputWithScanField 已经被删除，复用了统一样式组件
 
 @Composable
 fun SelectFertilizerDialog(

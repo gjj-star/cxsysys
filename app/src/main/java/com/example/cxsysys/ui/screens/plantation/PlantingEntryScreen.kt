@@ -1,10 +1,14 @@
 package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,7 +22,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,8 +34,10 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-// 引入提取的顶部大卡片公共组件
+
+// 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
+import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,8 +46,16 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
+    // 【新增】：将自编码模式状态上提至父页面
+    var isSelfCodeMode by remember { mutableStateOf(false) }
+
     // --- 表单状态 (对应 V10 plant 表字段) ---
-    var motherTreeQrCode by remember { mutableStateOf("") } // (V10: mother_tree_qr_code 母树二维码)
+    // 【修改】：地块 ID 拆分为 二维码 和 自编码 两个独立状态
+    var fieldQrCode by remember { mutableStateOf("") }
+    var fieldSelfCode by remember { mutableStateOf("") }
+
+    // 【修改】：母树改为只能输入自编码的普通文本
+    var motherTreeSelfCode by remember { mutableStateOf("") }
 
     // 沉香品种 (V10: subspecies_id 沉香品种细分id: 0-野生沉香，1-人工白木香，2-人工奇楠沉香)
     var subspeciesIdLabel by remember { mutableStateOf("2-人工奇楠沉香") }
@@ -53,8 +66,6 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
     // (V10: generation_way 育苗方法: 嫁接/扦插/圈枝/组培/其他)
     var generationWay by remember { mutableStateOf("嫁接") }
     val generationWayOptions = listOf("嫁接", "扦插", "圈枝", "组培", "其他")
-
-    var plantationField by remember { mutableStateOf("") } // 定植地块
 
     // 种植规格
     var caveDepth by remember { mutableStateOf("") }      // 穴深
@@ -71,22 +82,14 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
     var isScanning by remember { mutableStateOf(false) }
 
-    // 模拟扫码
-    fun simulateScan(target: String) {
+    // 模拟扫码 (精简：现在只有地块需要扫码)
+    fun simulateScan() {
         scope.launch {
             isScanning = true
-            val msg = when(target) {
-                "mother" -> "正在识别母树二维码..."
-                "field" -> "正在识别地块二维码..."
-                else -> "正在识别..."
-            }
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "正在识别地块二维码...", Toast.LENGTH_SHORT).show()
             delay(1500)
             isScanning = false
-            when(target) {
-                "mother" -> motherTreeQrCode = "MOTHER-2012-A001"
-                "field" -> plantationField = "FIELD-A-03"
-            }
+            fieldQrCode = "FIELD-A-03" // 扫码成功填入二维码字段
             Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
         }
     }
@@ -122,9 +125,9 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 简单校验
-                        if (plantationField.isEmpty()) {
-                            Toast.makeText(context, "请扫码或输入地块自编码", Toast.LENGTH_SHORT).show()
+                        // 校验：二维码或自编码必填其一
+                        if (fieldQrCode.isEmpty() && fieldSelfCode.isEmpty()) {
+                            Toast.makeText(context, "请扫码或输入地块编码", Toast.LENGTH_SHORT).show()
                         } else if (plantCount.isEmpty()) {
                             Toast.makeText(context, "请输入定植数量", Toast.LENGTH_SHORT).show()
                         } else {
@@ -151,13 +154,19 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. 扫码关联 (复用公共组件 TopScanCard)
-            TopScanCard(
-                isScanning = isScanning,
-                title = "点击扫描地块二维码",
-                subtitle = "直接关联地块信息",
-                onScanClick = { simulateScan("field") }
-            )
+            // 1. 扫码关联 (加入平滑的收起动画)
+            AnimatedVisibility(
+                visible = !isSelfCodeMode,
+                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+            ) {
+                TopScanCard(
+                    isScanning = isScanning,
+                    title = "点击扫描地块二维码",
+                    subtitle = "直接关联地块信息",
+                    onScanClick = { simulateScan() }
+                )
+            }
 
             // 2. 基础信息
             Text("基础档案", fontWeight = FontWeight.Bold, color = Color.Gray)
@@ -166,22 +175,32 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    PlantingInputWithScanField(
-                        label = "定植地块",
-                        value = plantationField,
-                        onValueChange = { plantationField = it },
-                        onScanClick = { simulateScan("field") },
-                        placeholder = "手动输入地块自编码"
+
+                    // 【修改】：使用通用的双模式组件处理地块信息
+                    DualModeIdentifierField(
+                        targetName = "定植地块",
+                        qrCodeValue = fieldQrCode,
+                        onQrCodeChange = { fieldQrCode = it },
+                        selfCodeValue = fieldSelfCode,
+                        onSelfCodeChange = { fieldSelfCode = it },
+                        isSelfCodeMode = isSelfCodeMode,
+                        onModeChange = { isSelfCodeMode = it }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 母树二维码
-                    PlantingInputWithScanField(
-                        label = "母树二维码 (选填)",
-                        value = motherTreeQrCode,
-                        onValueChange = { motherTreeQrCode = it },
-                        onScanClick = { simulateScan("mother") },
-                        placeholder = "选填，关联母树档案"
+                    // 【修改】：母树自编码，改为普通的单行文本输入框，无扫码功能
+                    OutlinedTextField(
+                        value = motherTreeSelfCode,
+                        onValueChange = { motherTreeSelfCode = it },
+                        label = { Text("母树自编码 (选填)") },
+                        placeholder = { Text("选填，关联母树档案", color = Color.Gray, fontSize = 14.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AgGreenPrimary,
+                            focusedLabelColor = AgGreenPrimary,
+                            unfocusedBorderColor = Color(0xFFE0E0E0)
+                        )
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -218,9 +237,9 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                     OutlinedTextField(
                         value = plantingDate,
                         onValueChange = { plantingDate = it },
+                        readOnly = true, // 防止点开弹出键盘
                         label = { Text("定植日期") },
                         modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
                         trailingIcon = {
                             IconButton(onClick = { showDatePicker = true }) {
@@ -275,7 +294,7 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // [新增] 定植数量
+                    // 定植数量
                     OutlinedTextField(
                         value = plantCount,
                         onValueChange = { if (it.all { c -> c.isDigit() }) plantCount = it },
@@ -289,7 +308,7 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
             }
 
             // 提示信息
-            PlantingInfoTip(text = "系统将根据‘地块自编码’关联生成定植档案。若该苗木为采购幼苗，请确保已在育苗阶段完成基础信息录入。")
+            PlantingInfoTip(text = "系统将根据‘地块标识’关联生成定植档案。若该苗木为采购幼苗，请确保已在育苗阶段完成基础信息录入。")
 
             Spacer(modifier = Modifier.height(20.dp))
         }
@@ -299,31 +318,6 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
 // =================================================================
 // ⬇️ 组件定义
 // =================================================================
-
-// 【删除处】原有的 PlantingScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
-
-@Composable
-private fun PlantingInputWithScanField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    onScanClick: () -> Unit,
-    placeholder: String = ""
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        placeholder = { Text(placeholder, color = Color.Gray) },
-        modifier = Modifier.fillMaxWidth(),
-        trailingIcon = {
-            IconButton(onClick = onScanClick) {
-                Icon(Icons.Default.DocumentScanner, contentDescription = "Scan", tint = AgGreenPrimary)
-            }
-        },
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
-    )
-}
 
 // 通用选择下拉框
 @OptIn(ExperimentalMaterial3Api::class)

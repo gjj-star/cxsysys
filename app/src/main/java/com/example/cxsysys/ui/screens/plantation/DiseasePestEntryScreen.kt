@@ -1,11 +1,16 @@
 package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,8 +35,9 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-// 引入两项公共扫码组件
-import com.example.cxsysys.ui.components.ScanCodeInputField
+
+// 引入公共组件
+import com.example.cxsysys.ui.components.DualModeIdentifierField
 import com.example.cxsysys.ui.components.TopScanCard
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -45,8 +51,16 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
     // 0: 按苗木个别录入 (默认), 1: 按地块批量录入
     var inputMode by remember { mutableStateOf(0) }
 
-    var plant_id by remember { mutableStateOf("") }
-    var field_id by remember { mutableStateOf("") }
+    // 将自编码模式状态上提至父页面
+    var isSelfCodeMode by remember { mutableStateOf(false) }
+
+    // 适配新组件，拆分为二维码和自编码状态
+    var plant_qr_code by remember { mutableStateOf("") }
+    var plant_self_code by remember { mutableStateOf("") }
+
+    var field_qr_code by remember { mutableStateOf("") }
+    var field_self_code by remember { mutableStateOf("") }
+
     var description by remember { mutableStateOf("") }
 
     // 虫害复选框状态
@@ -69,10 +83,11 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             delay(1500)
             isScanning = false
+            // 扫码成功后，赋值给对应的 qr_code 变量
             if (inputMode == 0) {
-                plant_id = "TREE-2023-PEST-001"
+                plant_qr_code = "TREE-2023-PEST-001"
             } else {
-                field_id = "FIELD-PEST-002"
+                field_qr_code = "FIELD-PEST-002"
             }
             Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
         }
@@ -109,20 +124,21 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 根据模式进行校验
+                        // 校验逻辑更新，二维码或自编码填写一项即可
                         val isValid = if (inputMode == 0) {
-                            plant_id.isNotEmpty()
+                            plant_qr_code.isNotEmpty() || plant_self_code.isNotEmpty()
                         } else {
-                            field_id.isNotEmpty()
+                            field_qr_code.isNotEmpty() || field_self_code.isNotEmpty()
                         }
 
                         if (!isValid) {
-                            val msg = if (inputMode == 0) "请填写苗木ID" else "请选择或扫码地块"
+                            val msg = if (inputMode == 0) "请填写或扫码苗木ID" else "请填写或扫码地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else {
-                            val target = if (inputMode == 0) "苗木: $plant_id" else "地块: $field_id"
+                            val target = if (inputMode == 0) "苗木二维码: $plant_qr_code\n苗木自编码: $plant_self_code"
+                            else "地块二维码: $field_qr_code\n地块自编码: $field_self_code"
                             val pestInfo = if (selectedPests.isNotEmpty()) "虫害: ${selectedPests.joinToString(",")}" else "未选虫害"
-                            Toast.makeText(context, "保存成功！\n$target\n$pestInfo", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "保存成功！\n$target\n$pestInfo", Toast.LENGTH_LONG).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
@@ -155,7 +171,6 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                     .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(24.dp)),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 个别录入按钮
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -170,8 +185,6 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         fontWeight = if (inputMode == 0) FontWeight.Bold else FontWeight.Normal
                     )
                 }
-
-                // 批量录入按钮
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -188,13 +201,19 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 2. 顶部扫码大图区 (使用我们新抽离的公共组件 TopScanCard)
-            TopScanCard(
-                isScanning = isScanning,
-                title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
-                subtitle = if (inputMode == 0) "关联苗木ID" else "关联地块编码",
-                onScanClick = { simulateScan() }
-            )
+            // 2. 顶部扫码大图区 (加入平滑的收起动画)
+            AnimatedVisibility(
+                visible = !isSelfCodeMode,
+                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+            ) {
+                TopScanCard(
+                    isScanning = isScanning,
+                    title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
+                    subtitle = if (inputMode == 0) "关联苗木ID" else "关联地块编码",
+                    onScanClick = { simulateScan() }
+                )
+            }
 
             // 3. 根据模式动态显示内容
             if (inputMode == 0) {
@@ -207,13 +226,15 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         Text("关联苗木", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AgGreenPrimary)
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // 使用公共扫码组件
-                        ScanCodeInputField(
-                            label = "苗木ID / 二维码",
-                            value = plant_id,
-                            onValueChange = { plant_id = it },
-                            onScanClick = { simulateScan() },
-                            placeholder = "扫码或手动输入"
+                        DualModeIdentifierField(
+                            targetName = "苗木",
+                            qrCodeValue = plant_qr_code,
+                            selfCodeValue = plant_self_code,
+                            onQrCodeChange = { plant_qr_code = it },
+                            onSelfCodeChange = { plant_self_code = it },
+                            isSelfCodeMode = isSelfCodeMode,
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
                         )
                     }
                 }
@@ -227,18 +248,19 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         Text("关联地块", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AgGreenPrimary)
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // 批量录入同样使用的公共扫码组件
-                        ScanCodeInputField(
-                            label = "定植地块自编码 / 二维码",
-                            value = field_id,
-                            onValueChange = { field_id = it },
-                            onScanClick = { simulateScan() },
-                            placeholder = "扫码或手动输入地块编码"
+                        DualModeIdentifierField(
+                            targetName = "定植地块",
+                            qrCodeValue = field_qr_code,
+                            selfCodeValue = field_self_code,
+                            onQrCodeChange = { field_qr_code = it },
+                            onSelfCodeChange = { field_self_code = it },
+                            isSelfCodeMode = isSelfCodeMode,
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // 提示文字
                         Row(verticalAlignment = Alignment.Top) {
                             Icon(Icons.Default.Info, null, tint = Color.Gray, modifier = Modifier.size(16.dp).padding(top = 2.dp))
                             Spacer(modifier = Modifier.width(4.dp))
@@ -256,10 +278,11 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // record_date
+                    // 记录日期
                     OutlinedTextField(
                         value = record_date,
                         onValueChange = { record_date = it },
+                        readOnly = true, // 防止点开弹出键盘
                         label = { Text("记录日期") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
@@ -318,13 +341,12 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                     })
                 }
             }
+            Spacer(modifier = Modifier.height(60.dp))
         }
     }
 }
 
 // === 内部组件 ===
-
-// 【已删除原有的 DiseaseScanSection 私有方法，全面使用通用组件 TopScanCard】
 
 @Composable
 private fun DiseasePhotoUploadBox(onClick: () -> Unit) {

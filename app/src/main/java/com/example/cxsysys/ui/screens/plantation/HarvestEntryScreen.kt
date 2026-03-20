@@ -1,6 +1,12 @@
 package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,8 +38,10 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-// 引入刚刚提取的顶部大卡片公共组件
+
+// 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
+import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,14 +54,22 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
     // 录入模式：0-个别录入(枝干/苗木), 1-批量录入(地块)。默认为1
     var inputMode by remember { mutableIntStateOf(1) }
 
+    // 【新增点】：将自编码模式状态上提至父页面
+    var isSelfCodeMode by remember { mutableStateOf(false) }
+
     // 个别录入类型：苗木 或 打孔枝干 (明确区分，防混淆)
     var individualTargetType by remember { mutableStateOf("苗木") }
     val individualTargetOptions = listOf("苗木", "打孔枝干")
 
-    // 将原 target_id 拆分为明确的两个字段
-    var plant_id by remember { mutableStateOf("") }  // 苗木ID
-    var branch_id by remember { mutableStateOf("") } // 枝干ID
-    var field_id by remember { mutableStateOf("") }  // 地块ID (批量模式)
+    // 【修改点】：将各种 target_id 拆分为明确的二维码和自编码两个字段
+    var plantQrCode by remember { mutableStateOf("") }
+    var plantSelfCode by remember { mutableStateOf("") }
+
+    var branchQrCode by remember { mutableStateOf("") }
+    var branchSelfCode by remember { mutableStateOf("") }
+
+    var fieldQrCode by remember { mutableStateOf("") }
+    var fieldSelfCode by remember { mutableStateOf("") }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     var harvest_date by remember { mutableStateOf(dateFormat.format(Date())) }
@@ -84,9 +100,9 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
 
             // 数据回填
             when {
-                inputMode == 1 -> field_id = "HARVEST-FIELD-A01"
-                individualTargetType == "苗木" -> plant_id = "HARVEST-TREE-001"
-                else -> branch_id = "HARVEST-BRANCH-B02"
+                inputMode == 1 -> fieldQrCode = "HARVEST-FIELD-A01"
+                individualTargetType == "苗木" -> plantQrCode = "HARVEST-TREE-001"
+                else -> branchQrCode = "HARVEST-BRANCH-B02"
             }
             Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
         }
@@ -121,18 +137,18 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 按照具体的字段进行校验，避免混为一谈
+                        // 【修改点】：按照拆分后的字段进行校验
                         val isTargetValid = when {
-                            inputMode == 1 -> field_id.isNotEmpty()
-                            individualTargetType == "苗木" -> plant_id.isNotEmpty()
-                            else -> branch_id.isNotEmpty()
+                            inputMode == 1 -> fieldQrCode.isNotEmpty() || fieldSelfCode.isNotEmpty()
+                            individualTargetType == "苗木" -> plantQrCode.isNotEmpty() || plantSelfCode.isNotEmpty()
+                            else -> branchQrCode.isNotEmpty() || branchSelfCode.isNotEmpty()
                         }
 
                         if (!isTargetValid) {
                             val msg = when {
-                                inputMode == 1 -> "请扫码或输入地块自编码"
-                                individualTargetType == "苗木" -> "请扫码或输入苗木二维码"
-                                else -> "请扫码或输入打孔枝干二维码"
+                                inputMode == 1 -> "请扫码或输入地块编码"
+                                individualTargetType == "苗木" -> "请扫码或输入苗木编码"
+                                else -> "请扫码或输入打孔枝干编码"
                             }
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else if (weight.isEmpty()) {
@@ -205,7 +221,7 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 2. 顶部扫码区 (复用公共组件 TopScanCard)
+            // 2. 顶部扫码区 (复用公共组件 TopScanCard 并加入平滑的收起动画)
             val scanTitle = when {
                 inputMode == 1 -> "点击扫描地块二维码"
                 individualTargetType == "苗木" -> "点击扫描苗木二维码"
@@ -217,12 +233,18 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
                 else -> "录入单个打孔枝干采收记录"
             }
 
-            TopScanCard(
-                isScanning = isScanning,
-                title = scanTitle,
-                subtitle = scanSubtitle,
-                onScanClick = { simulateScan() }
-            )
+            AnimatedVisibility(
+                visible = !isSelfCodeMode,
+                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+            ) {
+                TopScanCard(
+                    isScanning = isScanning,
+                    title = scanTitle,
+                    subtitle = scanSubtitle,
+                    onScanClick = { simulateScan() }
+                )
+            }
 
             Text("作业基本信息", fontWeight = FontWeight.Bold, color = Color.Gray)
 
@@ -244,30 +266,43 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
                         Spacer(modifier = Modifier.height(16.dp))
 
                         if (individualTargetType == "苗木") {
-                            HarvestInputWithScanField(
-                                label = "苗木二维码",
-                                value = plant_id,
-                                onValueChange = { plant_id = it },
-                                onScanClick = { simulateScan() },
-                                placeholder = "手动输入苗木二维码"
+                            // 【修改点】：使用通用的双模式组件处理苗木信息
+                            DualModeIdentifierField(
+                                targetName = "苗木",
+                                qrCodeValue = plantQrCode,
+                                onQrCodeChange = { plantQrCode = it },
+                                selfCodeValue = plantSelfCode,
+                                onSelfCodeChange = { plantSelfCode = it },
+                                isSelfCodeMode = isSelfCodeMode,
+                                onModeChange = { isSelfCodeMode = it },
+                                onScanClick = { simulateScan() }
                             )
                         } else {
-                            HarvestInputWithScanField(
-                                label = "打孔枝干二维码",
-                                value = branch_id,
-                                onValueChange = { branch_id = it },
-                                onScanClick = { simulateScan() },
-                                placeholder = "手动输入打孔枝干二维码"
+                            // 【修改点】：使用通用的双模式组件处理枝干信息
+                            DualModeIdentifierField(
+                                targetName = "打孔枝干",
+                                qrCodeValue = branchQrCode,
+                                onQrCodeChange = { branchQrCode = it },
+                                selfCodeValue = branchSelfCode,
+                                onSelfCodeChange = { branchSelfCode = it },
+                                isSelfCodeMode = isSelfCodeMode,
+                                onModeChange = { isSelfCodeMode = it },
+                                onScanClick = { simulateScan() }
                             )
                         }
                     } else {
                         // 批量模式
-                        HarvestInputWithScanField(
-                            label = "定植地块",
-                            value = field_id,
-                            onValueChange = { field_id = it },
-                            onScanClick = { simulateScan() },
-                            placeholder = "手动输入地块自编码"
+                        // 【修改点】：使用通用的双模式组件处理地块信息
+                        DualModeIdentifierField(
+                            targetName = "定植地块",
+                            qrCodeValue = fieldQrCode,
+                            onQrCodeChange = { fieldQrCode = it },
+                            selfCodeValue = fieldSelfCode,
+                            onSelfCodeChange = { fieldSelfCode = it },
+                            isSelfCodeMode = isSelfCodeMode,
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
+
                         )
                     }
 
@@ -277,6 +312,7 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
                     OutlinedTextField(
                         value = harvest_date,
                         onValueChange = { harvest_date = it },
+                        readOnly = true, // 防止键盘弹起
                         label = { Text("采收日期") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
@@ -336,30 +372,7 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
 // ⬇️ 内部组件 (前缀 Harvest)
 // =================================================================
 
-// 【删除处】原有的 HarvestScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
-
-@Composable
-private fun HarvestInputWithScanField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    onScanClick: () -> Unit,
-    placeholder: String = ""
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        placeholder = { Text(placeholder, color = Color.Gray) },
-        modifier = Modifier.fillMaxWidth(),
-        trailingIcon = {
-            IconButton(onClick = onScanClick) {
-                Icon(Icons.Default.DocumentScanner, contentDescription = "Scan", tint = AgGreenPrimary)
-            }
-        },
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
-    )
-}
+// 【注】：原先的 HarvestInputWithScanField 已经被删除，复用了统一样式的 DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

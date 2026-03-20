@@ -1,6 +1,12 @@
 package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,8 +36,10 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-// 引入提取的顶部大卡片公共组件
+
+// 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
+import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,13 +52,20 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1 (大部分情境为批量)
     var inputMode by remember { mutableIntStateOf(1) }
 
-    var plant_id by remember { mutableStateOf("") }
-    var field_id by remember { mutableStateOf("") }
+    // 【新增点】：将自编码模式状态上提至父页面
+    var isSelfCodeMode by remember { mutableStateOf(false) }
+
+    // 【修改点】：将原先的 ID 拆分为二维码和自编码
+    var plantQrCode by remember { mutableStateOf("") }
+    var plantSelfCode by remember { mutableStateOf("") }
+
+    var fieldQrCode by remember { mutableStateOf("") }
+    var fieldSelfCode by remember { mutableStateOf("") }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     var pruning_date by remember { mutableStateOf(dateFormat.format(Date())) }
 
-    // [新增/找回] 选项数据状态
+    // 选项数据状态
     var time_slot by remember { mutableStateOf("9-11时") }
     val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时")
 
@@ -70,7 +85,7 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
     var isScanning by remember { mutableStateOf(false) }
 
-    // 模拟扫码逻辑 (风格同施药/定植页)
+    // 模拟扫码逻辑
     fun simulateScan() {
         scope.launch {
             isScanning = true
@@ -78,10 +93,11 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             delay(1500)
             isScanning = false
+            // 扫码成功填入对应的二维码字段
             if (inputMode == 0) {
-                plant_id = "TREE-PRUNE-V10-088"
+                plantQrCode = "TREE-PRUNE-V10-088"
             } else {
-                field_id = "FIELD-PRUNE-V10-A01"
+                fieldQrCode = "FIELD-PRUNE-V10-A01"
             }
             Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
         }
@@ -116,9 +132,15 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        val targetValid = if (inputMode == 0) plant_id.isNotEmpty() else field_id.isNotEmpty()
+                        // 【修改点】：根据拆分后的状态进行校验
+                        val targetValid = if (inputMode == 0) {
+                            plantQrCode.isNotEmpty() || plantSelfCode.isNotEmpty()
+                        } else {
+                            fieldQrCode.isNotEmpty() || fieldSelfCode.isNotEmpty()
+                        }
+
                         if (!targetValid) {
-                            val msg = if (inputMode == 0) "请扫码或输入苗木二维码" else "请扫码或输入地块自编码"
+                            val msg = if (inputMode == 0) "请扫码或输入苗木编码" else "请扫码或输入地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
@@ -186,13 +208,19 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 2. 顶部扫码区 (复用公共组件 TopScanCard)
-            TopScanCard(
-                isScanning = isScanning,
-                title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
-                subtitle = if (inputMode == 0) "直接录入苗木剪枝信息" else "批量录入地块剪枝信息",
-                onScanClick = { simulateScan() }
-            )
+            // 2. 顶部扫码区 (加入平滑的收起动画)
+            AnimatedVisibility(
+                visible = !isSelfCodeMode,
+                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+            ) {
+                TopScanCard(
+                    isScanning = isScanning,
+                    title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
+                    subtitle = if (inputMode == 0) "直接录入苗木剪枝信息" else "批量录入地块剪枝信息",
+                    onScanClick = { simulateScan() }
+                )
+            }
 
             Text("作业基本信息", fontWeight = FontWeight.Bold, color = Color.Gray)
 
@@ -201,22 +229,28 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // 关联对象输入：根据模式动态切换
+                    // 关联对象输入：根据模式动态切换，使用双模式组件
                     if (inputMode == 0) {
-                        PruningInputWithScanField(
-                            label = "苗木二维码",
-                            value = plant_id,
-                            onValueChange = { plant_id = it },
-                            onScanClick = { simulateScan() },
-                            placeholder = "手动输入苗木二维码"
+                        DualModeIdentifierField(
+                            targetName = "苗木",
+                            qrCodeValue = plantQrCode,
+                            onQrCodeChange = { plantQrCode = it },
+                            selfCodeValue = plantSelfCode,
+                            onSelfCodeChange = { plantSelfCode = it },
+                            isSelfCodeMode = isSelfCodeMode,
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
                         )
                     } else {
-                        PruningInputWithScanField(
-                            label = "定植地块",
-                            value = field_id,
-                            onValueChange = { field_id = it },
-                            onScanClick = { simulateScan() },
-                            placeholder = "手动输入地块自编码"
+                        DualModeIdentifierField(
+                            targetName = "定植地块",
+                            qrCodeValue = fieldQrCode,
+                            onQrCodeChange = { fieldQrCode = it },
+                            selfCodeValue = fieldSelfCode,
+                            onSelfCodeChange = { fieldSelfCode = it },
+                            isSelfCodeMode = isSelfCodeMode,
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
                         )
                     }
 
@@ -226,6 +260,7 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
                     OutlinedTextField(
                         value = pruning_date,
                         onValueChange = { pruning_date = it },
+                        readOnly = true, // 防止点开弹出键盘
                         label = { Text("剪枝日期") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
@@ -238,7 +273,7 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // [找回] 剪枝时段 (time_slot)
+                    // 剪枝时段
                     PruningSelectDropdown(
                         label = "剪枝时段",
                         selectedValue = time_slot,
@@ -255,7 +290,7 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // [找回] 剪枝类型 (prune_type)
+                    // 剪枝类型
                     PruningSelectDropdown(
                         label = "剪枝类型",
                         selectedValue = pruning_type,
@@ -265,7 +300,7 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // [找回] 工具类型 (tool_type)
+                    // 工具类型
                     PruningSelectDropdown(
                         label = "工具类型",
                         selectedValue = tool_type,
@@ -275,7 +310,7 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // [找回] 消毒方式 (disinfect_method)
+                    // 消毒方式
                     PruningSelectDropdown(
                         label = "消毒方式",
                         selectedValue = disinfect_method,
@@ -312,30 +347,7 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
 // ⬇️ 内部组件 (前缀 Pruning)
 // =================================================================
 
-// 【删除处】原有的 PruningScanSection 已经被删除，转为调用引入的公共组件 TopScanCard
-
-@Composable
-private fun PruningInputWithScanField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    onScanClick: () -> Unit,
-    placeholder: String = ""
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        placeholder = { Text(placeholder, color = Color.Gray) },
-        modifier = Modifier.fillMaxWidth(),
-        trailingIcon = {
-            IconButton(onClick = onScanClick) {
-                Icon(Icons.Default.DocumentScanner, contentDescription = "Scan", tint = AgGreenPrimary)
-            }
-        },
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
-    )
-}
+// 【注】：原有的 PruningInputWithScanField 已经被删除，复用了统一样式的 DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
