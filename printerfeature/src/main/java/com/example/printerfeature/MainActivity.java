@@ -42,6 +42,7 @@ public class MainActivity extends ComponentActivity {
     private Button btnPrint;
     private ImageButton btnBack;
     private TextView tvToolbarTitle;
+    private Button btnExample;
 
     public static final String TEMP_MM = "苗木二维码";
     public static final String TEMP_CJG = "加工二维码"; // 原：初加工二维码
@@ -87,6 +88,7 @@ public class MainActivity extends ComponentActivity {
 
         btnBack = findViewById(R.id.btnBack);
         tvToolbarTitle = findViewById(R.id.tvToolbarTitle);
+        btnExample = findViewById(R.id.btnExample);
         tvStatus = findViewById(R.id.tvStatus);
         tvDataCount = findViewById(R.id.tvDataCount);
         Button btnConnect = findViewById(R.id.btnConnect);
@@ -161,6 +163,9 @@ public class MainActivity extends ComponentActivity {
             startPrint();
         });
 
+        // 示例数据按钮点击事件
+        btnExample.setOnClickListener(v -> fillExampleData());
+
         // 根据 Intent 传入的模板名称进行初始化
         String targetTemplate = getIntent().getStringExtra("target_template");
         if (targetTemplate == null) targetTemplate = TEMP_MM;
@@ -170,6 +175,79 @@ public class MainActivity extends ComponentActivity {
         tvToolbarTitle.setText(targetTemplate + "打印");
         
         updateDataUI();
+    }
+
+    /**
+     * 在此处填入各个模板的示例数据
+     */
+    private void fillExampleData() {
+        String currentTemplate = spinnerTemplate.getText().toString();
+        
+        // 清空当前输入
+        etF1.setText(""); etF2.setText(""); etF3.setText(""); 
+        etF4.setText(""); etF5.setText(""); etF6.setText("");
+        etProcessName.setText(""); etModel.setText(""); etSpec.setText("");
+        etNum.setText(""); etWeight.setText(""); etTraceCode.setText("");
+
+        if (TEMP_MM.equals(currentTemplate)) {
+            // TODO: 填写 苗木二维码 示例数据
+            etF1.setText("金丝油（奇楠）");
+            etF2.setText("2");
+            etF3.setText("嫁接");
+            etF4.setText("DK-456");
+            etF5.setText("2012-A005");
+            etF6.setText("2024-05-20");
+            etTraceCode.setText("DDDDDDEEEEEEEEE-AAA-BBBB-CCCCCCCC-YYMMDD-GG");
+        } else if (TEMP_CJG.equals(currentTemplate)) {
+            // TODO: 填写 加工二维码 示例数据
+            spinnerProcessingType.setText(TYPE_INITIAL, false);
+            etProcessName.setText("初步清理");
+            etF1.setText("沉香片");
+            etModel.setText("CX-1234");
+            etSpec.setText("5×2");
+            etNum.setText("10");
+            etWeight.setText("5g");
+            etF4.setText("一级");
+            etF5.setText("2024-05-21 14:00:00");
+            etF6.setText("OP-08");
+            etTraceCode.setText("DDDDDDEEEEEEEEE-AAA-BCCCCCCCC-YYMMDD-BB-GG-SS");
+        } else if (TEMP_CP.equals(currentTemplate)) {
+            // TODO: 填写 产成品二维码 示例数据
+            etF1.setText("极品沉香线香");
+            etModel.setText("CX-20");
+            etSpec.setText("20支");
+            etNum.setText("50");
+            etWeight.setText("1.5kg");
+            etF4.setText("特级");
+            etF5.setText("2024-05-22 10:30:00");
+            etF6.setText("OP-12");
+            etTraceCode.setText("DDDDDDEEEEEEEEE-AAA-PCCCCCCCC-YYMMDD-BB-GG-FFF");
+        } else if (TEMP_DP.equals(currentTemplate)) {
+            // TODO: 填写 大棚二维码 示例数据
+            etF1.setText("DP-12345");
+            etF2.setText("ZZY-123");
+            etF3.setText("500亩");
+            etF4.setText("张三");
+            etTraceCode.setText("DDDDDDEEEEEEEEE-PPPPPP-AAAAAA");
+        } else if (TEMP_MC.equals(currentTemplate)) {
+            // TODO: 填写 苗床二维码 示例数据
+            etF1.setText("MC-12345");
+            etF2.setText("DP-123");
+            etF3.setText("ZZY-123");
+            etF4.setText("李四");
+            etTraceCode.setText("DDDDDDEEEEEEEEE-PPPPPP-AAAAAA-SSSSSS");
+        } else if (TEMP_DK.equals(currentTemplate)) {
+            // TODO: 填写 地块二维码 示例数据
+            etF1.setText("DK-108");
+            etF2.setText("ZZY-123");
+            etModel.setText("100");
+            etSpec.setText("50");
+            etF4.setText("50亩");
+            etF5.setText("王五");
+            etTraceCode.setText("DDDDDDEEEEEEEEE-PPPPPP-FFFFFF");
+        }
+        
+        Toast.makeText(this, "已填入示例数据", Toast.LENGTH_SHORT).show();
     }
 
     private void showDatePicker() {
@@ -255,7 +333,7 @@ public class MainActivity extends ComponentActivity {
             etF6.setFocusableInTouchMode(true);
             etF6.setOnClickListener(null);
         } else if (TEMP_CP.equals(template)) {
-            tilF1.setHint("分类名称");
+            tilF1.setHint("产成品名称");
             tilF2.setVisibility(View.GONE);
             layoutModelSpec.setVisibility(View.VISIBLE);
             tilModel.setHint("型号");
@@ -410,8 +488,13 @@ public class MainActivity extends ComponentActivity {
 
             @Override
             public void onError(int errorCode, int printState) {
+                String name = MyApplication.printerName;
                 runOnUiThread(() -> {
                     hideLoading();
+                    if (name.equals("未连接")) {
+                        Toast.makeText(MainActivity.this, "请先连接打印机", Toast.LENGTH_SHORT).show();
+                        return;
+                    };
                     Toast.makeText(MainActivity.this, "打印出错:" + errorCode, Toast.LENGTH_SHORT).show();
                 });
             }

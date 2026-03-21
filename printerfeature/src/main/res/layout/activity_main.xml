@@ -32,6 +32,17 @@
             android:textColor="#333333"
             android:textSize="18sp"
             android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnExample"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:text="示例数据"
+            android:textColor="#4CAF50"
+            app:rippleColor="#4CAF50" />
     </RelativeLayout>
 
     <ScrollView

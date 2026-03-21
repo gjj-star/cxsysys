@@ -222,9 +222,9 @@ fun HomeScreen(
                     MenuOptionCard(
                         title = "地块二维码",
                         subtitle = "为特定种植区域打印溯源码",
-                        icon = Icons.Default.Layers,
+                        icon = Icons.Default.LocationOn,
                         backgroundColor = Color(0xFFE1F5FE),
-                        contentColor = Color(0xFF0288D1),
+                        contentColor = Color(0xFF1565C0),
                         onClick = {
                             showQrDialog = false
                             val intent = Intent(context, MainActivity::class.java).apply {
@@ -239,9 +239,9 @@ fun HomeScreen(
                     MenuOptionCard(
                         title = "大棚二维码",
                         subtitle = "为生产大棚打印唯一识别码",
-                        icon = Icons.Default.Storefront,
+                        icon = Icons.Default.Domain,
                         backgroundColor = Color(0xFFF3E5F5),
-                        contentColor = Color(0xFF7B1FA2),
+                        contentColor = Color(0xFF6A1B9A),
                         onClick = {
                             showQrDialog = false
                             val intent = Intent(context, MainActivity::class.java).apply {
@@ -257,8 +257,8 @@ fun HomeScreen(
                         title = "苗床二维码",
                         subtitle = "为育苗区域打印溯源识别码",
                         icon = Icons.Default.GridView,
-                        backgroundColor = Color(0xFFFFF8E1),
-                        contentColor = Color(0xFFFF8F00),
+                        backgroundColor = Color(0xFFFFEBEE),
+                        contentColor = Color(0xFFD32F2F),
                         onClick = {
                             showQrDialog = false
                             val intent = Intent(context, MainActivity::class.java).apply {
@@ -273,7 +273,7 @@ fun HomeScreen(
                     MenuOptionCard(
                         title = "苗木二维码",
                         subtitle = "为单株苗木打印全生命周期码",
-                        icon = Icons.Default.Forest,
+                        icon = Icons.Default.Park,
                         backgroundColor = Color(0xFFE8F5E9),
                         contentColor = Color(0xFF2E7D32),
                         onClick = {
@@ -291,12 +291,29 @@ fun HomeScreen(
                         title = "加工二维码",
                         subtitle = "为加工过程打印溯源码",
                         icon = Icons.Default.Build,
-                        backgroundColor = Color(0xFFFFDFBF),
-                        contentColor = Color(0xFFE67E00),
+                        backgroundColor = Color(0xFFFFF3E0),
+                        contentColor = Color(0xFFEF6C00),
                         onClick = {
                             showQrDialog = false
                             val intent = Intent(context, MainActivity::class.java).apply {
                                 putExtra("target_template", MainActivity.TEMP_CJG)
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    MenuOptionCard(
+                        title = "产成品二维码",
+                        subtitle = "为产成品打印最终溯源码",
+                        icon = Icons.Default.Inventory2,
+                        backgroundColor = Color(0xFFE0F7FA),
+                        contentColor = Color(0xFF00838F),
+                        onClick = {
+                            showQrDialog = false
+                            val intent = Intent(context, MainActivity::class.java).apply {
+                                putExtra("target_template", MainActivity.TEMP_CP)
                             }
                             context.startActivity(intent)
                         }
