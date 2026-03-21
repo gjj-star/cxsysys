@@ -1,15 +1,48 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
+# --- Built artifacts ---
+bin/
+gen/
+out/
+build/
+.gradle/
 /captures
 .externalNativeBuild
 .cxx
+*.apk
+*.aar
+*.ap_
+*.dex
+
+# --- IDE - Android Studio & IntelliJ ---
+*.iml
+.idea/
+# !.idea/runConfigurations/
+
+# --- Device & Emulator ---
+*.log
 local.properties
+
+# --- Gradle ---
+.gradletasknamecache
+
+# --- Kotlin ---
+.kotlin/
+.konan/
+
+# --- macOS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# --- Windows ---
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# --- Others ---
+*.bak
+*.swp
+*~
