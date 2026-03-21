@@ -206,7 +206,7 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     if (inputMode == 0) {
-                        // 【修改点】：传入 isSelfCodeMode 及其回调，并移除无用的 onScanClick
+                        // 【修改点】：传入 isSelfCodeMode 及其回调，并补充onScanClick
                         DualModeIdentifierField(
                             targetName = "苗木",
                             qrCodeValue = plant_qr_code,
@@ -214,10 +214,11 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
                             onQrCodeChange = { plant_qr_code = it },
                             onSelfCodeChange = { plant_self_code = it },
                             isSelfCodeMode = isSelfCodeMode,
-                            onModeChange = { isSelfCodeMode = it }
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
                         )
                     } else {
-                        // 【修改点】：传入 isSelfCodeMode 及其回调，并移除无用的 onScanClick
+                        // 【修改点】：传入 isSelfCodeMode 及其回调，并补充 onScanClick
                         DualModeIdentifierField(
                             targetName = "定植地块",
                             qrCodeValue = field_qr_code,

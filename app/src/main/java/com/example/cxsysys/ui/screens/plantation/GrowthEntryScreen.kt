@@ -194,7 +194,8 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                             selfCodeValue = plantSelfCode,
                             onSelfCodeChange = { plantSelfCode = it },
                             isSelfCodeMode = isSelfCodeMode,
-                            onModeChange = { isSelfCodeMode = it }
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
                         )
                     } else {
                         DualModeIdentifierField(
@@ -204,7 +205,8 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                             selfCodeValue = fieldSelfCode,
                             onSelfCodeChange = { fieldSelfCode = it },
                             isSelfCodeMode = isSelfCodeMode,
-                            onModeChange = { isSelfCodeMode = it }
+                            onModeChange = { isSelfCodeMode = it },
+                            onScanClick = { simulateScan() }
                         )
                     }
 

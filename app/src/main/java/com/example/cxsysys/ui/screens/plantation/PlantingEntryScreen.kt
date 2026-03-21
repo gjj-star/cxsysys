@@ -184,7 +184,8 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                         selfCodeValue = fieldSelfCode,
                         onSelfCodeChange = { fieldSelfCode = it },
                         isSelfCodeMode = isSelfCodeMode,
-                        onModeChange = { isSelfCodeMode = it }
+                        onModeChange = { isSelfCodeMode = it },
+                        onScanClick = { simulateScan() }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
