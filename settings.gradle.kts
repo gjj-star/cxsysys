@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "CXSYSYS"
 include(":app")
+include(":printerfeature")
  

@@ -1,6 +1,6 @@
 package com.example.cxsysys.ui.screens.home
 
-import android.widget.Toast
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.printerfeature.MainActivity
 
 /**
  * 首页/工作台
@@ -55,7 +56,8 @@ fun HomeScreen(
         ActionItem("采收香木", Icons.Default.Forest, Color(0xFFEFEBE9), Color(0xFF795548), "harvest_entry"),
         ActionItem("药肥信息", Icons.Default.LocalPharmacy, Color(0xFFE1F5FE), Color(0xFF0288D1), "ag_input_dialog"),
         // [新增] 二维码生成模块 (入口项定义)
-        ActionItem("二维码生成", Icons.Default.QrCode, Color(0xFFE8F5E9), AgGreenPrimary, "qr_code_dialog")
+        //更名为二维码打印模块
+        ActionItem("二维码打印", Icons.Default.QrCode, Color(0xFFE8F5E9), AgGreenPrimary, "qr_code_dialog")
     )
 
     // 1. 病虫防治选择弹窗 - UI优化版
@@ -198,7 +200,7 @@ fun HomeScreen(
         )
     }
 
-    // [新增] 3. 二维码生成选择弹窗 (保持与病虫防治、药肥信息一致的 UI 风格)
+    // [修改] 3. 二维码生成选择弹窗 - 对应到模块页面
     if (showQrDialog) {
         AlertDialog(
             onDismissRequest = { showQrDialog = false },
@@ -219,13 +221,16 @@ fun HomeScreen(
 
                     MenuOptionCard(
                         title = "地块二维码",
-                        subtitle = "为特定种植区域生成溯源码",
+                        subtitle = "为特定种植区域打印溯源码",
                         icon = Icons.Default.Layers,
                         backgroundColor = Color(0xFFE1F5FE),
                         contentColor = Color(0xFF0288D1),
                         onClick = {
                             showQrDialog = false
-                            Toast.makeText(context, "地块二维码页面正在开发中", Toast.LENGTH_SHORT).show()
+                            val intent = Intent(context, MainActivity::class.java).apply {
+                                putExtra("target_template", MainActivity.TEMP_DK)
+                            }
+                            context.startActivity(intent)
                         }
                     )
 
@@ -233,13 +238,16 @@ fun HomeScreen(
 
                     MenuOptionCard(
                         title = "大棚二维码",
-                        subtitle = "为生产大棚生成唯一识别码",
+                        subtitle = "为生产大棚打印唯一识别码",
                         icon = Icons.Default.Storefront,
                         backgroundColor = Color(0xFFF3E5F5),
                         contentColor = Color(0xFF7B1FA2),
                         onClick = {
                             showQrDialog = false
-                            Toast.makeText(context, "大棚二维码页面正在开发中", Toast.LENGTH_SHORT).show()
+                            val intent = Intent(context, MainActivity::class.java).apply {
+                                putExtra("target_template", MainActivity.TEMP_DP)
+                            }
+                            context.startActivity(intent)
                         }
                     )
 
@@ -247,13 +255,16 @@ fun HomeScreen(
 
                     MenuOptionCard(
                         title = "苗床二维码",
-                        subtitle = "为育苗区域生成溯源识别码",
+                        subtitle = "为育苗区域打印溯源识别码",
                         icon = Icons.Default.GridView,
                         backgroundColor = Color(0xFFFFF8E1),
                         contentColor = Color(0xFFFF8F00),
                         onClick = {
                             showQrDialog = false
-                            Toast.makeText(context, "苗床二维码页面正在开发中", Toast.LENGTH_SHORT).show()
+                            val intent = Intent(context, MainActivity::class.java).apply {
+                                putExtra("target_template", MainActivity.TEMP_MC)
+                            }
+                            context.startActivity(intent)
                         }
                     )
 
@@ -261,13 +272,33 @@ fun HomeScreen(
 
                     MenuOptionCard(
                         title = "苗木二维码",
-                        subtitle = "为单株苗木生成全生命周期码",
+                        subtitle = "为单株苗木打印全生命周期码",
                         icon = Icons.Default.Forest,
                         backgroundColor = Color(0xFFE8F5E9),
                         contentColor = Color(0xFF2E7D32),
                         onClick = {
                             showQrDialog = false
-                            Toast.makeText(context, "苗木二维码页面正在开发中", Toast.LENGTH_SHORT).show()
+                            val intent = Intent(context, MainActivity::class.java).apply {
+                                putExtra("target_template", MainActivity.TEMP_MM)
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    MenuOptionCard(
+                        title = "加工二维码",
+                        subtitle = "为加工过程打印溯源码",
+                        icon = Icons.Default.Build,
+                        backgroundColor = Color(0xFFFFDFBF),
+                        contentColor = Color(0xFFE67E00),
+                        onClick = {
+                            showQrDialog = false
+                            val intent = Intent(context, MainActivity::class.java).apply {
+                                putExtra("target_template", MainActivity.TEMP_CJG)
+                            }
+                            context.startActivity(intent)
                         }
                     )
 
