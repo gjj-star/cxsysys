@@ -1,11 +1,14 @@
+//优化：不再负责具体打印指令，只管理UI框架、页面切换、权限等
 package com.example.printerfeature;
 
+import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.ProgressDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -20,275 +23,342 @@ import android.widget.Toast;
 
 import androidx.activity.ComponentActivity;
 
+import com.example.printerfeature.data.LabelTemplates;
+import com.example.printerfeature.data.MockLabelRepository;
+import com.example.printerfeature.model.LabelData;
+import com.example.printerfeature.model.PlantBlockData;
+import com.example.printerfeature.model.PlantData;
+import com.example.printerfeature.model.TemplateExampleData;
+import com.example.printerfeature.printing.LabelPrintManager;
 import com.google.android.material.textfield.TextInputLayout;
-import com.gengcon.www.jcprintersdk.callback.PrintCallback;
 
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends ComponentActivity {
 
-    private TextView tvStatus, tvDataCount;
-    private ProgressDialog loadingDialog;
+    public static final String TEMP_MM = LabelTemplates.TEMP_MM;
+    public static final String TEMP_CJG = LabelTemplates.TEMP_CJG;
+    public static final String TEMP_CP = LabelTemplates.TEMP_CP;
+    public static final String TEMP_DP = LabelTemplates.TEMP_DP;
+    public static final String TEMP_MC = LabelTemplates.TEMP_MC;
+    public static final String TEMP_DK = LabelTemplates.TEMP_DK;
 
-    // UI 控件
-    private EditText etF1, etF2, etF3, etF4, etF5, etF6, etProcessName, etTraceCode, etSpec, etNum, etModel, etWeight;
-    private TextInputLayout tilF1, tilF2, tilF3, tilF4, tilF5, tilF6, tilProcessName, tilModel, tilSpec, tilNum, tilWeight, tilProcessingType;
-    private LinearLayout layoutModelSpec, layoutNumWeight;
-    private AutoCompleteTextView spinnerTemplate, spinnerProcessingType;
-    private Button btnPrint;
-    private ImageButton btnBack;
+    private TextView tvStatus;
+    private TextView tvDataCount;
     private TextView tvToolbarTitle;
+    private TextView tvPlantBlockName;
+    private TextView tvPlantBlockCode;
+    private TextView tvPlantBlockLocation;
+    private TextView tvPlantBlockStatus;
+    private TextView tvPlantCount;
+
+    private EditText etF1;
+    private EditText etF2;
+    private EditText etF3;
+    private EditText etF4;
+    private EditText etF5;
+    private EditText etF6;
+    private EditText etProcessName;
+    private EditText etTraceCode;
+    private EditText etSpec;
+    private EditText etNum;
+    private EditText etModel;
+    private EditText etWeight;
+    private EditText etPlantDate;
+
+    private TextInputLayout tilF1;
+    private TextInputLayout tilF2;
+    private TextInputLayout tilF3;
+    private TextInputLayout tilF4;
+    private TextInputLayout tilF5;
+    private TextInputLayout tilF6;
+    private TextInputLayout tilProcessName;
+    private TextInputLayout tilModel;
+    private TextInputLayout tilSpec;
+    private TextInputLayout tilNum;
+    private TextInputLayout tilWeight;
+    private TextInputLayout tilProcessingType;
+
+    private LinearLayout layoutModelSpec;
+    private LinearLayout layoutNumWeight;
+    private LinearLayout layoutPlantSummary;
+
+    private AutoCompleteTextView spinnerTemplate;
+    private AutoCompleteTextView spinnerProcessingType;
+    private AutoCompleteTextView spinnerPlantBlock;
+
+    private Button btnPrint;
     private Button btnExample;
+    private Button btnResetPlantFilters;
 
-    public static final String TEMP_MM = "苗木二维码";
-    public static final String TEMP_CJG = "加工二维码"; // 原：初加工二维码
-    public static final String TEMP_CP = "产成品二维码";
-    public static final String TEMP_DP = "大棚二维码";
-    public static final String TEMP_MC = "苗床二维码";
-    public static final String TEMP_DK = "地块二维码";
+    private View cardManualForm;
+    private View cardPlantBatch;
 
-    private static final String TYPE_INITIAL = "初加工";
-    private static final String TYPE_DEEP = "精加工";
+    private ProgressDialog loadingDialog;
+    private final LabelPrintManager printManager = new LabelPrintManager();
 
-    // 数据存储类
-    private static class LabelData {
-        String template;
-        String processingType; // 初加工 or 精加工
-        String processName;
-        String f1, f2, f3, f4, f5, f6, traceCode;
-
-        LabelData(String temp, String processingType, String process, String f1, String f2, String f3, String f4, String f5, String f6, String tc) {
-            this.template = temp;
-            this.processingType = processingType;
-            this.processName = process;
-            this.f1 = f1; this.f2 = f2; this.f3 = f3;
-            this.f4 = f4; this.f5 = f5; this.f6 = f6;
-            this.traceCode = tc;
-        }
-    }
-
-    private List<LabelData> dataList = new ArrayList<>();
+    private final List<LabelData> dataList = new ArrayList<>();
+    private List<PlantBlockData> plantBlocks = new ArrayList<>();
+    private PlantBlockData selectedPlantBlock;
+    private String selectedPlantDate = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // 适配沉浸式状态栏（根项目风格）
+        setupStatusBar();
+        setContentView(R.layout.activity_main);
+
+        bindViews();
+        setupStaticInputs();
+        setupTemplateSelectors();
+        setupActions();
+
+        String targetTemplate = getIntent().getStringExtra("target_template");
+        if (targetTemplate == null) targetTemplate = TEMP_MM;
+
+        spinnerTemplate.setText(targetTemplate, false);
+        updateUIByTemplate(targetTemplate);
+        tvToolbarTitle.setText(targetTemplate + "打印");
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshPrinterStatus();
+    }
+
+    private void setupStatusBar() {
         Window window = getWindow();
         window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         window.setStatusBarColor(Color.WHITE);
+    }
 
-        setContentView(R.layout.activity_main);
-
-        btnBack = findViewById(R.id.btnBack);
+    private void bindViews() {
         tvToolbarTitle = findViewById(R.id.tvToolbarTitle);
-        btnExample = findViewById(R.id.btnExample);
         tvStatus = findViewById(R.id.tvStatus);
         tvDataCount = findViewById(R.id.tvDataCount);
+        tvPlantBlockName = findViewById(R.id.tvPlantBlockName);
+        tvPlantBlockCode = findViewById(R.id.tvPlantBlockCode);
+        tvPlantBlockLocation = findViewById(R.id.tvPlantBlockLocation);
+        tvPlantBlockStatus = findViewById(R.id.tvPlantBlockStatus);
+        tvPlantCount = findViewById(R.id.tvPlantCount);
+
+        etProcessName = findViewById(R.id.etProcessName);
+        etF1 = findViewById(R.id.etF1);
+        etF2 = findViewById(R.id.etF2);
+        etF3 = findViewById(R.id.etF3);
+        etF4 = findViewById(R.id.etF4);
+        etF5 = findViewById(R.id.etF5);
+        etF6 = findViewById(R.id.etF6);
+        etTraceCode = findViewById(R.id.etTraceCode);
+        etModel = findViewById(R.id.etModel);
+        etSpec = findViewById(R.id.etSpec);
+        etNum = findViewById(R.id.etNum);
+        etWeight = findViewById(R.id.etWeight);
+        etPlantDate = findViewById(R.id.etPlantDate);
+
+        tilProcessingType = findViewById(R.id.tilProcessingType);
+        tilProcessName = findViewById(R.id.tilProcessName);
+        tilF1 = findViewById(R.id.tilF1);
+        tilF2 = findViewById(R.id.tilF2);
+        tilF3 = findViewById(R.id.tilF3);
+        tilF4 = findViewById(R.id.tilF4);
+        tilF5 = findViewById(R.id.tilF5);
+        tilF6 = findViewById(R.id.tilF6);
+        tilModel = findViewById(R.id.tilModel);
+        tilSpec = findViewById(R.id.tilSpec);
+        tilNum = findViewById(R.id.tilNum);
+        tilWeight = findViewById(R.id.tilWeight);
+
+        layoutModelSpec = findViewById(R.id.layoutModelSpec);
+        layoutNumWeight = findViewById(R.id.layoutNumWeight);
+        layoutPlantSummary = findViewById(R.id.layoutPlantSummary);
+
+        spinnerTemplate = findViewById(R.id.spinnerTemplate);
+        spinnerProcessingType = findViewById(R.id.spinnerProcessingType);
+        spinnerPlantBlock = findViewById(R.id.spinnerPlantBlock);
+
+        btnExample = findViewById(R.id.btnExample);
+        btnPrint = findViewById(R.id.btnPrint);
+        btnResetPlantFilters = findViewById(R.id.btnResetPlantFilters);
+
+        cardManualForm = findViewById(R.id.cardManualForm);
+        cardPlantBatch = findViewById(R.id.cardPlantBatch);
+
+        ImageButton btnBack = findViewById(R.id.btnBack);
+        btnBack.setOnClickListener(v -> finish());
+    }
+
+    private void setupStaticInputs() {
+        ArrayAdapter<String> templateAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, LabelTemplates.allTemplates());
+        spinnerTemplate.setAdapter(templateAdapter);
+
+        ArrayAdapter<String> processingAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, LabelTemplates.processingTypes());
+        spinnerProcessingType.setAdapter(processingAdapter);
+        spinnerProcessingType.setText(LabelTemplates.TYPE_INITIAL, false);
+
+        etF6.setFocusable(false);
+        etF6.setOnClickListener(v -> showDatePicker(etF6));
+
+        etPlantDate.setInputType(InputType.TYPE_NULL);
+        etPlantDate.setOnClickListener(v -> showPlantDatePicker());
+
+        plantBlocks = MockLabelRepository.getPlantBlocks();
+        setupPlantBlockSelector();
+    }
+
+    private void setupTemplateSelectors() {
+        spinnerTemplate.setOnItemClickListener((parent, view, position, id) -> {
+            String template = LabelTemplates.allTemplates()[position];
+            updateUIByTemplate(template);
+            tvToolbarTitle.setText(template + "打印");
+        });
+    }
+
+    private void setupActions() {
         Button btnConnect = findViewById(R.id.btnConnect);
         Button btnAddData = findViewById(R.id.btnAddData);
         Button btnClearData = findViewById(R.id.btnClearData);
-        btnPrint = findViewById(R.id.btnPrint);
 
-        // 初始化输入框和布局容器
-        tilProcessingType = findViewById(R.id.tilProcessingType);
-        spinnerProcessingType = findViewById(R.id.spinnerProcessingType);
-        tilProcessName = findViewById(R.id.tilProcessName);
-        etProcessName = findViewById(R.id.etProcessName);
-        tilF1 = findViewById(R.id.tilF1); etF1 = findViewById(R.id.etF1);
-        tilF2 = findViewById(R.id.tilF2); etF2 = findViewById(R.id.etF2);
-        tilF3 = findViewById(R.id.tilF3); etF3 = findViewById(R.id.etF3);
-        tilF4 = findViewById(R.id.tilF4); etF4 = findViewById(R.id.etF4);
-        tilF5 = findViewById(R.id.tilF5); etF5 = findViewById(R.id.etF5);
-        tilF6 = findViewById(R.id.tilF6); etF6 = findViewById(R.id.etF6);
-        etTraceCode = findViewById(R.id.etTraceCode);
-        spinnerTemplate = findViewById(R.id.spinnerTemplate);
-
-        // 初始化组合字段布局
-        layoutModelSpec = findViewById(R.id.layoutModelSpec);
-        tilModel = findViewById(R.id.tilModel);
-        etModel = findViewById(R.id.etModel);
-        tilSpec = findViewById(R.id.tilSpec);
-        etSpec = findViewById(R.id.etSpec);
-        
-        layoutNumWeight = findViewById(R.id.layoutNumWeight);
-        tilNum = findViewById(R.id.tilNum);
-        etNum = findViewById(R.id.etNum);
-        tilWeight = findViewById(R.id.tilWeight);
-        etWeight = findViewById(R.id.etWeight);
-
-        // 默认点击 etF6 弹出日期选择器
-        etF6.setFocusable(false);
-        etF6.setOnClickListener(v -> showDatePicker());
-
-        // 设置下拉框选项
-        String[] templates = {TEMP_MM, TEMP_CJG, TEMP_CP, TEMP_DP, TEMP_MC, TEMP_DK};
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, templates);
-        spinnerTemplate.setAdapter(adapter);
-        spinnerTemplate.setOnItemClickListener((parent, view, position, id) -> {
-            updateUIByTemplate(templates[position]);
-        });
-
-        // 初始化加工类型下拉框
-        String[] processingTypes = {TYPE_INITIAL, TYPE_DEEP};
-        ArrayAdapter<String> processingAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, processingTypes);
-        spinnerProcessingType.setAdapter(processingAdapter);
-        spinnerProcessingType.setText(TYPE_INITIAL, false);
-
-        btnBack.setOnClickListener(v -> finish());
-        
-        btnConnect.setOnClickListener(v -> {
-            startActivity(new Intent(MainActivity.this, DeviceListActivity.class));
-        });
-
+        btnConnect.setOnClickListener(v -> startActivity(new Intent(MainActivity.this, DeviceListActivity.class)));
         btnAddData.setOnClickListener(v -> addData());
-
-        btnClearData.setOnClickListener(v -> {
-            dataList.clear();
-            updateDataUI();
-            Toast.makeText(this, "数据已清空", Toast.LENGTH_SHORT).show();
-        });
-
-        btnPrint.setOnClickListener(v -> {
-            if (dataList.isEmpty()) {
-                Toast.makeText(this, "请先录入数据", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            startPrint();
-        });
-
-        // 示例数据按钮点击事件
-        btnExample.setOnClickListener(v -> fillExampleData());
-
-        // 根据 Intent 传入的模板名称进行初始化
-        String targetTemplate = getIntent().getStringExtra("target_template");
-        if (targetTemplate == null) targetTemplate = TEMP_MM;
-        
-        spinnerTemplate.setText(targetTemplate, false);
-        updateUIByTemplate(targetTemplate);
-        tvToolbarTitle.setText(targetTemplate + "打印");
-        
-        updateDataUI();
+        btnClearData.setOnClickListener(v -> clearCurrentData());
+        btnResetPlantFilters.setOnClickListener(v -> resetPlantFilters());
+        btnPrint.setOnClickListener(v -> printCurrentData());
+        btnExample.setOnClickListener(v -> onExampleAction());
     }
 
-    /**
-     * 在此处填入各个模板的示例数据
-     */
-    private void fillExampleData() {
-        String currentTemplate = spinnerTemplate.getText().toString();
-        
-        // 清空当前输入
-        etF1.setText(""); etF2.setText(""); etF3.setText(""); 
-        etF4.setText(""); etF5.setText(""); etF6.setText("");
-        etProcessName.setText(""); etModel.setText(""); etSpec.setText("");
-        etNum.setText(""); etWeight.setText(""); etTraceCode.setText("");
+    private void clearCurrentData() {
+        dataList.clear();
+        updateDataUI();
+        Toast.makeText(this, "数据已清空", Toast.LENGTH_SHORT).show();
+    }
 
-        if (TEMP_MM.equals(currentTemplate)) {
-            // TODO: 填写 苗木二维码 示例数据
-            etF1.setText("金丝油（奇楠）");
-            etF2.setText("2");
-            etF3.setText("嫁接");
-            etF4.setText("DK-456");
-            etF5.setText("2012-A005");
-            etF6.setText("2024-05-20");
-            etTraceCode.setText("DDDDDDEEEEEEEEE-AAA-BBBB-CCCCCCCC-YYMMDD-GG");
-        } else if (TEMP_CJG.equals(currentTemplate)) {
-            // TODO: 填写 加工二维码 示例数据
-            spinnerProcessingType.setText(TYPE_INITIAL, false);
-            etProcessName.setText("初步清理");
-            etF1.setText("沉香片");
-            etModel.setText("CX-1234");
-            etSpec.setText("5×2");
-            etNum.setText("10");
-            etWeight.setText("5g");
-            etF4.setText("一级");
-            etF5.setText("2024-05-21 14:00:00");
-            etF6.setText("OP-08");
-            etTraceCode.setText("DDDDDDEEEEEEEEE-AAA-BCCCCCCCC-YYMMDD-BB-GG-SS");
-        } else if (TEMP_CP.equals(currentTemplate)) {
-            // TODO: 填写 产成品二维码 示例数据
-            etF1.setText("极品沉香线香");
-            etModel.setText("CX-20");
-            etSpec.setText("20支");
-            etNum.setText("50");
-            etWeight.setText("1.5kg");
-            etF4.setText("特级");
-            etF5.setText("2024-05-22 10:30:00");
-            etF6.setText("OP-12");
-            etTraceCode.setText("DDDDDDEEEEEEEEE-AAA-PCCCCCCCC-YYMMDD-BB-GG-FFF");
-        } else if (TEMP_DP.equals(currentTemplate)) {
-            // TODO: 填写 大棚二维码 示例数据
-            etF1.setText("DP-12345");
-            etF2.setText("ZZY-123");
-            etF3.setText("500亩");
-            etF4.setText("张三");
-            etTraceCode.setText("DDDDDDEEEEEEEEE-PPPPPP-AAAAAA");
-        } else if (TEMP_MC.equals(currentTemplate)) {
-            // TODO: 填写 苗床二维码 示例数据
-            etF1.setText("MC-12345");
-            etF2.setText("DP-123");
-            etF3.setText("ZZY-123");
-            etF4.setText("李四");
-            etTraceCode.setText("DDDDDDEEEEEEEEE-PPPPPP-AAAAAA-SSSSSS");
-        } else if (TEMP_DK.equals(currentTemplate)) {
-            // TODO: 填写 地块二维码 示例数据
-            etF1.setText("DK-108");
-            etF2.setText("ZZY-123");
-            etModel.setText("100");
-            etSpec.setText("50");
-            etF4.setText("50亩");
-            etF5.setText("王五");
-            etTraceCode.setText("DDDDDDEEEEEEEEE-PPPPPP-FFFFFF");
+    private void printCurrentData() {
+        if (dataList.isEmpty()) {
+            String message = TEMP_MM.equals(currentTemplate()) ? "请先选择地块或补打一棵苗木" : "请先录入数据";
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+            return;
         }
-        
+
+        showLoading("正在准备批量打印 " + dataList.size() + " 张...");
+        printManager.startPrint(dataList, new LabelPrintManager.PrintJobListener() {
+            @Override
+            public void onCompleted() {
+                runOnUiThread(() -> {
+                    hideLoading();
+                    Toast.makeText(MainActivity.this, "全部打印完成", Toast.LENGTH_SHORT).show();
+                    if (TEMP_MM.equals(currentTemplate()) && selectedPlantBlock != null) {
+                        applyPlantFilters(false);
+                    } else {
+                        dataList.clear();
+                        updateDataUI();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(int errorCode) {
+                runOnUiThread(() -> {
+                    hideLoading();
+                    if ("未连接".equals(printerSDK.printerName)) {
+                        Toast.makeText(MainActivity.this, "请先连接打印机", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    Toast.makeText(MainActivity.this, "打印出错:" + errorCode, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+
+    private void onExampleAction() {
+        if (TEMP_MM.equals(currentTemplate())) {
+            if ("未连接".equals(printerSDK.printerName)) {
+                Toast.makeText(this, "请先连接打印机，再进行单棵补打", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            showManualPlantDialog();
+            return;
+        }
+        fillExampleData();
+    }
+
+    private void fillExampleData() {
+        clearManualInputs();
+
+        if (TEMP_MM.equals(currentTemplate())) {
+            if (!plantBlocks.isEmpty()) {
+                spinnerPlantBlock.setText(plantBlocks.get(0).name, false);
+                selectedPlantBlock = plantBlocks.get(0);
+                applyPlantFilters(true);
+            }
+            return;
+        }
+
+        TemplateExampleData exampleData = MockLabelRepository.getTemplateExample(currentTemplate());
+        if (exampleData == null) return;
+
+        spinnerProcessingType.setText(exampleData.processingType, false);
+        etProcessName.setText(exampleData.processName);
+        etF1.setText(exampleData.f1);
+        etF2.setText(exampleData.f2);
+        etF3.setText(exampleData.f3);
+        etF4.setText(exampleData.f4);
+        etF5.setText(exampleData.f5);
+        etF6.setText(exampleData.f6);
+        etModel.setText(exampleData.model);
+        etSpec.setText(exampleData.spec);
+        etNum.setText(exampleData.num);
+        etWeight.setText(exampleData.weight);
+        etTraceCode.setText(exampleData.traceCode);
         Toast.makeText(this, "已填入示例数据", Toast.LENGTH_SHORT).show();
     }
 
-    private void showDatePicker() {
-        final Calendar c = Calendar.getInstance();
-        int year = c.get(Calendar.YEAR);
-        int month = c.get(Calendar.MONTH);
-        int day = c.get(Calendar.DAY_OF_MONTH);
-
-        DatePickerDialog datePickerDialog = new DatePickerDialog(this,
-                (view, year1, monthOfYear, dayOfMonth) -> {
-                    String date = String.format(Locale.getDefault(), "%d-%02d-%02d", year1, monthOfYear + 1, dayOfMonth);
-                    etF6.setText(date);
-                }, year, month, day);
-        datePickerDialog.show();
-    }
-
-    private void showDateTimePicker(final EditText editText) {
-        final Calendar c = Calendar.getInstance();
-        int year = c.get(Calendar.YEAR);
-        int month = c.get(Calendar.MONTH);
-        int day = c.get(Calendar.DAY_OF_MONTH);
-
-        DatePickerDialog datePickerDialog = new DatePickerDialog(this,
-                (view, year1, monthOfYear, dayOfMonth) -> {
-                    final String date = String.format(Locale.getDefault(), "%d-%02d-%02d", year1, monthOfYear + 1, dayOfMonth);
-                    
-                    int hour = c.get(Calendar.HOUR_OF_DAY);
-                    int minute = c.get(Calendar.MINUTE);
-                    
-                    TimePickerDialog timePickerDialog = new TimePickerDialog(MainActivity.this,
-                            (view1, hourOfDay, minute1) -> {
-                                String dateTime = date + " " + String.format(Locale.getDefault(), "%02d:%02d:00", hourOfDay, minute1);
-                                editText.setText(dateTime);
-                            }, hour, minute, true);
-                    timePickerDialog.show();
-                }, year, month, day);
-        datePickerDialog.show();
+    private void clearManualInputs() {
+        etF1.setText("");
+        etF2.setText("");
+        etF3.setText("");
+        etF4.setText("");
+        etF5.setText("");
+        etF6.setText("");
+        etProcessName.setText("");
+        etModel.setText("");
+        etSpec.setText("");
+        etNum.setText("");
+        etWeight.setText("");
+        etTraceCode.setText("");
     }
 
     private void updateUIByTemplate(String template) {
-        // 重置所有可见性
+        dataList.clear();
+        resetCommonVisibility();
+
+        if (TEMP_MM.equals(template)) {
+            cardManualForm.setVisibility(View.GONE);
+            cardPlantBatch.setVisibility(View.VISIBLE);
+            btnExample.setText("补打单棵");
+            resetPlantFilters();
+        } else if (TEMP_CJG.equals(template)) {
+            showProcessingTemplate();
+        } else if (TEMP_CP.equals(template)) {
+            showProductTemplate();
+        } else if (TEMP_DP.equals(template)) {
+            showGreenhouseTemplate();
+        } else if (TEMP_MC.equals(template)) {
+            showSeedbedTemplate();
+        } else if (TEMP_DK.equals(template)) {
+            showFieldTemplate();
+        }
+
+        updateDataUI();
+    }
+
+    private void resetCommonVisibility() {
         tilF1.setVisibility(View.VISIBLE);
         tilF2.setVisibility(View.VISIBLE);
         tilF3.setVisibility(View.VISIBLE);
@@ -299,324 +369,386 @@ public class MainActivity extends ComponentActivity {
         tilProcessName.setVisibility(View.GONE);
         layoutModelSpec.setVisibility(View.GONE);
         layoutNumWeight.setVisibility(View.GONE);
-        
-        if (TEMP_MM.equals(template)) {
-            tilF1.setHint("品种");
-            tilF2.setHint("代数");
-            tilF3.setHint("育苗方法");
-            tilF4.setHint("地块");
-            tilF5.setHint("母树");
-            tilF6.setHint("定植日期");
-            
-            etF5.setFocusableInTouchMode(true);
-            etF5.setOnClickListener(null);
-            etF6.setFocusable(false);
-            etF6.setOnClickListener(v -> showDatePicker());
-        } else if (TEMP_CJG.equals(template)) {
-            tilProcessingType.setVisibility(View.VISIBLE);
-            tilProcessName.setVisibility(View.VISIBLE);
-            tilF1.setHint("名称");
-            tilF2.setVisibility(View.GONE); 
-            layoutModelSpec.setVisibility(View.VISIBLE);
-            tilModel.setHint("型号");
-            tilSpec.setHint("规格");
-            tilF3.setVisibility(View.GONE); 
-            layoutNumWeight.setVisibility(View.VISIBLE);
-            tilNum.setHint("数量");
-            tilWeight.setHint("重量");
-            tilF4.setHint("等级");
-            tilF5.setHint("完工时间");
-            tilF6.setHint("操作员ID");
-            
-            etF5.setFocusable(false);
-            etF5.setOnClickListener(v -> showDateTimePicker(etF5));
-            etF6.setFocusableInTouchMode(true);
-            etF6.setOnClickListener(null);
-        } else if (TEMP_CP.equals(template)) {
-            tilF1.setHint("产成品名称");
-            tilF2.setVisibility(View.GONE);
-            layoutModelSpec.setVisibility(View.VISIBLE);
-            tilModel.setHint("型号");
-            tilSpec.setHint("规格");
-            tilF3.setVisibility(View.GONE);
-            layoutNumWeight.setVisibility(View.VISIBLE);
-            tilNum.setHint("数量");
-            tilWeight.setHint("重量");
-            tilF4.setHint("等级");
-            tilF5.setHint("完工时间");
-            tilF6.setHint("操作员ID");
+        cardManualForm.setVisibility(View.VISIBLE);
+        cardPlantBatch.setVisibility(View.GONE);
+        btnExample.setVisibility(View.VISIBLE);
+        btnExample.setText("示例数据");
+        tvDataCount.setText("");
+    }
 
-            etF5.setFocusable(false);
-            etF5.setOnClickListener(v -> showDateTimePicker(etF5));
-            etF6.setFocusableInTouchMode(true);
-            etF6.setOnClickListener(null);
-        } else if (TEMP_DP.equals(template)) {
-            tilF1.setHint("自编码");
-            tilF2.setHint("种植园");
-            tilF3.setHint("面积");
-            tilF4.setHint("负责人");
-            tilF5.setVisibility(View.GONE);
-            tilF6.setVisibility(View.GONE);
-            
-            etF5.setFocusableInTouchMode(true);
-            etF5.setOnClickListener(null);
-            etF6.setFocusableInTouchMode(true);
-            etF6.setOnClickListener(null);
-        } else if (TEMP_MC.equals(template)) {
-            tilF1.setHint("自编码");
-            tilF2.setHint("大棚");
-            tilF3.setHint("种植园");
-            tilF4.setHint("负责人");
-            tilF5.setVisibility(View.GONE);
-            tilF6.setVisibility(View.GONE);
+    private void showProcessingTemplate() {
+        tilProcessingType.setVisibility(View.VISIBLE);
+        tilProcessName.setVisibility(View.VISIBLE);
+        tilF1.setHint("名称");
+        tilF2.setVisibility(View.GONE);
+        tilF3.setVisibility(View.GONE);
+        layoutModelSpec.setVisibility(View.VISIBLE);
+        layoutNumWeight.setVisibility(View.VISIBLE);
+        tilModel.setHint("型号");
+        tilSpec.setHint("规格");
+        tilNum.setHint("数量");
+        tilWeight.setHint("重量");
+        tilF4.setHint("等级");
+        tilF5.setHint("完工时间");
+        tilF6.setHint("操作员ID");
+        etF5.setFocusable(false);
+        etF5.setOnClickListener(v -> showDateTimePicker(etF5));
+        etF6.setFocusableInTouchMode(true);
+        etF6.setOnClickListener(null);
+    }
 
-            etF5.setFocusableInTouchMode(true);
-            etF5.setOnClickListener(null);
-            etF6.setFocusableInTouchMode(true);
-            etF6.setOnClickListener(null);
-        } else if (TEMP_DK.equals(template)) {
-            tilF1.setHint("自编码");
-            tilF2.setHint("种植园");
-            tilF3.setVisibility(View.GONE); // 隐藏单一F3，显示长宽组合
-            layoutModelSpec.setVisibility(View.VISIBLE);
-            tilModel.setHint("长");
-            tilSpec.setHint("宽");
-            tilF4.setHint("面积");
-            tilF5.setHint("负责人");
-            tilF6.setVisibility(View.GONE);
+    private void showProductTemplate() {
+        tilF1.setHint("产成品名称");
+        tilF2.setVisibility(View.GONE);
+        tilF3.setVisibility(View.GONE);
+        layoutModelSpec.setVisibility(View.VISIBLE);
+        layoutNumWeight.setVisibility(View.VISIBLE);
+        tilModel.setHint("型号");
+        tilSpec.setHint("规格");
+        tilNum.setHint("数量");
+        tilWeight.setHint("重量");
+        tilF4.setHint("等级");
+        tilF5.setHint("完工时间");
+        tilF6.setHint("操作员ID");
+        etF5.setFocusable(false);
+        etF5.setOnClickListener(v -> showDateTimePicker(etF5));
+        etF6.setFocusableInTouchMode(true);
+        etF6.setOnClickListener(null);
+    }
 
-            etF5.setFocusableInTouchMode(true);
-            etF5.setOnClickListener(null);
-            etF6.setFocusableInTouchMode(true);
-            etF6.setOnClickListener(null);
-        }
+    private void showGreenhouseTemplate() {
+        tilF1.setHint("自编码");
+        tilF2.setHint("种植园");
+        tilF3.setHint("面积");
+        tilF4.setHint("负责人");
+        tilF5.setVisibility(View.GONE);
+        tilF6.setVisibility(View.GONE);
+        etF5.setFocusableInTouchMode(true);
+        etF5.setOnClickListener(null);
+        etF6.setFocusableInTouchMode(true);
+        etF6.setOnClickListener(null);
+    }
+
+    private void showSeedbedTemplate() {
+        tilF1.setHint("自编码");
+        tilF2.setHint("大棚");
+        tilF3.setHint("种植园");
+        tilF4.setHint("负责人");
+        tilF5.setVisibility(View.GONE);
+        tilF6.setVisibility(View.GONE);
+        etF5.setFocusableInTouchMode(true);
+        etF5.setOnClickListener(null);
+        etF6.setFocusableInTouchMode(true);
+        etF6.setOnClickListener(null);
+    }
+
+    private void showFieldTemplate() {
+        tilF1.setHint("自编码");
+        tilF2.setHint("种植园");
+        tilF3.setVisibility(View.GONE);
+        layoutModelSpec.setVisibility(View.VISIBLE);
+        tilModel.setHint("长");
+        tilSpec.setHint("宽");
+        tilF4.setHint("面积");
+        tilF5.setHint("负责人");
+        tilF6.setVisibility(View.GONE);
+        etF5.setFocusableInTouchMode(true);
+        etF5.setOnClickListener(null);
+        etF6.setFocusableInTouchMode(true);
+        etF6.setOnClickListener(null);
     }
 
     private void addData() {
-        String temp = spinnerTemplate.getText().toString();
-        String processingType = spinnerProcessingType.getText().toString();
-        String process = etProcessName.getText().toString();
+        String template = currentTemplate();
         String f1 = etF1.getText().toString();
-        
-        String f2, f3;
-        if (TEMP_MM.equals(temp) || TEMP_DP.equals(temp) || TEMP_MC.equals(temp)) {
-            f2 = etF2.getText().toString();
-            f3 = etF3.getText().toString();
-        } else if (TEMP_DK.equals(temp)) {
-            f2 = etF2.getText().toString();
-            f3 = etModel.getText().toString() + " × " + etSpec.getText().toString();
-        } else {
-            // 加工/产成品
-            f2 = etModel.getText().toString() + " / " + etSpec.getText().toString();
-            f3 = etNum.getText().toString() + " / " + etWeight.getText().toString();
-        }
-
+        String f2 = resolveF2(template);
+        String f3 = resolveF3(template);
         String f4 = etF4.getText().toString();
         String f5 = etF5.getText().toString();
         String f6 = etF6.getText().toString();
-        String tc = etTraceCode.getText().toString();
 
-        // 校验逻辑
-        if (TEMP_DP.equals(temp) || TEMP_MC.equals(temp)) {
-            if (f1.isEmpty() || f2.isEmpty() || f3.isEmpty() || f4.isEmpty()) {
-                Toast.makeText(this, "请填写所有必要字段", Toast.LENGTH_SHORT).show();
-                return;
-            }
-        } else if (TEMP_DK.equals(temp)) {
-            if (f1.isEmpty() || f2.isEmpty() || etModel.getText().toString().isEmpty() || etSpec.getText().toString().isEmpty() || f4.isEmpty() || f5.isEmpty()) {
-                Toast.makeText(this, "请填写所有必要字段", Toast.LENGTH_SHORT).show();
-                return;
-            }
-        } else {
-            if (f1.isEmpty() || f2.trim().equals("/") || f3.trim().equals("/") || f4.isEmpty() || f5.isEmpty() || f6.isEmpty()){
-                Toast.makeText(this, "请填写所有字段", Toast.LENGTH_SHORT).show();
-                return;
-            }
+        if (!validateManualInput(template, f1, f2, f3, f4, f5, f6)) {
+            return;
         }
-        dataList.add(new LabelData(temp, processingType, process, f1, f2, f3, f4, f5, f6, tc));
+
+        dataList.add(new LabelData(
+                template,
+                spinnerProcessingType.getText().toString(),
+                etProcessName.getText().toString(),
+                f1, f2, f3, f4, f5, f6,
+                etTraceCode.getText().toString()
+        ));
         updateDataUI();
         Toast.makeText(this, "已录入第 " + dataList.size() + " 组数据", Toast.LENGTH_SHORT).show();
     }
 
+    private String resolveF2(String template) {
+        if (TEMP_DK.equals(template)) {
+            return etF2.getText().toString();
+        }
+        if (TEMP_CP.equals(template) || TEMP_CJG.equals(template)) {
+            return etModel.getText().toString() + " / " + etSpec.getText().toString();
+        }
+        return etF2.getText().toString();
+    }
+
+    private String resolveF3(String template) {
+        if (TEMP_DK.equals(template)) {
+            return etModel.getText().toString() + " × " + etSpec.getText().toString();
+        }
+        if (TEMP_CP.equals(template) || TEMP_CJG.equals(template)) {
+            return etNum.getText().toString() + " / " + etWeight.getText().toString();
+        }
+        return etF3.getText().toString();
+    }
+
+    private boolean validateManualInput(String template, String f1, String f2, String f3, String f4, String f5, String f6) {
+        if (TEMP_DP.equals(template) || TEMP_MC.equals(template)) {
+            if (f1.isEmpty() || f2.isEmpty() || f3.isEmpty() || f4.isEmpty()) {
+                Toast.makeText(this, "请填写所有必要字段", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+            return true;
+        }
+        if (TEMP_DK.equals(template)) {
+            if (f1.isEmpty() || f2.isEmpty() || etModel.getText().toString().isEmpty() || etSpec.getText().toString().isEmpty() || f4.isEmpty() || f5.isEmpty()) {
+                Toast.makeText(this, "请填写所有必要字段", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+            return true;
+        }
+        if (f1.isEmpty() || f2.trim().equals("/") || f3.trim().equals("/") || f4.isEmpty() || f5.isEmpty() || f6.isEmpty()) {
+            Toast.makeText(this, "请填写所有字段", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        return true;
+    }
+
+    private void setupPlantBlockSelector() {
+        List<String> names = new ArrayList<>();
+        for (PlantBlockData block : plantBlocks) {
+            names.add(block.name);
+        }
+        ArrayAdapter<String> blockAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
+        spinnerPlantBlock.setAdapter(blockAdapter);
+        spinnerPlantBlock.setKeyListener(null);
+        spinnerPlantBlock.setFocusable(false);
+        spinnerPlantBlock.setCursorVisible(false);
+        spinnerPlantBlock.setOnClickListener(v -> spinnerPlantBlock.showDropDown());
+        spinnerPlantBlock.setOnItemClickListener((parent, view, position, id) -> {
+            selectedPlantBlock = plantBlocks.get(position);
+            applyPlantFilters(true);
+        });
+        layoutPlantSummary.setVisibility(View.VISIBLE);
+        updatePlantSummaryPlaceholder();
+    }
+
+    private void applyPlantFilters(boolean showToast) {
+        dataList.clear();
+        if (selectedPlantBlock == null) {
+            updatePlantSummaryPlaceholder();
+            updateDataUI();
+            return;
+        }
+
+        bindPlantBlockSummary(selectedPlantBlock);
+        for (PlantData plant : selectedPlantBlock.plants) {
+            if (selectedPlantDate.isEmpty() || selectedPlantDate.equals(plant.plantedDate)) {
+                dataList.add(MockLabelRepository.toPlantLabel(plant));
+            }
+        }
+        updateDataUI();
+
+        if (showToast) {
+            String message = selectedPlantDate.isEmpty()
+                    ? "已载入“" + selectedPlantBlock.name + "”的示例苗木标签"
+                    : "已按定植日期筛选到 " + dataList.size() + " 棵苗木";
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void bindPlantBlockSummary(PlantBlockData block) {
+        tvPlantBlockName.setText("地块名称：" + block.name);
+        tvPlantBlockCode.setText("自编码：" + block.selfCode);
+        tvPlantBlockLocation.setText("位置：" + block.location);
+        tvPlantBlockStatus.setText("状态：" + block.status);
+        tvPlantBlockStatus.setTextColor(getPlantStatusColor(block.status));
+    }
+
+    private void resetPlantFilters() {
+        selectedPlantBlock = null;
+        selectedPlantDate = "";
+        dataList.clear();
+        spinnerPlantBlock.setText("", false);
+        etPlantDate.setText("");
+        updatePlantSummaryPlaceholder();
+        updateDataUI();
+    }
+
+    private void updatePlantSummaryPlaceholder() {
+        tvPlantBlockName.setText("地块名称：待选择");
+        tvPlantBlockCode.setText("自编码：待选择");
+        tvPlantBlockLocation.setText("位置：待选择");
+        tvPlantBlockStatus.setText("状态：待选择");
+        tvPlantBlockStatus.setTextColor(Color.parseColor("#999999"));
+        tvPlantCount.setText("0");
+        tvDataCount.setText("请选择地块，并可按定植日期进一步筛选");
+    }
+
     private void updateDataUI() {
         btnPrint.setText("确认打印 (" + dataList.size() + ")");
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        refreshStatus();
-    }
-
-    private void refreshStatus() {
-        String name = MyApplication.printerName;
-        tvStatus.setText(name);
-        if (name.equals("未连接")) {
-            tvStatus.setTextColor(Color.RED);
-        } else {
-            tvStatus.setTextColor(Color.parseColor("#4CAF50")); // 适配根项目 AgGreenPrimary
+        if (TEMP_MM.equals(currentTemplate()) && selectedPlantBlock != null) {
+            String dateSuffix = selectedPlantDate.isEmpty() ? "" : "，定植日期：" + selectedPlantDate;
+            tvDataCount.setText("当前将打印地块“" + selectedPlantBlock.name + "”中的 " + dataList.size() + " 张苗木标签" + dateSuffix);
+            tvPlantCount.setText(String.valueOf(dataList.size()));
+        } else if (!TEMP_MM.equals(currentTemplate())) {
+            tvDataCount.setText(dataList.isEmpty() ? "" : "已准备 " + dataList.size() + " 张标签");
         }
     }
 
-    private int generatedCount = 0;
+    private void showManualPlantDialog() {
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(padding, padding / 2, padding, 0);
 
-    private void startPrint() {
-        generatedCount = 0;
-        int totalCount = dataList.size();
-        showLoading("正在准备批量打印 " + totalCount + " 张...");
+        EditText input = new EditText(this);
+        input.setHint("请输入苗木二维码");
+        input.setSingleLine();
+        container.addView(input);
 
-        PrintCallback printCallback = new PrintCallback() {
-            @Override
-            public void onProgress(int pageIndex, int quantityIndex, HashMap hashMap) {
-                if (pageIndex == totalCount) {
-                    MyApplication.api.endPrintJob();
-                    runOnUiThread(() -> {
-                        hideLoading();
-                        Toast.makeText(MainActivity.this, "全部打印完成", Toast.LENGTH_SHORT).show();
-                        dataList.clear();
-                        updateDataUI();
-                    });
+        TextView validationText = new TextView(this);
+        validationText.setPadding(0, padding, 0, 0);
+        validationText.setTextColor(Color.parseColor("#2E7D32"));
+        container.addView(validationText);
+
+        TextView infoText = new TextView(this);
+        infoText.setPadding(0, padding / 2, 0, 0);
+        infoText.setVisibility(View.GONE);
+        container.addView(infoText);
+
+        final LabelData[] validatedLabel = new LabelData[1];
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("补打单个苗木标签")
+                .setMessage("先校验苗木二维码，再确认苗木信息后打印。")
+                .setView(container)
+                .setNeutralButton("校验二维码", null)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认打印", null)
+                .create();
+
+        dialog.setOnShowListener(dialogInterface -> {
+            Button validateButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            Button printButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            printButton.setEnabled(false);
+
+            validateButton.setOnClickListener(v -> {
+                String manualCode = input.getText().toString().trim();
+                if (manualCode.isEmpty()) {
+                    Toast.makeText(this, "请输入苗木二维码", Toast.LENGTH_SHORT).show();
+                    return;
                 }
-            }
 
-            @Override
-            public void onBufferFree(int pageIndex, int bufferSize) {
-                if (generatedCount >= totalCount) return;
-                commitPrintData(dataList.get(generatedCount));
-                generatedCount++;
-            }
+                LabelData label = MockLabelRepository.findPlantLabelByTraceCode(plantBlocks, manualCode);
+                String status = selectedPlantBlock != null ? selectedPlantBlock.status : "正常养护";
+                if (label == null) {
+                    String blockName = selectedPlantBlock != null ? selectedPlantBlock.name : "一号示范地块";
+                    label = new LabelData(TEMP_MM, "", "", "金丝油", "2代", "嫁接", blockName, "MS-REPRINT-001", "2024-06-18", manualCode);
+                } else if (selectedPlantBlock == null) {
+                    PlantBlockData block = MockLabelRepository.findPlantBlockByName(plantBlocks, label.f4);
+                    status = block != null ? block.status : "正常养护";
+                }
 
-            @Override
-            public void onError(int errorCode, int printState) {
-                String name = MyApplication.printerName;
-                runOnUiThread(() -> {
-                    hideLoading();
-                    if (name.equals("未连接")) {
-                        Toast.makeText(MainActivity.this, "请先连接打印机", Toast.LENGTH_SHORT).show();
-                        return;
-                    };
-                    Toast.makeText(MainActivity.this, "打印出错:" + errorCode, Toast.LENGTH_SHORT).show();
-                });
-            }
+                validatedLabel[0] = label;
+                validationText.setText("二维码校验结果：正确");
+                infoText.setText("品种：" + label.f1 + "\n代数：" + label.f2 + "\n所属地块：" + label.f4 + "\n状态：" + status);
+                infoText.setTextColor(getPlantStatusColor(status));
+                infoText.setVisibility(View.VISIBLE);
+                printButton.setEnabled(true);
+            });
 
-            @Override public void onError(int i) {}
-            @Override public void onCancelJob(boolean i) {}
-        };
+            printButton.setOnClickListener(v -> {
+                if (validatedLabel[0] == null) {
+                    Toast.makeText(this, "请先校验苗木二维码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                dataList.clear();
+                dataList.add(validatedLabel[0]);
+                updateDataUI();
+                tvDataCount.setText("已准备补打 1 张苗木标签，二维码：" + validatedLabel[0].traceCode);
+                tvPlantCount.setText("1");
+                printCurrentData();
+                dialog.dismiss();
+            });
+        });
 
-        MyApplication.api.setTotalPrintQuantity(totalCount);
-        MyApplication.api.startPrintJob(3, 1, 1, printCallback);
+        dialog.show();
     }
 
-    private void commitPrintData(LabelData data) {
-        float w = 70, h = 50;
-        MyApplication.api.drawEmptyLabel(w, h, 0, new ArrayList<>());
-        // 外边框（加粗）
-        float margin = 1.5f;
-        //上
-        MyApplication.api.drawLabelLine(margin, margin, 70 - margin * 2, 0.5f, 0, 1, new float[]{});
-        //下
-        MyApplication.api.drawLabelLine(margin, 50 - margin, 70 - margin * 2, 0.5f, 0, 1, new float[]{});
-        // 左
-        MyApplication.api.drawLabelLine(margin, margin, 0.5f, 50 - margin * 2, 0, 1, new float[]{});
-        // 右
-        MyApplication.api.drawLabelLine(70 - margin, margin, 0.5f, 50 - margin * 2, 0, 1, new float[]{});
-        
-        // 标题 居中
-        String title;
-        if (TEMP_MM.equals(data.template)) title = "沉香溯源标签【苗木】";
-        else if (TEMP_CJG.equals(data.template)) title = "沉香溯源标签【" + data.processingType + "-(" + data.processName + ")】";
-        else if (TEMP_CP.equals(data.template)) title = "沉香溯源标签【产成品】";
-        else if (TEMP_DP.equals(data.template)) title = "沉香溯源标签【大棚】";
-        else if (TEMP_MC.equals(data.template)) title = "沉香溯源标签【苗床】";
-        else title = "沉香溯源标签【地块】";
-        
-        MyApplication.api.drawLabelText(0, 2, 70, 7, title, "", 5.5f, 0, 1, 1, 6, 0, 1, new boolean[]{true, false, false, false});
-        MyApplication.api.drawLabelLine(margin,margin+8f,67,0.5f,0,1,new float[]{});
+    private void showDatePicker(EditText target) {
+        Calendar c = Calendar.getInstance();
+        DatePickerDialog datePickerDialog = new DatePickerDialog(this,
+                (view, year, monthOfYear, dayOfMonth) -> {
+                    String date = String.format(Locale.getDefault(), "%d-%02d-%02d", year, monthOfYear + 1, dayOfMonth);
+                    target.setText(date);
+                },
+                c.get(Calendar.YEAR),
+                c.get(Calendar.MONTH),
+                c.get(Calendar.DAY_OF_MONTH)
+        );
+        datePickerDialog.show();
+    }
 
-        float tableTop = 8+margin;
-        float tableHeight = 32;
-        
-        // 两条竖线位置
-        float x1 = margin+15;           
-        float x2 = margin+15 + 26;      
-        
-        if (TEMP_DP.equals(data.template) || TEMP_MC.equals(data.template)) {
-            // 4行模板 (大棚/苗床)
-            float rowH = tableHeight / 4f;
-            MyApplication.api.drawLabelLine(x1, tableTop, 0.5f, tableHeight, 0, 1, new float[]{});
-            MyApplication.api.drawLabelLine(x2, tableTop, 0.5f, tableHeight, 0, 1, new float[]{});
-            // 3行横线
-            for (int i = 1; i <= 3; i++) {
-                MyApplication.api.drawLabelLine(margin, tableTop + i * rowH, x2-1, 0.4f, 0, 1, new float[]{});
-            }
-            
-            String[] labels;
-            if (TEMP_DP.equals(data.template)) {
-                labels = new String[]{"自编码", "种植园", "面积", "负责人"};
-            } else {
-                labels = new String[]{"自编码", "大棚", "种植园", "负责人"};
-            }
-            
-            String[] values = {data.f1, data.f2, data.f3, data.f4};
-            for (int i = 0; i < 4; i++) {
-                float y = tableTop + i * rowH ;
-                MyApplication.api.drawLabelText(margin+1, y, 14, rowH, labels[i], "", 3.5f, 0, 0, 1, 6, 0, 1, new boolean[]{false, false, false, false});
-                MyApplication.api.drawLabelText(x1+1, y, 25, rowH, values[i], "", 3.0f, 0, 0, 1, 6, 0, 1, new boolean[]{false, false, false, false});
-            }
-        } else if (TEMP_DK.equals(data.template)) {
-            // 5行模板 (地块)
-            float rowH = tableHeight / 5f;
-            MyApplication.api.drawLabelLine(x1, tableTop, 0.5f, tableHeight, 0, 1, new float[]{});
-            MyApplication.api.drawLabelLine(x2, tableTop, 0.5f, tableHeight, 0, 1, new float[]{});
-            // 4行横线
-            for (int i = 1; i <= 4; i++) {
-                MyApplication.api.drawLabelLine(margin, tableTop + i * rowH, x2-1, 0.4f, 0, 1, new float[]{});
-            }
-            String[] labels = {"自编码", "种植园", "长×宽", "面积", "负责人"};
-            String[] values = {data.f1, data.f2, data.f3, data.f4, data.f5};
-            for (int i = 0; i < 5; i++) {
-                float y = tableTop + i * rowH ;
-                MyApplication.api.drawLabelText(margin+1, y, 14, rowH, labels[i], "", 3.5f, 0, 0, 1, 6, 0, 1, new boolean[]{false, false, false, false});
-                MyApplication.api.drawLabelText(x1+1, y, 25, rowH, values[i], "", 3.0f, 0, 0, 1, 6, 0, 1, new boolean[]{false, false, false, false});
-            }
-        } else {
-            // 6行模板 (苗木/加工/产成品)
-            float rowH = tableHeight / 6f;
-            MyApplication.api.drawLabelLine(x1, tableTop, 0.5f, tableHeight, 0, 1, new float[]{});
-            MyApplication.api.drawLabelLine(x2, tableTop, 0.5f, tableHeight, 0, 1, new float[]{});
-            // 5行横线
-            for (int i = 1; i <= 5; i++) {
-                MyApplication.api.drawLabelLine(margin, tableTop + i * rowH, x2-1, 0.4f, 0, 1, new float[]{});
-            }
-            String[] labels;
-            if (TEMP_MM.equals(data.template)) {
-                labels = new String[]{"品种", "代数", "育苗方法", "地块", "母树", "定植日期"};
-            } else if (TEMP_CJG.equals(data.template)) {
-                labels = new String[]{"名称", "型号/规格", "数量/重量", "等级", "完工时间", "操作员ID"};
-            } else {
-                labels = new String[]{"分类名称", "型号/规格", "数量/重量", "等级", "完工时间", "操作员ID"};
-            }
-            String[] values = {data.f1, data.f2, data.f3, data.f4, data.f5, data.f6};
+    private void showDateTimePicker(EditText target) {
+        Calendar c = Calendar.getInstance();
+        DatePickerDialog datePickerDialog = new DatePickerDialog(this,
+                (view, year, monthOfYear, dayOfMonth) -> {
+                    String date = String.format(Locale.getDefault(), "%d-%02d-%02d", year, monthOfYear + 1, dayOfMonth);
+                    TimePickerDialog timePickerDialog = new TimePickerDialog(MainActivity.this,
+                            (view1, hourOfDay, minute) -> target.setText(date + " " + String.format(Locale.getDefault(), "%02d:%02d:00", hourOfDay, minute)),
+                            c.get(Calendar.HOUR_OF_DAY),
+                            c.get(Calendar.MINUTE),
+                            true
+                    );
+                    timePickerDialog.show();
+                },
+                c.get(Calendar.YEAR),
+                c.get(Calendar.MONTH),
+                c.get(Calendar.DAY_OF_MONTH)
+        );
+        datePickerDialog.show();
+    }
 
-            for (int i = 0; i < 6; i++) {
-                float y = tableTop + i * rowH ;
-                MyApplication.api.drawLabelText(margin+1, y, 14, rowH, labels[i], "", 3.5f, 0, 0, 1, 6, 0, 1, new boolean[]{false, false, false, false});
-                MyApplication.api.drawLabelText(x1+1, y, 25, rowH, values[i], "", 3.0f, 0, 0, 1, 6, 0, 1, new boolean[]{false, false, false, false});
-            }
-        }
+    private void showPlantDatePicker() {
+        Calendar c = Calendar.getInstance();
+        DatePickerDialog datePickerDialog = new DatePickerDialog(this,
+                (view, year, monthOfYear, dayOfMonth) -> {
+                    selectedPlantDate = String.format(Locale.getDefault(), "%d-%02d-%02d", year, monthOfYear + 1, dayOfMonth);
+                    etPlantDate.setText(selectedPlantDate);
+                    applyPlantFilters(true);
+                },
+                c.get(Calendar.YEAR),
+                c.get(Calendar.MONTH),
+                c.get(Calendar.DAY_OF_MONTH)
+        );
+        datePickerDialog.show();
+    }
 
-        //二维码绘制
-        MyApplication.api.drawLabelQrCode(x2+2, tableTop+5, 22, 22, data.traceCode, 31, 0);
-        //底部编码
-        MyApplication.api.drawLabelLine(margin, 40+margin, 67, 0.5f, 0, 1, new float[]{});
-        MyApplication.api.drawLabelText(margin+1, 39+margin, 68, 8, data.traceCode, "", 2.8f, 0, 1, 1, 6, 0, 1, new boolean[]{false, false, false, false});
+    private int getPlantStatusColor(String status) {
+        if (status == null) return Color.parseColor("#999999");
+        if (status.contains("正常") || status.contains("良好")) return Color.parseColor("#2E7D32");
+        if (status.contains("待")) return Color.parseColor("#EF6C00");
+        return Color.parseColor("#666666");
+    }
 
-        byte[] jsonByte = MyApplication.api.generateLabelJson();
-        String jsonStr = new String(jsonByte, java.nio.charset.StandardCharsets.UTF_8);
-        String printerInfo = "{\"printerImageProcessingInfo\":{\"orientation\":0,\"margin\":[0,0,0,0],\"printQuantity\":1,\"width\":70,\"height\":50},\"epc\":\"\"}";
-        List<String> dList = new ArrayList<>(); dList.add(jsonStr);
-        List<String> iList = new ArrayList<>(); iList.add(printerInfo);
-        MyApplication.api.commitData(dList, iList);
+    private void refreshPrinterStatus() {
+        String name = printerSDK.printerName;
+        tvStatus.setText(name);
+        tvStatus.setTextColor("未连接".equals(name) ? Color.RED : Color.parseColor("#4CAF50"));
+    }
+
+    private String currentTemplate() {
+        return spinnerTemplate.getText().toString();
     }
 
     private void showLoading(String message) {

@@ -1,3 +1,4 @@
+//管理蓝牙连接
 package com.example.printerfeature;
 
 import android.Manifest;
@@ -94,7 +95,7 @@ public class DeviceListActivity extends Activity {
             BluetoothDevice selectedDevice = deviceList.get(position);
 
             // 连接前先把设备名字存起来
-            MyApplication.printerName = selectedDevice.getName();
+            printerSDK.printerName = selectedDevice.getName();
 
             if (bluetoothAdapter != null && bluetoothAdapter.isDiscovering()) {
                 bluetoothAdapter.cancelDiscovery();
@@ -208,7 +209,7 @@ public class DeviceListActivity extends Activity {
     private void connectToPrinter(String address) {
         showLoading("正在连接打印机...");
         new Thread(() -> {
-            int result = MyApplication.api.connectBluetoothPrinter(address);
+            int result = printerSDK.api.connectBluetoothPrinter(address);
             runOnUiThread(() -> {
                 hideLoading();
                 if (result == 0) {

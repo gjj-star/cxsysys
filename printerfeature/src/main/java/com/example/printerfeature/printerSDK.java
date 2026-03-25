@@ -1,10 +1,11 @@
+//全局初始化SDK
 package com.example.printerfeature;
 
 import com.gengcon.www.jcprintersdk.JCPrintApi;
 import com.gengcon.www.jcprintersdk.callback.Callback;
 
-public class MyApplication extends android.app.Application {
-    public static MyApplication instance;
+public class printerSDK extends android.app.Application {
+    public static printerSDK instance;
     public static JCPrintApi api;
     public static String printerName = "未连接";
 
