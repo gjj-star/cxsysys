@@ -131,6 +131,7 @@
                     android:padding="16dp">
 
                     <TextView
+                        android:id="@+id/tvBatchFilterTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="筛选苗木所在地块"
@@ -228,6 +229,15 @@
                             android:textColor="#555555"
                             android:textSize="14sp" />
 
+                        <TextView
+                            android:id="@+id/tvPlantBlockOwner"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="负责人："
+                            android:textColor="#555555"
+                            android:textSize="14sp" />
+
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
@@ -238,6 +248,7 @@
                             android:paddingVertical="14dp">
 
                             <TextView
+                                android:id="@+id/tvPlantCountLabel"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="待打印苗木标签"

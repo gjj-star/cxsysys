@@ -2,8 +2,10 @@
 package com.example.printerfeature.data;
 
 import com.example.printerfeature.model.LabelData;
+import com.example.printerfeature.model.FieldLabelData;
 import com.example.printerfeature.model.PlantBlockData;
 import com.example.printerfeature.model.PlantData;
+import com.example.printerfeature.model.PlantationData;
 import com.example.printerfeature.model.TemplateExampleData;
 
 import java.util.ArrayList;
@@ -34,6 +36,30 @@ public final class MockLabelRepository {
         blocks.add(new PlantBlockData("三号保育地块", "DK-103", "C区西北角", "生长良好", blockC));
 
         return blocks;
+    }
+
+    public static List<PlantationData> getPlantations() {
+        List<PlantationData> plantations = new ArrayList<>();
+
+        List<FieldLabelData> fieldsA = new ArrayList<>();
+        fieldsA.add(new FieldLabelData("A区-01号地块", "DK-201", "120m × 45m", "5.4亩", "陈大海", "DK-EX-A01"));
+        fieldsA.add(new FieldLabelData("A区-02号地块", "DK-202", "100m × 40m", "4.0亩", "陈大海", "DK-EX-A02"));
+        fieldsA.add(new FieldLabelData("A区-03号地块", "DK-203", "90m × 35m", "3.2亩", "陈大海", "DK-EX-A03"));
+        plantations.add(new PlantationData("东山一号种植园", "ZZY-301", "12.6亩", "正常运营", "陈大海", fieldsA));
+
+        List<FieldLabelData> fieldsB = new ArrayList<>();
+        fieldsB.add(new FieldLabelData("B区-01号地块", "DK-311", "80m × 36m", "2.9亩", "李芳", "DK-EX-B01"));
+        fieldsB.add(new FieldLabelData("B区-02号地块", "DK-312", "110m × 42m", "4.6亩", "李芳", "DK-EX-B02"));
+        fieldsB.add(new FieldLabelData("B区-03号地块", "DK-313", "95m × 38m", "3.6亩", "李芳", "DK-EX-B03"));
+        plantations.add(new PlantationData("南岭智慧种植园", "ZZY-302", "11.1亩", "待巡检", "李芳", fieldsB));
+
+        List<FieldLabelData> fieldsC = new ArrayList<>();
+        fieldsC.add(new FieldLabelData("C区-01号地块", "DK-321", "130m × 50m", "6.5亩", "王志强", "DK-EX-C01"));
+        fieldsC.add(new FieldLabelData("C区-02号地块", "DK-322", "100m × 45m", "4.5亩", "王志强", "DK-EX-C02"));
+        fieldsC.add(new FieldLabelData("C区-03号地块", "DK-323", "85m × 40m", "3.4亩", "王志强", "DK-EX-C03"));
+        plantations.add(new PlantationData("西湾生态种植园", "ZZY-303", "14.4亩", "生长良好", "王志强", fieldsC));
+
+        return plantations;
     }
 
     public static TemplateExampleData getTemplateExample(String template) {
@@ -91,6 +117,41 @@ public final class MockLabelRepository {
                 if (traceCode.equalsIgnoreCase(plant.traceCode)) {
                     return toPlantLabel(plant);
                 }
+            }
+        }
+        return null;
+    }
+
+    public static LabelData toFieldLabel(String plantationName, FieldLabelData field) {
+        return new LabelData(
+                LabelTemplates.TEMP_DK,
+                "",
+                "",
+                field.selfCode,
+                plantationName,
+                field.size,
+                field.area,
+                field.owner,
+                "",
+                field.traceCode
+        );
+    }
+
+    public static LabelData findFieldLabelBySelfCode(List<PlantationData> plantations, String selfCode) {
+        for (PlantationData plantation : plantations) {
+            for (FieldLabelData field : plantation.fields) {
+                if (selfCode.equalsIgnoreCase(field.selfCode)) {
+                    return toFieldLabel(plantation.name, field);
+                }
+            }
+        }
+        return null;
+    }
+
+    public static PlantationData findPlantationByName(List<PlantationData> plantations, String name) {
+        for (PlantationData plantation : plantations) {
+            if (plantation.name.equals(name)) {
+                return plantation;
             }
         }
         return null;

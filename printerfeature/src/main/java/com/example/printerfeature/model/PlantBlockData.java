@@ -1,4 +1,4 @@
-//地块数据模型
+//地块数据模型（用于苗木二维码）
 package com.example.printerfeature.model;
 
 import java.util.List;

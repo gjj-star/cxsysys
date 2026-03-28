@@ -1,4 +1,4 @@
-//苗木数据模型
+//苗木数据模型（用于苗木二维码）
 package com.example.printerfeature.model;
 
 public class PlantData {

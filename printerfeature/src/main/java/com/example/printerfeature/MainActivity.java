@@ -25,9 +25,11 @@ import androidx.activity.ComponentActivity;
 
 import com.example.printerfeature.data.LabelTemplates;
 import com.example.printerfeature.data.MockLabelRepository;
+import com.example.printerfeature.model.FieldLabelData;
 import com.example.printerfeature.model.LabelData;
 import com.example.printerfeature.model.PlantBlockData;
 import com.example.printerfeature.model.PlantData;
+import com.example.printerfeature.model.PlantationData;
 import com.example.printerfeature.model.TemplateExampleData;
 import com.example.printerfeature.printing.LabelPrintManager;
 import com.google.android.material.textfield.TextInputLayout;
@@ -49,10 +51,13 @@ public class MainActivity extends ComponentActivity {
     private TextView tvStatus;
     private TextView tvDataCount;
     private TextView tvToolbarTitle;
+    private TextView tvBatchFilterTitle;
     private TextView tvPlantBlockName;
     private TextView tvPlantBlockCode;
     private TextView tvPlantBlockLocation;
     private TextView tvPlantBlockStatus;
+    private TextView tvPlantBlockOwner;
+    private TextView tvPlantCountLabel;
     private TextView tvPlantCount;
 
     private EditText etF1;
@@ -81,6 +86,8 @@ public class MainActivity extends ComponentActivity {
     private TextInputLayout tilNum;
     private TextInputLayout tilWeight;
     private TextInputLayout tilProcessingType;
+    private TextInputLayout tilPlantBlock;
+    private TextInputLayout tilPlantDate;
 
     private LinearLayout layoutModelSpec;
     private LinearLayout layoutNumWeight;
@@ -102,7 +109,9 @@ public class MainActivity extends ComponentActivity {
 
     private final List<LabelData> dataList = new ArrayList<>();
     private List<PlantBlockData> plantBlocks = new ArrayList<>();
+    private List<PlantationData> plantations = new ArrayList<>();
     private PlantBlockData selectedPlantBlock;
+    private PlantationData selectedPlantation;
     private String selectedPlantDate = "";
 
     @Override
@@ -142,10 +151,13 @@ public class MainActivity extends ComponentActivity {
         tvToolbarTitle = findViewById(R.id.tvToolbarTitle);
         tvStatus = findViewById(R.id.tvStatus);
         tvDataCount = findViewById(R.id.tvDataCount);
+        tvBatchFilterTitle = findViewById(R.id.tvBatchFilterTitle);
         tvPlantBlockName = findViewById(R.id.tvPlantBlockName);
         tvPlantBlockCode = findViewById(R.id.tvPlantBlockCode);
         tvPlantBlockLocation = findViewById(R.id.tvPlantBlockLocation);
         tvPlantBlockStatus = findViewById(R.id.tvPlantBlockStatus);
+        tvPlantBlockOwner = findViewById(R.id.tvPlantBlockOwner);
+        tvPlantCountLabel = findViewById(R.id.tvPlantCountLabel);
         tvPlantCount = findViewById(R.id.tvPlantCount);
 
         etProcessName = findViewById(R.id.etProcessName);
@@ -174,6 +186,8 @@ public class MainActivity extends ComponentActivity {
         tilSpec = findViewById(R.id.tilSpec);
         tilNum = findViewById(R.id.tilNum);
         tilWeight = findViewById(R.id.tilWeight);
+        tilPlantBlock = findViewById(R.id.tilPlantBlock);
+        tilPlantDate = findViewById(R.id.tilPlantDate);
 
         layoutModelSpec = findViewById(R.id.layoutModelSpec);
         layoutNumWeight = findViewById(R.id.layoutNumWeight);
@@ -209,7 +223,7 @@ public class MainActivity extends ComponentActivity {
         etPlantDate.setOnClickListener(v -> showPlantDatePicker());
 
         plantBlocks = MockLabelRepository.getPlantBlocks();
-        setupPlantBlockSelector();
+        plantations = MockLabelRepository.getPlantations();
     }
 
     private void setupTemplateSelectors() {
@@ -228,7 +242,13 @@ public class MainActivity extends ComponentActivity {
         btnConnect.setOnClickListener(v -> startActivity(new Intent(MainActivity.this, DeviceListActivity.class)));
         btnAddData.setOnClickListener(v -> addData());
         btnClearData.setOnClickListener(v -> clearCurrentData());
-        btnResetPlantFilters.setOnClickListener(v -> resetPlantFilters());
+        btnResetPlantFilters.setOnClickListener(v -> {
+            if (TEMP_DK.equals(currentTemplate())) {
+                resetFieldFilters();
+            } else {
+                resetPlantFilters();
+            }
+        });
         btnPrint.setOnClickListener(v -> printCurrentData());
         btnExample.setOnClickListener(v -> onExampleAction());
     }
@@ -241,7 +261,15 @@ public class MainActivity extends ComponentActivity {
 
     private void printCurrentData() {
         if (dataList.isEmpty()) {
-            String message = TEMP_MM.equals(currentTemplate()) ? "请先选择地块或补打一棵苗木" : "请先录入数据";
+            String template = currentTemplate();
+            String message;
+            if (TEMP_MM.equals(template)) {
+                message = "请先选择地块或补打一棵苗木";
+            } else if (TEMP_DK.equals(template)) {
+                message = "请先选择种植园或补打一块地块";
+            } else {
+                message = "请先录入数据";
+            }
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
             return;
         }
@@ -255,6 +283,8 @@ public class MainActivity extends ComponentActivity {
                     Toast.makeText(MainActivity.this, "全部打印完成", Toast.LENGTH_SHORT).show();
                     if (TEMP_MM.equals(currentTemplate()) && selectedPlantBlock != null) {
                         applyPlantFilters(false);
+                    } else if (TEMP_DK.equals(currentTemplate()) && selectedPlantation != null) {
+                        applyFieldFilters(false);
                     } else {
                         dataList.clear();
                         updateDataUI();
@@ -285,6 +315,14 @@ public class MainActivity extends ComponentActivity {
             showManualPlantDialog();
             return;
         }
+        if (TEMP_DK.equals(currentTemplate())) {
+            if ("未连接".equals(printerSDK.printerName)) {
+                Toast.makeText(this, "请先连接打印机，再进行地块补打", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            showManualFieldDialog();
+            return;
+        }
         fillExampleData();
     }
 
@@ -293,9 +331,19 @@ public class MainActivity extends ComponentActivity {
 
         if (TEMP_MM.equals(currentTemplate())) {
             if (!plantBlocks.isEmpty()) {
+                configurePlantBatchUI();
                 spinnerPlantBlock.setText(plantBlocks.get(0).name, false);
                 selectedPlantBlock = plantBlocks.get(0);
                 applyPlantFilters(true);
+            }
+            return;
+        }
+        if (TEMP_DK.equals(currentTemplate())) {
+            if (!plantations.isEmpty()) {
+                configureFieldBatchUI();
+                spinnerPlantBlock.setText(plantations.get(0).name, false);
+                selectedPlantation = plantations.get(0);
+                applyFieldFilters(true);
             }
             return;
         }
@@ -342,6 +390,7 @@ public class MainActivity extends ComponentActivity {
             cardManualForm.setVisibility(View.GONE);
             cardPlantBatch.setVisibility(View.VISIBLE);
             btnExample.setText("补打单棵");
+            configurePlantBatchUI();
             resetPlantFilters();
         } else if (TEMP_CJG.equals(template)) {
             showProcessingTemplate();
@@ -352,7 +401,11 @@ public class MainActivity extends ComponentActivity {
         } else if (TEMP_MC.equals(template)) {
             showSeedbedTemplate();
         } else if (TEMP_DK.equals(template)) {
-            showFieldTemplate();
+            cardManualForm.setVisibility(View.GONE);
+            cardPlantBatch.setVisibility(View.VISIBLE);
+            btnExample.setText("补打单块");
+            configureFieldBatchUI();
+            resetFieldFilters();
         }
 
         updateDataUI();
@@ -458,6 +511,22 @@ public class MainActivity extends ComponentActivity {
         etF6.setOnClickListener(null);
     }
 
+    private void configurePlantBatchUI() {
+        tvBatchFilterTitle.setText("筛选苗木所在地块");
+        tilPlantBlock.setHint("选择地块");
+        tilPlantDate.setVisibility(View.VISIBLE);
+        tvPlantCountLabel.setText("待打印苗木标签");
+        setupPlantBlockSelector();
+    }
+
+    private void configureFieldBatchUI() {
+        tvBatchFilterTitle.setText("筛选大棚所在种植园");
+        tilPlantBlock.setHint("选择种植园");
+        tilPlantDate.setVisibility(View.GONE);
+        tvPlantCountLabel.setText("待打印地块标签");
+        setupPlantationSelector();
+    }
+
     private void addData() {
         String template = currentTemplate();
         String f1 = etF1.getText().toString();
@@ -543,6 +612,25 @@ public class MainActivity extends ComponentActivity {
         updatePlantSummaryPlaceholder();
     }
 
+    private void setupPlantationSelector() {
+        List<String> names = new ArrayList<>();
+        for (PlantationData plantation : plantations) {
+            names.add(plantation.name);
+        }
+        ArrayAdapter<String> plantationAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
+        spinnerPlantBlock.setAdapter(plantationAdapter);
+        spinnerPlantBlock.setKeyListener(null);
+        spinnerPlantBlock.setFocusable(false);
+        spinnerPlantBlock.setCursorVisible(false);
+        spinnerPlantBlock.setOnClickListener(v -> spinnerPlantBlock.showDropDown());
+        spinnerPlantBlock.setOnItemClickListener((parent, view, position, id) -> {
+            selectedPlantation = plantations.get(position);
+            applyFieldFilters(true);
+        });
+        layoutPlantSummary.setVisibility(View.VISIBLE);
+        updateFieldSummaryPlaceholder();
+    }
+
     private void applyPlantFilters(boolean showToast) {
         dataList.clear();
         if (selectedPlantBlock == null) {
@@ -572,7 +660,38 @@ public class MainActivity extends ComponentActivity {
         tvPlantBlockCode.setText("自编码：" + block.selfCode);
         tvPlantBlockLocation.setText("位置：" + block.location);
         tvPlantBlockStatus.setText("状态：" + block.status);
-        tvPlantBlockStatus.setTextColor(getPlantStatusColor(block.status));
+        tvPlantBlockStatus.setTextColor(getStatusColor(block.status));
+        tvPlantBlockOwner.setText("负责人：按地块配置");
+        tvPlantBlockOwner.setTextColor(Color.parseColor("#555555"));
+    }
+
+    private void applyFieldFilters(boolean showToast) {
+        dataList.clear();
+        if (selectedPlantation == null) {
+            updateFieldSummaryPlaceholder();
+            updateDataUI();
+            return;
+        }
+
+        bindPlantationSummary(selectedPlantation);
+        for (FieldLabelData field : selectedPlantation.fields) {
+            dataList.add(MockLabelRepository.toFieldLabel(selectedPlantation.name, field));
+        }
+        updateDataUI();
+
+        if (showToast) {
+            Toast.makeText(this, "已载入“" + selectedPlantation.name + "”的地块示例标签", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void bindPlantationSummary(PlantationData plantation) {
+        tvPlantBlockName.setText("种植园：" + plantation.name);
+        tvPlantBlockCode.setText("自编码：" + plantation.selfCode);
+        tvPlantBlockLocation.setText("总面积：" + plantation.totalArea);
+        tvPlantBlockStatus.setText("状态：" + plantation.status);
+        tvPlantBlockStatus.setTextColor(getStatusColor(plantation.status));
+        tvPlantBlockOwner.setText("负责人：" + plantation.owner);
+        tvPlantBlockOwner.setTextColor(Color.parseColor("#555555"));
     }
 
     private void resetPlantFilters() {
@@ -591,8 +710,31 @@ public class MainActivity extends ComponentActivity {
         tvPlantBlockLocation.setText("位置：待选择");
         tvPlantBlockStatus.setText("状态：待选择");
         tvPlantBlockStatus.setTextColor(Color.parseColor("#999999"));
+        tvPlantBlockOwner.setText("负责人：待选择");
+        tvPlantBlockOwner.setTextColor(Color.parseColor("#999999"));
         tvPlantCount.setText("0");
         tvDataCount.setText("请选择地块，并可按定植日期进一步筛选");
+    }
+
+    private void resetFieldFilters() {
+        selectedPlantation = null;
+        dataList.clear();
+        spinnerPlantBlock.setText("", false);
+        etPlantDate.setText("");
+        updateFieldSummaryPlaceholder();
+        updateDataUI();
+    }
+
+    private void updateFieldSummaryPlaceholder() {
+        tvPlantBlockName.setText("种植园：待选择");
+        tvPlantBlockCode.setText("自编码：待选择");
+        tvPlantBlockLocation.setText("总面积：待选择");
+        tvPlantBlockStatus.setText("状态：待选择");
+        tvPlantBlockStatus.setTextColor(Color.parseColor("#999999"));
+        tvPlantBlockOwner.setText("负责人：待选择");
+        tvPlantBlockOwner.setTextColor(Color.parseColor("#999999"));
+        tvPlantCount.setText("0");
+        tvDataCount.setText("请选择种植园，批量打印该种植园下所有地块标签");
     }
 
     private void updateDataUI() {
@@ -601,7 +743,10 @@ public class MainActivity extends ComponentActivity {
             String dateSuffix = selectedPlantDate.isEmpty() ? "" : "，定植日期：" + selectedPlantDate;
             tvDataCount.setText("当前将打印地块“" + selectedPlantBlock.name + "”中的 " + dataList.size() + " 张苗木标签" + dateSuffix);
             tvPlantCount.setText(String.valueOf(dataList.size()));
-        } else if (!TEMP_MM.equals(currentTemplate())) {
+        } else if (TEMP_DK.equals(currentTemplate()) && selectedPlantation != null) {
+            tvDataCount.setText("当前将打印种植园“" + selectedPlantation.name + "”中的 " + dataList.size() + " 张地块标签");
+            tvPlantCount.setText(String.valueOf(dataList.size()));
+        } else if (!TEMP_MM.equals(currentTemplate()) && !TEMP_DK.equals(currentTemplate())) {
             tvDataCount.setText(dataList.isEmpty() ? "" : "已准备 " + dataList.size() + " 张标签");
         }
     }
@@ -662,7 +807,7 @@ public class MainActivity extends ComponentActivity {
                 validatedLabel[0] = label;
                 validationText.setText("二维码校验结果：正确");
                 infoText.setText("品种：" + label.f1 + "\n代数：" + label.f2 + "\n所属地块：" + label.f4 + "\n状态：" + status);
-                infoText.setTextColor(getPlantStatusColor(status));
+                infoText.setTextColor(getStatusColor(status));
                 infoText.setVisibility(View.VISIBLE);
                 printButton.setEnabled(true);
             });
@@ -676,6 +821,87 @@ public class MainActivity extends ComponentActivity {
                 dataList.add(validatedLabel[0]);
                 updateDataUI();
                 tvDataCount.setText("已准备补打 1 张苗木标签，二维码：" + validatedLabel[0].traceCode);
+                tvPlantCount.setText("1");
+                printCurrentData();
+                dialog.dismiss();
+            });
+        });
+
+        dialog.show();
+    }
+
+    private void showManualFieldDialog() {
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(padding, padding / 2, padding, 0);
+
+        EditText input = new EditText(this);
+        input.setHint("请输入地块自编码");
+        input.setSingleLine();
+        container.addView(input);
+
+        TextView validationText = new TextView(this);
+        validationText.setPadding(0, padding, 0, 0);
+        validationText.setTextColor(Color.parseColor("#2E7D32"));
+        container.addView(validationText);
+
+        TextView infoText = new TextView(this);
+        infoText.setPadding(0, padding / 2, 0, 0);
+        infoText.setVisibility(View.GONE);
+        container.addView(infoText);
+
+        final LabelData[] validatedLabel = new LabelData[1];
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("补打单个地块标签")
+                .setMessage("先校验地块自编码，再确认地块信息后打印。")
+                .setView(container)
+                .setNeutralButton("校验自编码", null)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认打印", null)
+                .create();
+
+        dialog.setOnShowListener(dialogInterface -> {
+            Button validateButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            Button printButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            printButton.setEnabled(false);
+
+            validateButton.setOnClickListener(v -> {
+                String selfCode = input.getText().toString().trim();
+                if (selfCode.isEmpty()) {
+                    Toast.makeText(this, "请输入地块自编码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                LabelData label = MockLabelRepository.findFieldLabelBySelfCode(plantations, selfCode);
+                PlantationData plantation = selectedPlantation;
+                String status = plantation != null ? plantation.status : "正常运营";
+                if (label == null) {
+                    String plantationName = plantation != null ? plantation.name : "东山一号种植园";
+                    String owner = plantation != null ? plantation.owner : "陈大海";
+                    label = new LabelData(TEMP_DK, "", "", selfCode, plantationName, "100m × 40m", "4.0亩", owner, "", "DK-REPRINT-" + selfCode);
+                } else if (plantation == null) {
+                    plantation = MockLabelRepository.findPlantationByName(plantations, label.f2);
+                    status = plantation != null ? plantation.status : "正常运营";
+                }
+
+                validatedLabel[0] = label;
+                validationText.setText("自编码校验结果：正确");
+                infoText.setText("地块自编码：" + label.f1 + "\n所属种植园：" + label.f2 + "\n面积：" + label.f4 + "\n负责人：" + label.f5 + "\n状态：" + status);
+                infoText.setTextColor(getStatusColor(status));
+                infoText.setVisibility(View.VISIBLE);
+                printButton.setEnabled(true);
+            });
+
+            printButton.setOnClickListener(v -> {
+                if (validatedLabel[0] == null) {
+                    Toast.makeText(this, "请先校验地块自编码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                dataList.clear();
+                dataList.add(validatedLabel[0]);
+                updateDataUI();
+                tvDataCount.setText("已准备补打 1 张地块标签，自编码：" + validatedLabel[0].f1);
                 tvPlantCount.setText("1");
                 printCurrentData();
                 dialog.dismiss();
@@ -734,7 +960,7 @@ public class MainActivity extends ComponentActivity {
         datePickerDialog.show();
     }
 
-    private int getPlantStatusColor(String status) {
+    private int getStatusColor(String status) {
         if (status == null) return Color.parseColor("#999999");
         if (status.contains("正常") || status.contains("良好")) return Color.parseColor("#2E7D32");
         if (status.contains("待")) return Color.parseColor("#EF6C00");
