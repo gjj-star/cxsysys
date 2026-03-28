@@ -273,7 +273,7 @@ fun HomeScreen(
 
                     MenuOptionCard(
                         title = "苗木二维码",
-                        subtitle = "为单株苗木打印全生命周期码",
+                        subtitle = "为苗木打印全生命周期码",
                         icon = Icons.Default.Park,
                         backgroundColor = Color(0xFFE8F5E9),
                         contentColor = Color(0xFF2E7D32),

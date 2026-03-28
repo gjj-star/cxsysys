@@ -1,5 +1,6 @@
 package com.example.cxsysys.ui.screens.plantation
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -75,12 +76,15 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
 
     // 定植日期
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+    val dateTimeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
     var plantingDate by remember { mutableStateOf(dateFormat.format(Date())) }
+    var entryDateTime by remember { mutableStateOf("") }
 
     // UI 状态
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
     var isScanning by remember { mutableStateOf(false) }
+    var showPrintConfirmDialog by remember { mutableStateOf(false) }
 
     // 模拟扫码 (精简：现在只有地块需要扫码)
     fun simulateScan() {
@@ -111,6 +115,37 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
         }
     }
 
+    if (showPrintConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrintConfirmDialog = false },
+            title = { Text("打印提示") },
+            text = { Text("是否打印本次录入的 $plantCount 株苗木标签？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPrintConfirmDialog = false
+                        launchPlantingBatchPrint(
+                            context = context,
+                            fieldCode = if (fieldSelfCode.isNotBlank()) fieldSelfCode else fieldQrCode,
+                            plantingDate = plantingDate,
+                            entryDateTime = entryDateTime,
+                            plantCount = plantCount.toIntOrNull() ?: 0,
+                            subspecies = subspeciesIdLabel,
+                            generation = generation,
+                            generationWay = generationWay,
+                            motherTreeSelfCode = motherTreeSelfCode
+                        )
+                    }
+                ) { Text("确定", color = AgGreenPrimary) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPrintConfirmDialog = false }) {
+                    Text("暂不打印", color = Color.Gray)
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -130,8 +165,12 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                             Toast.makeText(context, "请扫码或输入地块编码", Toast.LENGTH_SHORT).show()
                         } else if (plantCount.isEmpty()) {
                             Toast.makeText(context, "请输入定植数量", Toast.LENGTH_SHORT).show()
+                        } else if ((plantCount.toIntOrNull() ?: 0) > 999) {
+                            Toast.makeText(context, "定植株数超过上限(999)", Toast.LENGTH_SHORT).show()
                         } else {
+                            entryDateTime = dateTimeFormat.format(Date())
                             Toast.makeText(context, "苗木定植信息保存成功！", Toast.LENGTH_SHORT).show()
+                            showPrintConfirmDialog = true
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
@@ -354,3 +393,49 @@ private fun PlantingInfoTip(text: String) {
         Text(text = text, color = Color(0xFF0D47A1), fontSize = 12.sp, lineHeight = 18.sp)
     }
 }
+
+private fun launchPlantingBatchPrint(
+    context: android.content.Context,
+    fieldCode: String,
+    plantingDate: String,
+    entryDateTime: String,
+    plantCount: Int,
+    subspecies: String,
+    generation: String,
+    generationWay: String,
+    motherTreeSelfCode: String
+) {
+    val intent = Intent().apply {
+        setClassName(context, PRINTER_ACTIVITY_CLASS)
+        putExtra(EXTRA_TARGET_TEMPLATE, TEMP_MM)
+        putExtra(EXTRA_PRINT_SOURCE, PRINT_SOURCE_PLANTING_ENTRY)
+        putExtra(EXTRA_ENTRY_FIELD_CODE, fieldCode)
+        putExtra(EXTRA_ENTRY_PLANTING_DATE, plantingDate)
+        putExtra(EXTRA_ENTRY_RECORD_TIME, entryDateTime)
+        putExtra(EXTRA_ENTRY_PLANT_COUNT, plantCount)
+        putExtra(EXTRA_ENTRY_SUBSPECIES, subspecies)
+        putExtra(EXTRA_ENTRY_GENERATION, generation)
+        putExtra(EXTRA_ENTRY_GENERATION_WAY, generationWay)
+        putExtra(EXTRA_ENTRY_MOTHER_TREE_SELF_CODE, motherTreeSelfCode)
+    }
+
+    try {
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "打印模块暂不可用", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private const val PRINTER_ACTIVITY_CLASS = "com.example.printerfeature.MainActivity"
+private const val EXTRA_TARGET_TEMPLATE = "target_template"
+private const val TEMP_MM = "苗木二维码"
+private const val EXTRA_PRINT_SOURCE = "print_source"
+private const val PRINT_SOURCE_PLANTING_ENTRY = "planting_entry"
+private const val EXTRA_ENTRY_FIELD_CODE = "entry_field_code"
+private const val EXTRA_ENTRY_PLANTING_DATE = "entry_planting_date"
+private const val EXTRA_ENTRY_RECORD_TIME = "entry_record_time"
+private const val EXTRA_ENTRY_PLANT_COUNT = "entry_plant_count"
+private const val EXTRA_ENTRY_SUBSPECIES = "entry_subspecies"
+private const val EXTRA_ENTRY_GENERATION = "entry_generation"
+private const val EXTRA_ENTRY_GENERATION_WAY = "entry_generation_way"
+private const val EXTRA_ENTRY_MOTHER_TREE_SELF_CODE = "entry_mother_tree_self_code"

@@ -49,6 +49,17 @@ public class MainActivity extends ComponentActivity {
     public static final String TEMP_DP = LabelTemplates.TEMP_DP;
     public static final String TEMP_MC = LabelTemplates.TEMP_MC;
     public static final String TEMP_DK = LabelTemplates.TEMP_DK;
+    private static final String EXTRA_PRINT_SOURCE = "print_source";
+    private static final String PRINT_SOURCE_PLANTING_ENTRY = "planting_entry";
+    private static final String EXTRA_ENTRY_FIELD_CODE = "entry_field_code";
+    private static final String EXTRA_ENTRY_PLANTING_DATE = "entry_planting_date";
+    private static final String EXTRA_ENTRY_RECORD_TIME = "entry_record_time";
+    private static final String EXTRA_ENTRY_PLANT_COUNT = "entry_plant_count";
+    private static final String EXTRA_ENTRY_SUBSPECIES = "entry_subspecies";
+    private static final String EXTRA_ENTRY_GENERATION = "entry_generation";
+    private static final String EXTRA_ENTRY_GENERATION_WAY = "entry_generation_way";
+    private static final String EXTRA_ENTRY_MOTHER_TREE_SELF_CODE = "entry_mother_tree_self_code";
+    private static final String MSG_CONNECT_PRINTER = "请连接打印机";
 
     private TextView tvStatus;
     private TextView tvDataCount;
@@ -120,6 +131,10 @@ public class MainActivity extends ComponentActivity {
     private String selectedProcessTypeKey = "";
     private String selectedProcessDate = "";
     private String selectedProductDate = "";
+    private boolean isPlantingEntryPrintMode = false;
+    private String plantingEntryFieldCode = "";
+    private String plantingEntryDate = "";
+    private String plantingEntryRecordTime = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -137,6 +152,7 @@ public class MainActivity extends ComponentActivity {
 
         spinnerTemplate.setText(targetTemplate, false);
         updateUIByTemplate(targetTemplate);
+        consumePlantingEntryPrintIntentIfNeeded();
         tvToolbarTitle.setText(targetTemplate + "打印");
     }
 
@@ -277,6 +293,86 @@ public class MainActivity extends ComponentActivity {
         btnExample.setOnClickListener(v -> onExampleAction());
     }
 
+    private void consumePlantingEntryPrintIntentIfNeeded() {
+        Intent intent = getIntent();
+        if (intent == null) return;
+        if (!PRINT_SOURCE_PLANTING_ENTRY.equals(intent.getStringExtra(EXTRA_PRINT_SOURCE))) return;
+        if (!TEMP_MM.equals(currentTemplate())) return;
+
+        int plantCount = intent.getIntExtra(EXTRA_ENTRY_PLANT_COUNT, 0);
+        if (plantCount <= 0) {
+            Toast.makeText(this, "录入批次数据无效，请重新提交", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String fieldCode = safe(intent.getStringExtra(EXTRA_ENTRY_FIELD_CODE), "未填写地块编码");
+        String plantingDate = safe(intent.getStringExtra(EXTRA_ENTRY_PLANTING_DATE), "");
+        String entryRecordTime = safe(intent.getStringExtra(EXTRA_ENTRY_RECORD_TIME), "");
+        String subspecies = safe(intent.getStringExtra(EXTRA_ENTRY_SUBSPECIES), "未知品种");
+        String generation = safe(intent.getStringExtra(EXTRA_ENTRY_GENERATION), "1");
+        String generationWay = safe(intent.getStringExtra(EXTRA_ENTRY_GENERATION_WAY), "嫁接");
+        String motherTreeCode = safe(intent.getStringExtra(EXTRA_ENTRY_MOTHER_TREE_SELF_CODE), "-");
+
+        dataList.clear();
+        for (int i = 1; i <= plantCount; i++) {
+            dataList.add(new LabelData(
+                    TEMP_MM,
+                    "",
+                    "",
+                    subspecies,
+                    generation,
+                    generationWay,
+                    fieldCode,
+                    motherTreeCode,
+                    plantingDate,
+                    buildEntryTraceCode(plantingDate, i)
+            ));
+        }
+
+        isPlantingEntryPrintMode = true;
+        plantingEntryFieldCode = fieldCode;
+        plantingEntryDate = plantingDate;
+        plantingEntryRecordTime = entryRecordTime;
+        selectedPlantBlock = null;
+        selectedPlantDate = "";
+        tvBatchFilterTitle.setText("本次录入批次打印");
+        tilPlantBlock.setVisibility(View.GONE);
+        tilPlantDate.setVisibility(View.GONE);
+        btnResetPlantFilters.setVisibility(View.GONE);
+
+        tvPlantBlockCode.setText("定植地块：" + fieldCode);
+        tvPlantBlockLocation.setText("录入时间：" + (entryRecordTime.isEmpty() ? "未填写" : entryRecordTime));
+
+
+        updateDataUI();
+        Toast.makeText(this, "已加载本次录入的 " + plantCount + " 株苗木标签", Toast.LENGTH_SHORT).show();
+    }
+
+    private String buildEntryTraceCode(String plantingDate, int index) {
+        String datePart = plantingDate == null || plantingDate.isEmpty()
+                ? "00000000"
+                : plantingDate.replace("-", "");
+        return String.format(Locale.getDefault(), "MM-ENTRY-%s-%03d", datePart, index);
+    }
+
+    private String safe(String value, String fallback) {
+        return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private void toast(String msg) {
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+    }
+
+    private boolean isPrinterConnected() {
+        return !"未连接".equals(printerSDK.printerName);
+    }
+
+    private boolean ensurePrinterConnected() {
+        if (isPrinterConnected()) return true;
+        toast(MSG_CONNECT_PRINTER);
+        return false;
+    }
+
     private void clearCurrentData() {
         dataList.clear();
         updateDataUI();
@@ -336,66 +432,46 @@ public class MainActivity extends ComponentActivity {
             public void onError(int errorCode) {
                 runOnUiThread(() -> {
                     hideLoading();
-                    if ("未连接".equals(printerSDK.printerName)) {
-                        Toast.makeText(MainActivity.this, "请先连接打印机", Toast.LENGTH_SHORT).show();
+                    if (!isPrinterConnected()) {
+                        toast(MSG_CONNECT_PRINTER);
                         return;
                     }
-                    Toast.makeText(MainActivity.this, "打印出错:" + errorCode, Toast.LENGTH_SHORT).show();
+                    toast("打印出错:" + errorCode);
                 });
             }
         });
     }
 
     private void onExampleAction() {
-        if (TEMP_MM.equals(currentTemplate())) {
-            if ("未连接".equals(printerSDK.printerName)) {
-                Toast.makeText(this, "请先连接打印机，再进行单棵补打", Toast.LENGTH_SHORT).show();
+        String template = currentTemplate();
+        switch (template) {
+            case TEMP_MM:
+                if (!ensurePrinterConnected()) return;
+                showManualPlantDialog();
                 return;
-            }
-            showManualPlantDialog();
-            return;
-        }
-        if (TEMP_DK.equals(currentTemplate())) {
-            if ("未连接".equals(printerSDK.printerName)) {
-                Toast.makeText(this, "请先连接打印机，再进行地块补打", Toast.LENGTH_SHORT).show();
+            case TEMP_DK:
+                if (!ensurePrinterConnected()) return;
+                showManualFieldDialog();
                 return;
-            }
-            showManualFieldDialog();
-            return;
-        }
-        if (TEMP_DP.equals(currentTemplate())) {
-            if ("未连接".equals(printerSDK.printerName)) {
-                Toast.makeText(this, "请先连接打印机，再进行大棚补打", Toast.LENGTH_SHORT).show();
+            case TEMP_DP:
+                if (!ensurePrinterConnected()) return;
+                showManualGreenhouseDialog();
                 return;
-            }
-            showManualGreenhouseDialog();
-            return;
-        }
-        if (TEMP_MC.equals(currentTemplate())) {
-            if ("未连接".equals(printerSDK.printerName)) {
-                Toast.makeText(this, "请先连接打印机，再进行苗床补打", Toast.LENGTH_SHORT).show();
+            case TEMP_MC:
+                if (!ensurePrinterConnected()) return;
+                showManualSeedbedDialog();
                 return;
-            }
-            showManualSeedbedDialog();
-            return;
-        }
-        if (TEMP_CJG.equals(currentTemplate())) {
-            if ("未连接".equals(printerSDK.printerName)) {
-                Toast.makeText(this, "请先连接打印机，再进行加工标签补打", Toast.LENGTH_SHORT).show();
+            case TEMP_CJG:
+                if (!ensurePrinterConnected()) return;
+                showManualProcessDialog();
                 return;
-            }
-            showManualProcessDialog();
-            return;
-        }
-        if (TEMP_CP.equals(currentTemplate())) {
-            if ("未连接".equals(printerSDK.printerName)) {
-                Toast.makeText(this, "请先连接打印机，再进行产成品补打", Toast.LENGTH_SHORT).show();
+            case TEMP_CP:
+                if (!ensurePrinterConnected()) return;
+                showManualProductDialog();
                 return;
-            }
-            showManualProductDialog();
-            return;
+            default:
+                fillExampleData();
         }
-        fillExampleData();
     }
 
     private void fillExampleData() {
@@ -490,6 +566,10 @@ public class MainActivity extends ComponentActivity {
 
     private void updateUIByTemplate(String template) {
         dataList.clear();
+        isPlantingEntryPrintMode = false;
+        plantingEntryFieldCode = "";
+        plantingEntryDate = "";
+        plantingEntryRecordTime = "";
         resetCommonVisibility();
 
         if (TEMP_MM.equals(template)) {
@@ -985,11 +1065,18 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void resetPlantFilters() {
+        isPlantingEntryPrintMode = false;
+        plantingEntryFieldCode = "";
+        plantingEntryDate = "";
+        plantingEntryRecordTime = "";
         selectedPlantBlock = null;
         selectedPlantDate = "";
         dataList.clear();
         spinnerPlantBlock.setText("", false);
         etPlantDate.setText("");
+        tilPlantBlock.setVisibility(View.VISIBLE);
+        tilPlantDate.setVisibility(View.VISIBLE);
+        btnResetPlantFilters.setVisibility(View.VISIBLE);
         updatePlantSummaryPlaceholder();
         updateDataUI();
     }
@@ -998,9 +1085,9 @@ public class MainActivity extends ComponentActivity {
         tvPlantBlockName.setText("地块名称：待选择");
         tvPlantBlockCode.setText("自编码：待选择");
         tvPlantBlockLocation.setText("位置：待选择");
-        tvPlantBlockStatus.setText("状态：待选择");
+        tvPlantBlockStatus.setText("状态：-");
         tvPlantBlockStatus.setTextColor(Color.parseColor("#999999"));
-        tvPlantBlockOwner.setText("负责人：待选择");
+        tvPlantBlockOwner.setText("负责人：-");
         tvPlantBlockOwner.setTextColor(Color.parseColor("#999999"));
         tvPlantCount.setText("0");
         tvDataCount.setText("请选择地块，并可按定植日期进一步筛选");
@@ -1089,7 +1176,11 @@ public class MainActivity extends ComponentActivity {
 
     private void updateDataUI() {
         btnPrint.setText("确认打印 (" + dataList.size() + ")");
-        if (TEMP_MM.equals(currentTemplate()) && selectedPlantBlock != null) {
+        if (TEMP_MM.equals(currentTemplate()) && isPlantingEntryPrintMode) {
+            String recordTimeLine = plantingEntryRecordTime.isEmpty() ? "录入时间：未填写" : "录入时间：" + plantingEntryRecordTime;
+            tvDataCount.setText("当前将打印本次录入的 " + dataList.size() + " 张苗木标签\n" + recordTimeLine);
+            tvPlantCount.setText(String.valueOf(dataList.size()));
+        } else if (TEMP_MM.equals(currentTemplate()) && selectedPlantBlock != null) {
             String dateSuffix = selectedPlantDate.isEmpty() ? "" : "，定植日期：" + selectedPlantDate;
             tvDataCount.setText("当前将打印地块“" + selectedPlantBlock.name + "”中的 " + dataList.size() + " 张苗木标签" + dateSuffix);
             tvPlantCount.setText(String.valueOf(dataList.size()));
