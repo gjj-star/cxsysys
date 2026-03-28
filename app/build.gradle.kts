@@ -4,6 +4,15 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// 调试开关：是否启用打印模块。
+// - true:  引入 :printerfeature（适合真机/ARM 调试打印功能）
+// - false: 不引入 :printerfeature（适合 x86_64 模拟器或无打印 SDK 环境）
+val enablePrinterModule = providers
+    .gradleProperty("enablePrinterModule")
+    .map { it.toBoolean() }
+    .orElse(true)
+    .get()
+
 android {
     namespace = "com.example.cxsysys"
     compileSdk = 36
@@ -61,6 +70,8 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    //引入打印模块
-    implementation(project(":printerfeature"))
+    // 打印模块依赖按开关加载，便于不同平台切换调试
+    if (enablePrinterModule) {
+        implementation(project(":printerfeature"))
+    }
 }

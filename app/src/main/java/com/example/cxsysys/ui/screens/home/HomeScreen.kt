@@ -1,6 +1,7 @@
 package com.example.cxsysys.ui.screens.home
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,7 +24,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
-import com.example.printerfeature.MainActivity
+
+// 打印模块入口类名：使用字符串避免在关闭打印模块时出现编译期依赖
+private const val PRINTER_ACTIVITY_CLASS = "com.example.printerfeature.MainActivity"
+private const val EXTRA_TARGET_TEMPLATE = "target_template"
+private const val TEMP_MM = "苗木二维码"
+private const val TEMP_CJG = "加工二维码"
+private const val TEMP_CP = "产成品二维码"
+private const val TEMP_DP = "大棚二维码"
+private const val TEMP_MC = "苗床二维码"
+private const val TEMP_DK = "地块二维码"
 
 /**
  * 首页/工作台
@@ -227,10 +237,7 @@ fun HomeScreen(
                         contentColor = Color(0xFF1565C0),
                         onClick = {
                             showQrDialog = false
-                            val intent = Intent(context, MainActivity::class.java).apply {
-                                putExtra("target_template", MainActivity.TEMP_DK)
-                            }
-                            context.startActivity(intent)
+                            launchPrinterFeature(context, TEMP_DK)
                         }
                     )
 
@@ -244,10 +251,7 @@ fun HomeScreen(
                         contentColor = Color(0xFF6A1B9A),
                         onClick = {
                             showQrDialog = false
-                            val intent = Intent(context, MainActivity::class.java).apply {
-                                putExtra("target_template", MainActivity.TEMP_DP)
-                            }
-                            context.startActivity(intent)
+                            launchPrinterFeature(context, TEMP_DP)
                         }
                     )
 
@@ -261,10 +265,7 @@ fun HomeScreen(
                         contentColor = Color(0xFFD32F2F),
                         onClick = {
                             showQrDialog = false
-                            val intent = Intent(context, MainActivity::class.java).apply {
-                                putExtra("target_template", MainActivity.TEMP_MC)
-                            }
-                            context.startActivity(intent)
+                            launchPrinterFeature(context, TEMP_MC)
                         }
                     )
 
@@ -278,10 +279,7 @@ fun HomeScreen(
                         contentColor = Color(0xFF2E7D32),
                         onClick = {
                             showQrDialog = false
-                            val intent = Intent(context, MainActivity::class.java).apply {
-                                putExtra("target_template", MainActivity.TEMP_MM)
-                            }
-                            context.startActivity(intent)
+                            launchPrinterFeature(context, TEMP_MM)
                         }
                     )
 
@@ -295,10 +293,7 @@ fun HomeScreen(
                         contentColor = Color(0xFFEF6C00),
                         onClick = {
                             showQrDialog = false
-                            val intent = Intent(context, MainActivity::class.java).apply {
-                                putExtra("target_template", MainActivity.TEMP_CJG)
-                            }
-                            context.startActivity(intent)
+                            launchPrinterFeature(context, TEMP_CJG)
                         }
                     )
 
@@ -312,10 +307,7 @@ fun HomeScreen(
                         contentColor = Color(0xFF00838F),
                         onClick = {
                             showQrDialog = false
-                            val intent = Intent(context, MainActivity::class.java).apply {
-                                putExtra("target_template", MainActivity.TEMP_CP)
-                            }
-                            context.startActivity(intent)
+                            launchPrinterFeature(context, TEMP_CP)
                         }
                     )
 
@@ -467,3 +459,15 @@ data class ActionItem(
     val iconColor: Color,
     val routeId: String
 )
+
+private fun launchPrinterFeature(context: android.content.Context, template: String) {
+    val intent = Intent().apply {
+        setClassName(context, PRINTER_ACTIVITY_CLASS)
+        putExtra(EXTRA_TARGET_TEMPLATE, template)
+    }
+
+    val canHandleIntent = intent.resolveActivity(context.packageManager) != null
+    if (canHandleIntent) {
+        context.startActivity(intent)
+    }
+}
