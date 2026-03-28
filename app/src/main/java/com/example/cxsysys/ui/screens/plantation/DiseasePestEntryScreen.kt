@@ -54,10 +54,10 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
     // 将自编码模式状态上提至父页面
     var isSelfCodeMode by remember { mutableStateOf(false) }
 
-    // 适配新组件，拆分为二维码和自编码状态
+    // 【修改】：苗木只有二维码状态
     var plant_qr_code by remember { mutableStateOf("") }
-    var plant_self_code by remember { mutableStateOf("") }
 
+    // 地块保持双模式
     var field_qr_code by remember { mutableStateOf("") }
     var field_self_code by remember { mutableStateOf("") }
 
@@ -124,18 +124,18 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 校验逻辑更新，二维码或自编码填写一项即可
+                        // 【修改】校验逻辑更新：苗木只看二维码，地块看双码
                         val isValid = if (inputMode == 0) {
-                            plant_qr_code.isNotEmpty() || plant_self_code.isNotEmpty()
+                            plant_qr_code.isNotEmpty()
                         } else {
                             field_qr_code.isNotEmpty() || field_self_code.isNotEmpty()
                         }
 
                         if (!isValid) {
-                            val msg = if (inputMode == 0) "请填写或扫码苗木ID" else "请填写或扫码地块编码"
+                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请填写或扫码地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else {
-                            val target = if (inputMode == 0) "苗木二维码: $plant_qr_code\n苗木自编码: $plant_self_code"
+                            val target = if (inputMode == 0) "苗木二维码: $plant_qr_code"
                             else "地块二维码: $field_qr_code\n地块自编码: $field_self_code"
                             val pestInfo = if (selectedPests.isNotEmpty()) "虫害: ${selectedPests.joinToString(",")}" else "未选虫害"
                             Toast.makeText(context, "保存成功！\n$target\n$pestInfo", Toast.LENGTH_LONG).show()
@@ -202,8 +202,9 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
             }
 
             // 2. 顶部扫码大图区 (加入平滑的收起动画)
+            // 【修改】：苗木模式下卡片常驻，地块模式下根据 isSelfCodeMode 显隐
             AnimatedVisibility(
-                visible = !isSelfCodeMode,
+                visible = if (inputMode == 0) true else !isSelfCodeMode,
                 enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
                 exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
             ) {
@@ -226,15 +227,17 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         Text("关联苗木", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AgGreenPrimary)
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        // 【修改】：苗木锁死为二维码模式
                         DualModeIdentifierField(
                             targetName = "苗木",
                             qrCodeValue = plant_qr_code,
-                            selfCodeValue = plant_self_code,
+                            selfCodeValue = "",
                             onQrCodeChange = { plant_qr_code = it },
-                            onSelfCodeChange = { plant_self_code = it },
-                            isSelfCodeMode = isSelfCodeMode,
-                            onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { simulateScan() }
+                            onSelfCodeChange = { },
+                            isSelfCodeMode = false, // 永远为 false，保持扫码模式
+                            onModeChange = { },     // 不响应切换
+                            onScanClick = { simulateScan() },
+                            showModeToggle = false  // 隐藏右上角的切换按钮
                         )
                     }
                 }
@@ -248,6 +251,7 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         Text("关联地块", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AgGreenPrimary)
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        // 地块保持双模式可切换
                         DualModeIdentifierField(
                             targetName = "定植地块",
                             qrCodeValue = field_qr_code,

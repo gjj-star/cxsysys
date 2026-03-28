@@ -52,12 +52,11 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1 (大部分情境为批量)
     var inputMode by remember { mutableIntStateOf(1) }
 
-    // 【新增点】：将自编码模式状态上提至父页面
+    // 将自编码模式状态上提至父页面
     var isSelfCodeMode by remember { mutableStateOf(false) }
 
-    // 【修改点】：将原先的 ID 拆分为二维码和自编码
+    // 【修改】：苗木只有二维码状态
     var plantQrCode by remember { mutableStateOf("") }
-    var plantSelfCode by remember { mutableStateOf("") }
 
     var fieldQrCode by remember { mutableStateOf("") }
     var fieldSelfCode by remember { mutableStateOf("") }
@@ -132,15 +131,15 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 【修改点】：根据拆分后的状态进行校验
+                        // 【修改点】：根据拆分后的状态进行校验，苗木只看二维码
                         val targetValid = if (inputMode == 0) {
-                            plantQrCode.isNotEmpty() || plantSelfCode.isNotEmpty()
+                            plantQrCode.isNotEmpty()
                         } else {
                             fieldQrCode.isNotEmpty() || fieldSelfCode.isNotEmpty()
                         }
 
                         if (!targetValid) {
-                            val msg = if (inputMode == 0) "请扫码或输入苗木编码" else "请扫码或输入地块编码"
+                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请扫码或输入地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
@@ -209,8 +208,11 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
             }
 
             // 2. 顶部扫码区 (加入平滑的收起动画)
+            // 【修改】：判断是否需要显示顶部大卡片。如果是苗木模式，则常驻显示；地块模式跟随 isSelfCodeMode 状态。
+            val shouldShowScanCard = if (inputMode == 0) true else !isSelfCodeMode
+
             AnimatedVisibility(
-                visible = !isSelfCodeMode,
+                visible = shouldShowScanCard,
                 enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
                 exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
             ) {
@@ -231,17 +233,20 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     // 关联对象输入：根据模式动态切换，使用双模式组件
                     if (inputMode == 0) {
+                        // 【修改】：苗木锁死为二维码模式
                         DualModeIdentifierField(
                             targetName = "苗木",
                             qrCodeValue = plantQrCode,
                             onQrCodeChange = { plantQrCode = it },
-                            selfCodeValue = plantSelfCode,
-                            onSelfCodeChange = { plantSelfCode = it },
-                            isSelfCodeMode = isSelfCodeMode,
-                            onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { simulateScan() }
+                            selfCodeValue = "",
+                            onSelfCodeChange = { },
+                            isSelfCodeMode = false, // 永远为 false，保持扫码模式
+                            onModeChange = { },     // 不响应切换
+                            onScanClick = { simulateScan() },
+                            showModeToggle = false  // 隐藏右上角的切换按钮
                         )
                     } else {
+                        // 地块保持双模式可切换
                         DualModeIdentifierField(
                             targetName = "定植地块",
                             qrCodeValue = fieldQrCode,
@@ -346,8 +351,6 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
 // =================================================================
 // ⬇️ 内部组件 (前缀 Pruning)
 // =================================================================
-
-// 【注】：原有的 PruningInputWithScanField 已经被删除，复用了统一样式的 DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -1,11 +1,15 @@
 package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -34,12 +37,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// 引入刚刚提取的双模式扫码组件
+// 引入双模式扫码组件与大卡片组件
+import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 /**
  * 打孔结香录入页面
- * [修改] 严格按照 V10 方案字段要求：删除杜撰字段，更新孔深、孔径、孔距等
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,13 +55,13 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1
     var inputMode by remember { mutableIntStateOf(1) }
 
-    // 【新增点】：将自编码模式状态上提至父页面
+    // 将自编码模式状态上提至父页面 (仅地块会用到)
     var isSelfCodeMode by remember { mutableStateOf(false) }
 
-    // 适配新组件，拆分为二维码和自编码状态
+    // 【修改】：苗木只有二维码状态
     var plant_qr_code by remember { mutableStateOf("") }
-    var plant_self_code by remember { mutableStateOf("") }
 
+    // 地块保持双模式
     var field_qr_code by remember { mutableStateOf("") }
     var field_self_code by remember { mutableStateOf("") }
 
@@ -130,15 +133,15 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 校验逻辑更新，二维码或自编码填写一项即可
+                        // 【修改点】：校验逻辑更新，苗木只看二维码
                         val targetValid = if (inputMode == 0) {
-                            plant_qr_code.isNotEmpty() || plant_self_code.isNotEmpty()
+                            plant_qr_code.isNotEmpty()
                         } else {
                             field_qr_code.isNotEmpty() || field_self_code.isNotEmpty()
                         }
 
                         if (!targetValid) {
-                            val msg = if (inputMode == 0) "请扫码或输入苗木编码" else "请扫码或输入地块编码"
+                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请扫码或输入地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
@@ -188,12 +191,19 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 2. 顶部扫码区
-            // 【修改点】：只在非自编码模式（即扫码模式）下显示大卡片
-            if (!isSelfCodeMode) {
-                PunchingScanSection(
+            // 2. 顶部扫码区 (加入平滑的收起动画)
+            // 【修改】：判断是否需要显示顶部大卡片。如果是苗木模式，则常驻显示；地块模式跟随 isSelfCodeMode 状态。
+            val shouldShowScanCard = if (inputMode == 0) true else !isSelfCodeMode
+
+            AnimatedVisibility(
+                visible = shouldShowScanCard,
+                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+            ) {
+                TopScanCard(
                     isScanning = isScanning,
-                    inputMode = inputMode,
+                    title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
+                    subtitle = if (inputMode == 0) "直接录入苗木打孔结香信息" else "批量录入地块打孔结香信息",
                     onScanClick = { simulateScan() }
                 )
             }
@@ -206,24 +216,25 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     if (inputMode == 0) {
-                        // 【修改点】：传入 isSelfCodeMode 及其回调，并补充onScanClick
+                        // 【修改】：苗木锁死为二维码模式
                         DualModeIdentifierField(
                             targetName = "苗木",
                             qrCodeValue = plant_qr_code,
-                            selfCodeValue = plant_self_code,
                             onQrCodeChange = { plant_qr_code = it },
-                            onSelfCodeChange = { plant_self_code = it },
-                            isSelfCodeMode = isSelfCodeMode,
-                            onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { simulateScan() }
+                            selfCodeValue = "",
+                            onSelfCodeChange = { },
+                            isSelfCodeMode = false, // 永远为 false，保持扫码模式
+                            onModeChange = { },     // 不响应切换
+                            onScanClick = { simulateScan() },
+                            showModeToggle = false  // 隐藏右上角的切换按钮
                         )
                     } else {
-                        // 【修改点】：传入 isSelfCodeMode 及其回调，并补充 onScanClick
+                        // 地块保持双模式可切换
                         DualModeIdentifierField(
                             targetName = "定植地块",
                             qrCodeValue = field_qr_code,
-                            selfCodeValue = field_self_code,
                             onQrCodeChange = { field_qr_code = it },
+                            selfCodeValue = field_self_code,
                             onSelfCodeChange = { field_self_code = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
@@ -237,6 +248,7 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
                     OutlinedTextField(
                         value = punch_date,
                         onValueChange = { punch_date = it },
+                        readOnly = true, // 防止键盘弹起
                         label = { Text("打孔日期") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
@@ -336,33 +348,7 @@ fun PunchEntryScreen(onBackClick: () -> Unit) {
 // ⬇️ 内部组件
 // =================================================================
 
-@Composable
-private fun PunchingScanSection(isScanning: Boolean, inputMode: Int, onScanClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().height(180.dp).clickable { if (!isScanning) onScanClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF263238))
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (isScanning) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = AgGreenPrimary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("识别中...", color = Color.White)
-                }
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.QrCodeScanner, null, tint = Color.White, modifier = Modifier.size(56.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    val title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码"
-                    Text(title, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 16.sp)
-                    val subtitle = if (inputMode == 0) "直接录入苗木打孔结香信息" else "批量录入地块打孔结香信息"
-                    Text(subtitle, color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                }
-            }
-        }
-    }
-}
+// 【注】：原先的 PunchingScanSection 已经被删除，复用了统一样式的 TopScanCard 和 DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

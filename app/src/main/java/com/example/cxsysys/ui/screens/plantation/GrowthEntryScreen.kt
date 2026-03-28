@@ -1,6 +1,12 @@
 package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,13 +50,13 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
     // --- 表单状态 ---
     var inputMode by remember { mutableIntStateOf(0) } // 0-个别录入(苗木), 1-批量录入(地块)
 
-    // 【新增点】：将自编码模式状态上提至父页面
+    // 将自编码模式状态上提至父页面
     var isSelfCodeMode by remember { mutableStateOf(false) }
 
-    // [修改] 将实体 ID 拆分为 二维码 和 自编码 两个独立状态
+    // 【修改】：苗木只有二维码状态
     var plantQrCode by remember { mutableStateOf("") }
-    var plantSelfCode by remember { mutableStateOf("") }
 
+    // 地块依然保留双模式
     var fieldQrCode by remember { mutableStateOf("") }
     var fieldSelfCode by remember { mutableStateOf("") }
 
@@ -116,15 +122,15 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // [修改] 校验逻辑：二维码和自编码只需填一个即可
+                        // 【修改】 校验逻辑：苗木只看二维码，地块看双码
                         val targetValid = if (inputMode == 0) {
-                            plantQrCode.isNotEmpty() || plantSelfCode.isNotEmpty()
+                            plantQrCode.isNotEmpty()
                         } else {
                             fieldQrCode.isNotEmpty() || fieldSelfCode.isNotEmpty()
                         }
 
                         if (!targetValid) {
-                            val msg = if (inputMode == 0) "请提供苗木标识信息" else "请提供地块标识信息"
+                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请提供地块标识信息"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
@@ -170,8 +176,12 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                 ) { Text("批量录入 (地块)", color = if (inputMode == 1) Color.White else Color.Gray, fontWeight = if (inputMode == 1) FontWeight.Bold else FontWeight.Normal) }
             }
 
-            // 【修改点】：只在非自编码模式（即扫码模式）下显示大卡片
-            if (!isSelfCodeMode) {
+            // 【修改】：苗木模式下卡片常驻，地块模式下根据 isSelfCodeMode 显隐
+            AnimatedVisibility(
+                visible = if (inputMode == 0) true else !isSelfCodeMode,
+                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+            ) {
                 TopScanCard(
                     isScanning = isScanning,
                     title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
@@ -185,19 +195,22 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(12.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
 
-                    // [修改] 引入全新的双模式输入组件，并传入 isSelfCodeMode 及其回调
+                    // 引入全新的双模式输入组件
                     if (inputMode == 0) {
+                        // 【修改】：苗木锁死为二维码模式
                         DualModeIdentifierField(
                             targetName = "苗木",
                             qrCodeValue = plantQrCode,
                             onQrCodeChange = { plantQrCode = it },
-                            selfCodeValue = plantSelfCode,
-                            onSelfCodeChange = { plantSelfCode = it },
-                            isSelfCodeMode = isSelfCodeMode,
-                            onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { simulateScan() }
+                            selfCodeValue = "",
+                            onSelfCodeChange = { },
+                            isSelfCodeMode = false, // 永远为 false，保持扫码模式
+                            onModeChange = { },     // 不响应切换
+                            onScanClick = { simulateScan() },
+                            showModeToggle = false  // 【关键】：隐藏右上角的切换按钮
                         )
                     } else {
+                        // 地块保持双模式可切换
                         DualModeIdentifierField(
                             targetName = "地块",
                             qrCodeValue = fieldQrCode,
@@ -215,6 +228,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                     OutlinedTextField(
                         value = recordDate,
                         onValueChange = { recordDate = it },
+                        readOnly = true, // 【防键盘弹起】
                         label = { Text("记录日期") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = { IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary) } },

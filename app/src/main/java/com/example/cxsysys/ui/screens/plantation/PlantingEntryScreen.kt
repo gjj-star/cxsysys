@@ -55,8 +55,8 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
     var fieldQrCode by remember { mutableStateOf("") }
     var fieldSelfCode by remember { mutableStateOf("") }
 
-    // 【修改】：母树改为只能输入自编码的普通文本
-    var motherTreeSelfCode by remember { mutableStateOf("") }
+    // 【修改】：母树改为二维码状态
+    var motherTreeQrCode by remember { mutableStateOf("") }
 
     // 沉香品种 (V10: subspecies_id 沉香品种细分id: 0-野生沉香，1-人工白木香，2-人工奇楠沉香)
     var subspeciesIdLabel by remember { mutableStateOf("2-人工奇楠沉香") }
@@ -86,7 +86,7 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
     var isScanning by remember { mutableStateOf(false) }
     var showPrintConfirmDialog by remember { mutableStateOf(false) }
 
-    // 模拟扫码 (精简：现在只有地块需要扫码)
+    // 模拟地块扫码
     fun simulateScan() {
         scope.launch {
             isScanning = true
@@ -94,6 +94,16 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
             delay(1500)
             isScanning = false
             fieldQrCode = "FIELD-A-03" // 扫码成功填入二维码字段
+            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 【新增】：模拟母树专属扫码逻辑
+    fun simulateMotherTreeScan() {
+        scope.launch {
+            Toast.makeText(context, "正在识别母树二维码...", Toast.LENGTH_SHORT).show()
+            delay(1500)
+            motherTreeQrCode = "MT-QR-2023001"
             Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
         }
     }
@@ -133,7 +143,7 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                             subspecies = subspeciesIdLabel,
                             generation = generation,
                             generationWay = generationWay,
-                            motherTreeSelfCode = motherTreeSelfCode
+                            motherTreeSelfCode = motherTreeQrCode // 传入更新后的变量
                         )
                     }
                 ) { Text("确定", color = AgGreenPrimary) }
@@ -215,7 +225,7 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
 
-                    // 【修改】：使用通用的双模式组件处理地块信息
+                    // 使用通用的双模式组件处理地块信息
                     DualModeIdentifierField(
                         targetName = "定植地块",
                         qrCodeValue = fieldQrCode,
@@ -228,14 +238,20 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 【修改】：母树自编码，改为普通的单行文本输入框，无扫码功能
+                    // 【修改】：母树二维码，原生组件，只读且带有扫码图标
                     OutlinedTextField(
-                        value = motherTreeSelfCode,
-                        onValueChange = { motherTreeSelfCode = it },
-                        label = { Text("母树自编码 (选填)") },
-                        placeholder = { Text("选填，关联母树档案", color = Color.Gray, fontSize = 14.sp) },
+                        value = motherTreeQrCode,
+                        onValueChange = { motherTreeQrCode = it },
+                        readOnly = true, // 限制只能通过扫码录入
+                        label = { Text("母树二维码 (选填)") },
+                        placeholder = { Text("请点击右侧图标扫码", color = Color.Gray, fontSize = 14.sp) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
+                        trailingIcon = {
+                            IconButton(onClick = { simulateMotherTreeScan() }) {
+                                Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan", tint = AgGreenPrimary)
+                            }
+                        },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = AgGreenPrimary,
                             focusedLabelColor = AgGreenPrimary,

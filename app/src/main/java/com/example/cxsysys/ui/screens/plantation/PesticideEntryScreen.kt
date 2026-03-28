@@ -71,13 +71,13 @@ fun PesticideEntryScreen(
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1 (大部分情境为批量)
     var inputMode by remember { mutableIntStateOf(1) }
 
-    // 【新增点】：将自编码模式状态上提至父页面
+    // 将自编码模式状态上提至父页面
     var isSelfCodeMode by remember { mutableStateOf(false) }
 
-    // 【修改点】：将原先的 ID 拆分为二维码和自编码
+    // 【修改】：苗木只有二维码状态
     var plantQrCode by remember { mutableStateOf("") }
-    var plantSelfCode by remember { mutableStateOf("") }
 
+    // 地块保持双模式
     var fieldQrCode by remember { mutableStateOf("") }
     var fieldSelfCode by remember { mutableStateOf("") }
 
@@ -168,15 +168,15 @@ fun PesticideEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 【修改点】：根据拆分后的状态进行校验
+                        // 【修改】校验逻辑更新：苗木只看二维码，地块看双码
                         val targetValid = if (inputMode == 0) {
-                            plantQrCode.isNotEmpty() || plantSelfCode.isNotEmpty()
+                            plantQrCode.isNotEmpty()
                         } else {
                             fieldQrCode.isNotEmpty() || fieldSelfCode.isNotEmpty()
                         }
 
                         if (!targetValid) {
-                            val msg = if (inputMode == 0) "请扫码或输入苗木编码" else "请扫码或输入地块编码"
+                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请填写或扫码地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else if (selectedPesticide == null) {
                             Toast.makeText(context, "请选择农药", Toast.LENGTH_SHORT).show()
@@ -247,8 +247,9 @@ fun PesticideEntryScreen(
             }
 
             // 2. 顶部扫码区 (加入平滑的收起动画)
+            // 【修改】：苗木模式下卡片常驻，地块模式下根据 isSelfCodeMode 显隐
             AnimatedVisibility(
-                visible = !isSelfCodeMode,
+                visible = if (inputMode == 0) true else !isSelfCodeMode,
                 enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
                 exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
             ) {
@@ -269,17 +270,20 @@ fun PesticideEntryScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     // 关联对象输入：根据模式动态切换标签与组件
                     if (inputMode == 0) {
+                        // 【修改】：苗木锁死为二维码模式
                         DualModeIdentifierField(
                             targetName = "苗木",
                             qrCodeValue = plantQrCode,
                             onQrCodeChange = { plantQrCode = it },
-                            selfCodeValue = plantSelfCode,
-                            onSelfCodeChange = { plantSelfCode = it },
-                            isSelfCodeMode = isSelfCodeMode,
-                            onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { simulateScan() }
+                            selfCodeValue = "",
+                            onSelfCodeChange = { },
+                            isSelfCodeMode = false, // 永远为 false，保持扫码模式
+                            onModeChange = { },     // 不响应切换
+                            onScanClick = { simulateScan() },
+                            showModeToggle = false  // 隐藏右上角的切换按钮
                         )
                     } else {
+                        // 地块保持双模式可切换
                         DualModeIdentifierField(
                             targetName = "定植地块",
                             qrCodeValue = fieldQrCode,
