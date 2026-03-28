@@ -3,9 +3,13 @@ package com.example.printerfeature.data;
 
 import com.example.printerfeature.model.LabelData;
 import com.example.printerfeature.model.FieldLabelData;
+import com.example.printerfeature.model.GreenhouseLabelData;
 import com.example.printerfeature.model.PlantBlockData;
 import com.example.printerfeature.model.PlantData;
 import com.example.printerfeature.model.PlantationData;
+import com.example.printerfeature.model.ProcessLabelData;
+import com.example.printerfeature.model.ProductLabelData;
+import com.example.printerfeature.model.SeedbedLabelData;
 import com.example.printerfeature.model.TemplateExampleData;
 
 import java.util.ArrayList;
@@ -13,6 +17,8 @@ import java.util.List;
 
 public final class MockLabelRepository {
     private MockLabelRepository() {}
+    public static final String PROCESS_TYPE_MATERIAL = "material";
+    public static final String PROCESS_TYPE_SEMI_FINISHED = "semi_finished";
 
     public static List<PlantBlockData> getPlantBlocks() {
         List<PlantBlockData> blocks = new ArrayList<>();
@@ -96,6 +102,144 @@ public final class MockLabelRepository {
         return null;
     }
 
+    public static List<ProcessLabelData> getProcessLabels() {
+        List<ProcessLabelData> list = new ArrayList<>();
+        list.add(new ProcessLabelData(PROCESS_TYPE_MATERIAL, LabelTemplates.TYPE_INITIAL, "初步清理",
+                "沉香片", "CX-1234", "5×2", "10", "5g", "一级", "2024-05-21 14:00:00", "OP-08", "CJG-M-2101"));
+        list.add(new ProcessLabelData(PROCESS_TYPE_MATERIAL, LabelTemplates.TYPE_INITIAL, "烘干分拣",
+                "沉香丝", "CX-1266", "3×2", "12", "4g", "一级", "2024-05-21 16:20:00", "OP-11", "CJG-M-2102"));
+        list.add(new ProcessLabelData(PROCESS_TYPE_SEMI_FINISHED, LabelTemplates.TYPE_DEEP, "精制提纯",
+                "沉香半成品粉", "SF-201", "40g", "30", "1.2kg", "特级", "2024-05-22 10:10:00", "OP-03", "CJG-S-2201"));
+        list.add(new ProcessLabelData(PROCESS_TYPE_SEMI_FINISHED, LabelTemplates.TYPE_DEEP, "压制成型",
+                "沉香半成品片", "SF-302", "25片", "20", "1.8kg", "精品", "2024-05-22 13:40:00", "OP-05", "CJG-S-2202"));
+        return list;
+    }
+
+    public static LabelData toProcessLabel(ProcessLabelData item) {
+        return new LabelData(
+                LabelTemplates.TEMP_CJG,
+                item.processingType,
+                item.processName,
+                item.name,
+                item.model + " / " + item.spec,
+                item.num + " / " + item.weight,
+                item.grade,
+                item.completedTime,
+                item.operatorId,
+                item.traceCode
+        );
+    }
+
+    public static List<LabelData> findProcessLabelsByTypeAndDate(String typeKey, String date) {
+        List<LabelData> labels = new ArrayList<>();
+        for (ProcessLabelData item : getProcessLabels()) {
+            if (typeKey.equals(item.processTypeKey) && item.completedTime.startsWith(date)) {
+                labels.add(toProcessLabel(item));
+            }
+        }
+        if (labels.isEmpty()) {
+            String processingType = PROCESS_TYPE_MATERIAL.equals(typeKey) ? LabelTemplates.TYPE_INITIAL : LabelTemplates.TYPE_DEEP;
+            String processName = PROCESS_TYPE_MATERIAL.equals(typeKey) ? "初步清理" : "精制提纯";
+            labels.add(toProcessLabel(new ProcessLabelData(
+                    typeKey, processingType, processName,
+                    PROCESS_TYPE_MATERIAL.equals(typeKey) ? "沉香片" : "沉香半成品粉",
+                    PROCESS_TYPE_MATERIAL.equals(typeKey) ? "CX-1234" : "SF-201",
+                    PROCESS_TYPE_MATERIAL.equals(typeKey) ? "5×2" : "40g",
+                    "10", PROCESS_TYPE_MATERIAL.equals(typeKey) ? "5g" : "1.2kg",
+                    "一级", date + " 10:00:00", "OP-08",
+                    "CJG-TEST-" + typeKey + "-" + date.replace("-", "") + "-01"
+            )));
+            labels.add(toProcessLabel(new ProcessLabelData(
+                    typeKey, processingType, processName,
+                    PROCESS_TYPE_MATERIAL.equals(typeKey) ? "沉香丝" : "沉香半成品片",
+                    PROCESS_TYPE_MATERIAL.equals(typeKey) ? "CX-1266" : "SF-302",
+                    PROCESS_TYPE_MATERIAL.equals(typeKey) ? "3×2" : "25片",
+                    "20", PROCESS_TYPE_MATERIAL.equals(typeKey) ? "6g" : "1.6kg",
+                    "精品", date + " 15:20:00", "OP-12",
+                    "CJG-TEST-" + typeKey + "-" + date.replace("-", "") + "-02"
+            )));
+        }
+        return labels;
+    }
+
+    public static LabelData findProcessLabelByTypeAndTraceCode(String typeKey, String traceCode) {
+        for (ProcessLabelData item : getProcessLabels()) {
+            if (typeKey.equals(item.processTypeKey) && traceCode.equalsIgnoreCase(item.traceCode)) {
+                return toProcessLabel(item);
+            }
+        }
+        return null;
+    }
+
+    public static List<ProductLabelData> getProductLabels() {
+        List<ProductLabelData> products = new ArrayList<>();
+        products.add(new ProductLabelData("极品沉香线香", "CX-20", "20支", "50", "1.5kg", "特级", "2024-05-22 10:30:00", "OP-12", "CP-EX-2201"));
+        products.add(new ProductLabelData("商务沉香盘香", "PX-10", "10片", "80", "2.0kg", "一级", "2024-05-22 15:40:00", "OP-09", "CP-EX-2202"));
+        products.add(new ProductLabelData("礼盒沉香粉", "FH-05", "50g", "120", "6.0kg", "特级", "2024-05-23 09:20:00", "OP-15", "CP-EX-2301"));
+        products.add(new ProductLabelData("家用沉香片", "XP-08", "8片", "60", "2.8kg", "一级", "2024-05-23 14:10:00", "OP-18", "CP-EX-2302"));
+        products.add(new ProductLabelData("沉香礼品套装", "TZ-01", "1套", "30", "3.2kg", "精品", "2024-05-24 11:00:00", "OP-07", "CP-EX-2401"));
+        return products;
+    }
+
+    public static LabelData toProductLabel(ProductLabelData product) {
+        return new LabelData(
+                LabelTemplates.TEMP_CP,
+                "",
+                "",
+                product.productName,
+                product.model + " / " + product.spec,
+                product.num + " / " + product.weight,
+                product.grade,
+                product.completedTime,
+                product.operatorId,
+                product.traceCode
+        );
+    }
+
+    public static List<LabelData> findProductLabelsByDate(String date) {
+        List<LabelData> labels = new ArrayList<>();
+        for (ProductLabelData product : getProductLabels()) {
+            if (product.completedTime.startsWith(date)) {
+                labels.add(toProductLabel(product));
+            }
+        }
+        if (labels.isEmpty()) {
+            // 便于联调测试：任意日期都可得到当日可打印的产成品标签
+            labels.add(toProductLabel(new ProductLabelData(
+                    "极品沉香线香",
+                    "CX-20",
+                    "20支",
+                    "50",
+                    "1.5kg",
+                    "特级",
+                    date + " 10:30:00",
+                    "OP-12",
+                    "CP-TEST-" + date.replace("-", "") + "-01"
+            )));
+            labels.add(toProductLabel(new ProductLabelData(
+                    "商务沉香盘香",
+                    "PX-10",
+                    "10片",
+                    "80",
+                    "2.0kg",
+                    "一级",
+                    date + " 15:40:00",
+                    "OP-09",
+                    "CP-TEST-" + date.replace("-", "") + "-02"
+            )));
+        }
+        return labels;
+    }
+
+    public static LabelData findProductLabelByTraceCode(String traceCode) {
+        for (ProductLabelData product : getProductLabels()) {
+            if (traceCode.equalsIgnoreCase(product.traceCode)) {
+                return toProductLabel(product);
+            }
+        }
+        return null;
+    }
+
     public static LabelData toPlantLabel(PlantData plant) {
         return new LabelData(
                 LabelTemplates.TEMP_MM,
@@ -142,6 +286,142 @@ public final class MockLabelRepository {
             for (FieldLabelData field : plantation.fields) {
                 if (selfCode.equalsIgnoreCase(field.selfCode)) {
                     return toFieldLabel(plantation.name, field);
+                }
+            }
+        }
+        return null;
+    }
+
+    public static List<GreenhouseLabelData> getGreenhousesByPlantationName(String plantationName) {
+        List<GreenhouseLabelData> greenhouses = new ArrayList<>();
+        if ("东山一号种植园".equals(plantationName)) {
+            greenhouses.add(new GreenhouseLabelData("东山-连栋1号棚", "GH-201", "东山一号种植园", "2.1亩", "正常运营", "陈大海", "GH-EX-A01"));
+            greenhouses.add(new GreenhouseLabelData("东山-连栋2号棚", "GH-202", "东山一号种植园", "1.8亩", "正常运营", "陈大海", "GH-EX-A02"));
+            greenhouses.add(new GreenhouseLabelData("东山-拱棚3号棚", "GH-203", "东山一号种植园", "1.6亩", "待巡检", "陈大海", "GH-EX-A03"));
+            return greenhouses;
+        }
+        if ("南岭智慧种植园".equals(plantationName)) {
+            greenhouses.add(new GreenhouseLabelData("南岭-智能1号棚", "GH-311", "南岭智慧种植园", "1.9亩", "正常运营", "李芳", "GH-EX-B01"));
+            greenhouses.add(new GreenhouseLabelData("南岭-智能2号棚", "GH-312", "南岭智慧种植园", "2.2亩", "正常运营", "李芳", "GH-EX-B02"));
+            greenhouses.add(new GreenhouseLabelData("南岭-保育3号棚", "GH-313", "南岭智慧种植园", "1.5亩", "待巡检", "李芳", "GH-EX-B03"));
+            return greenhouses;
+        }
+        if ("西湾生态种植园".equals(plantationName)) {
+            greenhouses.add(new GreenhouseLabelData("西湾-生态1号棚", "GH-321", "西湾生态种植园", "2.4亩", "生长良好", "王志强", "GH-EX-C01"));
+            greenhouses.add(new GreenhouseLabelData("西湾-生态2号棚", "GH-322", "西湾生态种植园", "2.0亩", "生长良好", "王志强", "GH-EX-C02"));
+            greenhouses.add(new GreenhouseLabelData("西湾-生态3号棚", "GH-323", "西湾生态种植园", "1.7亩", "待巡检", "王志强", "GH-EX-C03"));
+        }
+        return greenhouses;
+    }
+
+    public static List<GreenhouseLabelData> getAllGreenhouses() {
+        List<GreenhouseLabelData> all = new ArrayList<>();
+        all.addAll(getGreenhousesByPlantationName("东山一号种植园"));
+        all.addAll(getGreenhousesByPlantationName("南岭智慧种植园"));
+        all.addAll(getGreenhousesByPlantationName("西湾生态种植园"));
+        return all;
+    }
+
+    public static LabelData toGreenhouseLabel(String plantationName, GreenhouseLabelData greenhouse) {
+        return new LabelData(
+                LabelTemplates.TEMP_DP,
+                "",
+                "",
+                greenhouse.selfCode,
+                plantationName,
+                greenhouse.area,
+                greenhouse.owner,
+                "",
+                "",
+                greenhouse.traceCode
+        );
+    }
+
+    public static List<SeedbedLabelData> getSeedbedsByGreenhouseSelfCode(String greenhouseSelfCode) {
+        List<SeedbedLabelData> seedbeds = new ArrayList<>();
+        if ("GH-201".equals(greenhouseSelfCode)) {
+            seedbeds.add(new SeedbedLabelData("东山1号棚-A苗床", "MC-201-A", "MC-EX-201A"));
+            seedbeds.add(new SeedbedLabelData("东山1号棚-B苗床", "MC-201-B", "MC-EX-201B"));
+            seedbeds.add(new SeedbedLabelData("东山1号棚-C苗床", "MC-201-C", "MC-EX-201C"));
+            return seedbeds;
+        }
+        if ("GH-202".equals(greenhouseSelfCode)) {
+            seedbeds.add(new SeedbedLabelData("东山2号棚-A苗床", "MC-202-A", "MC-EX-202A"));
+            seedbeds.add(new SeedbedLabelData("东山2号棚-B苗床", "MC-202-B", "MC-EX-202B"));
+            seedbeds.add(new SeedbedLabelData("东山2号棚-C苗床", "MC-202-C", "MC-EX-202C"));
+            return seedbeds;
+        }
+        if ("GH-203".equals(greenhouseSelfCode)) {
+            seedbeds.add(new SeedbedLabelData("东山3号棚-A苗床", "MC-203-A", "MC-EX-203A"));
+            seedbeds.add(new SeedbedLabelData("东山3号棚-B苗床", "MC-203-B", "MC-EX-203B"));
+            return seedbeds;
+        }
+        if ("GH-311".equals(greenhouseSelfCode)) {
+            seedbeds.add(new SeedbedLabelData("南岭1号棚-A苗床", "MC-311-A", "MC-EX-311A"));
+            seedbeds.add(new SeedbedLabelData("南岭1号棚-B苗床", "MC-311-B", "MC-EX-311B"));
+            return seedbeds;
+        }
+        if ("GH-312".equals(greenhouseSelfCode)) {
+            seedbeds.add(new SeedbedLabelData("南岭2号棚-A苗床", "MC-312-A", "MC-EX-312A"));
+            seedbeds.add(new SeedbedLabelData("南岭2号棚-B苗床", "MC-312-B", "MC-EX-312B"));
+            seedbeds.add(new SeedbedLabelData("南岭2号棚-C苗床", "MC-312-C", "MC-EX-312C"));
+            return seedbeds;
+        }
+        if ("GH-313".equals(greenhouseSelfCode)) {
+            seedbeds.add(new SeedbedLabelData("南岭3号棚-A苗床", "MC-313-A", "MC-EX-313A"));
+            return seedbeds;
+        }
+        if ("GH-321".equals(greenhouseSelfCode)) {
+            seedbeds.add(new SeedbedLabelData("西湾1号棚-A苗床", "MC-321-A", "MC-EX-321A"));
+            seedbeds.add(new SeedbedLabelData("西湾1号棚-B苗床", "MC-321-B", "MC-EX-321B"));
+            return seedbeds;
+        }
+        if ("GH-322".equals(greenhouseSelfCode)) {
+            seedbeds.add(new SeedbedLabelData("西湾2号棚-A苗床", "MC-322-A", "MC-EX-322A"));
+            seedbeds.add(new SeedbedLabelData("西湾2号棚-B苗床", "MC-322-B", "MC-EX-322B"));
+            return seedbeds;
+        }
+        if ("GH-323".equals(greenhouseSelfCode)) {
+            seedbeds.add(new SeedbedLabelData("西湾3号棚-A苗床", "MC-323-A", "MC-EX-323A"));
+            seedbeds.add(new SeedbedLabelData("西湾3号棚-B苗床", "MC-323-B", "MC-EX-323B"));
+            return seedbeds;
+        }
+        return seedbeds;
+    }
+
+    public static LabelData toSeedbedLabel(GreenhouseLabelData greenhouse, SeedbedLabelData seedbed) {
+        return new LabelData(
+                LabelTemplates.TEMP_MC,
+                "",
+                "",
+                seedbed.selfCode,
+                greenhouse.selfCode,
+                greenhouse.plantationName,
+                greenhouse.owner,
+                "",
+                "",
+                seedbed.traceCode
+        );
+    }
+
+    public static LabelData findSeedbedLabelBySelfCode(List<GreenhouseLabelData> greenhouses, String selfCode) {
+        for (GreenhouseLabelData greenhouse : greenhouses) {
+            List<SeedbedLabelData> seedbeds = getSeedbedsByGreenhouseSelfCode(greenhouse.selfCode);
+            for (SeedbedLabelData seedbed : seedbeds) {
+                if (selfCode.equalsIgnoreCase(seedbed.selfCode)) {
+                    return toSeedbedLabel(greenhouse, seedbed);
+                }
+            }
+        }
+        return null;
+    }
+
+    public static LabelData findGreenhouseLabelBySelfCode(List<PlantationData> plantations, String selfCode) {
+        for (PlantationData plantation : plantations) {
+            List<GreenhouseLabelData> greenhouses = getGreenhousesByPlantationName(plantation.name);
+            for (GreenhouseLabelData greenhouse : greenhouses) {
+                if (selfCode.equalsIgnoreCase(greenhouse.selfCode)) {
+                    return toGreenhouseLabel(plantation.name, greenhouse);
                 }
             }
         }

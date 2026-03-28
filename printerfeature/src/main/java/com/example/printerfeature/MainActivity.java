@@ -26,10 +26,12 @@ import androidx.activity.ComponentActivity;
 import com.example.printerfeature.data.LabelTemplates;
 import com.example.printerfeature.data.MockLabelRepository;
 import com.example.printerfeature.model.FieldLabelData;
+import com.example.printerfeature.model.GreenhouseLabelData;
 import com.example.printerfeature.model.LabelData;
 import com.example.printerfeature.model.PlantBlockData;
 import com.example.printerfeature.model.PlantData;
 import com.example.printerfeature.model.PlantationData;
+import com.example.printerfeature.model.SeedbedLabelData;
 import com.example.printerfeature.model.TemplateExampleData;
 import com.example.printerfeature.printing.LabelPrintManager;
 import com.google.android.material.textfield.TextInputLayout;
@@ -110,9 +112,14 @@ public class MainActivity extends ComponentActivity {
     private final List<LabelData> dataList = new ArrayList<>();
     private List<PlantBlockData> plantBlocks = new ArrayList<>();
     private List<PlantationData> plantations = new ArrayList<>();
+    private List<GreenhouseLabelData> greenhouses = new ArrayList<>();
     private PlantBlockData selectedPlantBlock;
     private PlantationData selectedPlantation;
+    private GreenhouseLabelData selectedGreenhouse;
     private String selectedPlantDate = "";
+    private String selectedProcessTypeKey = "";
+    private String selectedProcessDate = "";
+    private String selectedProductDate = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -220,10 +227,19 @@ public class MainActivity extends ComponentActivity {
         etF6.setOnClickListener(v -> showDatePicker(etF6));
 
         etPlantDate.setInputType(InputType.TYPE_NULL);
-        etPlantDate.setOnClickListener(v -> showPlantDatePicker());
+        etPlantDate.setOnClickListener(v -> {
+            if (TEMP_MM.equals(currentTemplate())) {
+                showPlantDatePicker();
+            } else if (TEMP_CJG.equals(currentTemplate())) {
+                showProcessDatePicker();
+            } else if (TEMP_CP.equals(currentTemplate())) {
+                showProductDatePicker();
+            }
+        });
 
         plantBlocks = MockLabelRepository.getPlantBlocks();
         plantations = MockLabelRepository.getPlantations();
+        greenhouses = MockLabelRepository.getAllGreenhouses();
     }
 
     private void setupTemplateSelectors() {
@@ -245,6 +261,14 @@ public class MainActivity extends ComponentActivity {
         btnResetPlantFilters.setOnClickListener(v -> {
             if (TEMP_DK.equals(currentTemplate())) {
                 resetFieldFilters();
+            } else if (TEMP_DP.equals(currentTemplate())) {
+                resetGreenhouseFilters();
+            } else if (TEMP_MC.equals(currentTemplate())) {
+                resetSeedbedFilters();
+            } else if (TEMP_CJG.equals(currentTemplate())) {
+                resetProcessFilters();
+            } else if (TEMP_CP.equals(currentTemplate())) {
+                resetProductFilters();
             } else {
                 resetPlantFilters();
             }
@@ -267,6 +291,14 @@ public class MainActivity extends ComponentActivity {
                 message = "请先选择地块或补打一棵苗木";
             } else if (TEMP_DK.equals(template)) {
                 message = "请先选择种植园或补打一块地块";
+            } else if (TEMP_DP.equals(template)) {
+                message = "请先选择种植园或补打一座大棚";
+            } else if (TEMP_MC.equals(template)) {
+                message = "请先选择大棚或补打一个苗床";
+            } else if (TEMP_CJG.equals(template)) {
+                message = "请先选择加工类型和完工日期，或补打一个加工标签";
+            } else if (TEMP_CP.equals(template)) {
+                message = "请先选择完工日期或补打一个产成品";
             } else {
                 message = "请先录入数据";
             }
@@ -285,6 +317,14 @@ public class MainActivity extends ComponentActivity {
                         applyPlantFilters(false);
                     } else if (TEMP_DK.equals(currentTemplate()) && selectedPlantation != null) {
                         applyFieldFilters(false);
+                    } else if (TEMP_DP.equals(currentTemplate()) && selectedPlantation != null) {
+                        applyGreenhouseFilters(false);
+                    } else if (TEMP_MC.equals(currentTemplate()) && selectedGreenhouse != null) {
+                        applySeedbedFilters(false);
+                    } else if (TEMP_CJG.equals(currentTemplate()) && !selectedProcessTypeKey.isEmpty() && !selectedProcessDate.isEmpty()) {
+                        applyProcessFilters(false);
+                    } else if (TEMP_CP.equals(currentTemplate()) && !selectedProductDate.isEmpty()) {
+                        applyProductFilters(false);
                     } else {
                         dataList.clear();
                         updateDataUI();
@@ -323,6 +363,38 @@ public class MainActivity extends ComponentActivity {
             showManualFieldDialog();
             return;
         }
+        if (TEMP_DP.equals(currentTemplate())) {
+            if ("未连接".equals(printerSDK.printerName)) {
+                Toast.makeText(this, "请先连接打印机，再进行大棚补打", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            showManualGreenhouseDialog();
+            return;
+        }
+        if (TEMP_MC.equals(currentTemplate())) {
+            if ("未连接".equals(printerSDK.printerName)) {
+                Toast.makeText(this, "请先连接打印机，再进行苗床补打", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            showManualSeedbedDialog();
+            return;
+        }
+        if (TEMP_CJG.equals(currentTemplate())) {
+            if ("未连接".equals(printerSDK.printerName)) {
+                Toast.makeText(this, "请先连接打印机，再进行加工标签补打", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            showManualProcessDialog();
+            return;
+        }
+        if (TEMP_CP.equals(currentTemplate())) {
+            if ("未连接".equals(printerSDK.printerName)) {
+                Toast.makeText(this, "请先连接打印机，再进行产成品补打", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            showManualProductDialog();
+            return;
+        }
         fillExampleData();
     }
 
@@ -345,6 +417,40 @@ public class MainActivity extends ComponentActivity {
                 selectedPlantation = plantations.get(0);
                 applyFieldFilters(true);
             }
+            return;
+        }
+        if (TEMP_DP.equals(currentTemplate())) {
+            if (!plantations.isEmpty()) {
+                configureGreenhouseBatchUI();
+                spinnerPlantBlock.setText(plantations.get(0).name, false);
+                selectedPlantation = plantations.get(0);
+                applyGreenhouseFilters(true);
+            }
+            return;
+        }
+        if (TEMP_MC.equals(currentTemplate())) {
+            if (!greenhouses.isEmpty()) {
+                configureSeedbedBatchUI();
+                spinnerPlantBlock.setText(greenhouses.get(0).greenhouseName + " (" + greenhouses.get(0).selfCode + ")", false);
+                selectedGreenhouse = greenhouses.get(0);
+                applySeedbedFilters(true);
+            }
+            return;
+        }
+        if (TEMP_CJG.equals(currentTemplate())) {
+            configureProcessBatchUI();
+            selectedProcessTypeKey = MockLabelRepository.PROCESS_TYPE_MATERIAL;
+            spinnerPlantBlock.setText("初加工 (material)", false);
+            selectedProcessDate = "2024-05-21";
+            etPlantDate.setText(selectedProcessDate);
+            applyProcessFilters(true);
+            return;
+        }
+        if (TEMP_CP.equals(currentTemplate())) {
+            configureProductBatchUI();
+            selectedProductDate = "2024-05-22";
+            etPlantDate.setText(selectedProductDate);
+            applyProductFilters(true);
             return;
         }
 
@@ -393,13 +499,29 @@ public class MainActivity extends ComponentActivity {
             configurePlantBatchUI();
             resetPlantFilters();
         } else if (TEMP_CJG.equals(template)) {
-            showProcessingTemplate();
+            cardManualForm.setVisibility(View.GONE);
+            cardPlantBatch.setVisibility(View.VISIBLE);
+            btnExample.setText("补打单条");
+            configureProcessBatchUI();
+            resetProcessFilters();
         } else if (TEMP_CP.equals(template)) {
-            showProductTemplate();
+            cardManualForm.setVisibility(View.GONE);
+            cardPlantBatch.setVisibility(View.VISIBLE);
+            btnExample.setText("补打单品");
+            configureProductBatchUI();
+            resetProductFilters();
         } else if (TEMP_DP.equals(template)) {
-            showGreenhouseTemplate();
+            cardManualForm.setVisibility(View.GONE);
+            cardPlantBatch.setVisibility(View.VISIBLE);
+            btnExample.setText("补打单棚");
+            configureGreenhouseBatchUI();
+            resetGreenhouseFilters();
         } else if (TEMP_MC.equals(template)) {
-            showSeedbedTemplate();
+            cardManualForm.setVisibility(View.GONE);
+            cardPlantBatch.setVisibility(View.VISIBLE);
+            btnExample.setText("补打单床");
+            configureSeedbedBatchUI();
+            resetSeedbedFilters();
         } else if (TEMP_DK.equals(template)) {
             cardManualForm.setVisibility(View.GONE);
             cardPlantBatch.setVisibility(View.VISIBLE);
@@ -426,6 +548,8 @@ public class MainActivity extends ComponentActivity {
         cardPlantBatch.setVisibility(View.GONE);
         btnExample.setVisibility(View.VISIBLE);
         btnExample.setText("示例数据");
+        tilPlantBlock.setVisibility(View.VISIBLE);
+        layoutPlantSummary.setVisibility(View.VISIBLE);
         tvDataCount.setText("");
     }
 
@@ -513,18 +637,61 @@ public class MainActivity extends ComponentActivity {
 
     private void configurePlantBatchUI() {
         tvBatchFilterTitle.setText("筛选苗木所在地块");
+        tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择地块");
         tilPlantDate.setVisibility(View.VISIBLE);
+        tilPlantDate.setHint("定植日期");
+        layoutPlantSummary.setVisibility(View.VISIBLE);
         tvPlantCountLabel.setText("待打印苗木标签");
         setupPlantBlockSelector();
     }
 
     private void configureFieldBatchUI() {
-        tvBatchFilterTitle.setText("筛选大棚所在种植园");
+        tvBatchFilterTitle.setText("筛选地块所在种植园");
+        tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择种植园");
         tilPlantDate.setVisibility(View.GONE);
+        layoutPlantSummary.setVisibility(View.VISIBLE);
         tvPlantCountLabel.setText("待打印地块标签");
         setupPlantationSelector();
+    }
+
+    private void configureGreenhouseBatchUI() {
+        tvBatchFilterTitle.setText("筛选大棚所在种植园");
+        tilPlantBlock.setVisibility(View.VISIBLE);
+        tilPlantBlock.setHint("选择种植园");
+        tilPlantDate.setVisibility(View.GONE);
+        layoutPlantSummary.setVisibility(View.VISIBLE);
+        tvPlantCountLabel.setText("待打印大棚标签");
+        setupPlantationSelector();
+    }
+
+    private void configureSeedbedBatchUI() {
+        tvBatchFilterTitle.setText("筛选苗床所在大棚");
+        tilPlantBlock.setVisibility(View.VISIBLE);
+        tilPlantBlock.setHint("选择大棚");
+        tilPlantDate.setVisibility(View.GONE);
+        layoutPlantSummary.setVisibility(View.VISIBLE);
+        tvPlantCountLabel.setText("待打印苗床标签");
+        setupGreenhouseSelector();
+    }
+
+    private void configureProductBatchUI() {
+        tvBatchFilterTitle.setText("筛选产成品完工时间");
+        tilPlantBlock.setVisibility(View.GONE);
+        tilPlantDate.setVisibility(View.VISIBLE);
+        tilPlantDate.setHint("完工日期");
+        layoutPlantSummary.setVisibility(View.GONE);
+    }
+
+    private void configureProcessBatchUI() {
+        tvBatchFilterTitle.setText("筛选加工完工标签");
+        tilPlantBlock.setVisibility(View.VISIBLE);
+        tilPlantBlock.setHint("选择类型");
+        tilPlantDate.setVisibility(View.VISIBLE);
+        tilPlantDate.setHint("完工日期");
+        layoutPlantSummary.setVisibility(View.GONE);
+        setupProcessTypeSelector();
     }
 
     private void addData() {
@@ -593,6 +760,45 @@ public class MainActivity extends ComponentActivity {
         return true;
     }
 
+    private void setupGreenhouseSelector() {
+        List<String> names = new ArrayList<>();
+        for (GreenhouseLabelData greenhouse : greenhouses) {
+            names.add(greenhouse.greenhouseName + " (" + greenhouse.selfCode + ")");
+        }
+        ArrayAdapter<String> greenhouseAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
+        spinnerPlantBlock.setAdapter(greenhouseAdapter);
+        spinnerPlantBlock.setKeyListener(null);
+        spinnerPlantBlock.setFocusable(false);
+        spinnerPlantBlock.setCursorVisible(false);
+        spinnerPlantBlock.setOnClickListener(v -> spinnerPlantBlock.showDropDown());
+        spinnerPlantBlock.setOnItemClickListener((parent, view, position, id) -> {
+            selectedGreenhouse = greenhouses.get(position);
+            applySeedbedFilters(true);
+        });
+        layoutPlantSummary.setVisibility(View.VISIBLE);
+        updateSeedbedSummaryPlaceholder();
+    }
+
+    private void setupProcessTypeSelector() {
+        List<String> types = new ArrayList<>();
+        types.add("初加工 (material)");
+        types.add("精加工 (semi_finished)");
+        ArrayAdapter<String> typeAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, types);
+        spinnerPlantBlock.setAdapter(typeAdapter);
+        spinnerPlantBlock.setKeyListener(null);
+        spinnerPlantBlock.setFocusable(false);
+        spinnerPlantBlock.setCursorVisible(false);
+        spinnerPlantBlock.setOnClickListener(v -> spinnerPlantBlock.showDropDown());
+        spinnerPlantBlock.setOnItemClickListener((parent, view, position, id) -> {
+            selectedProcessTypeKey = position == 0
+                    ? MockLabelRepository.PROCESS_TYPE_MATERIAL
+                    : MockLabelRepository.PROCESS_TYPE_SEMI_FINISHED;
+            if (!selectedProcessDate.isEmpty()) {
+                applyProcessFilters(true);
+            }
+        });
+    }
+
     private void setupPlantBlockSelector() {
         List<String> names = new ArrayList<>();
         for (PlantBlockData block : plantBlocks) {
@@ -625,10 +831,18 @@ public class MainActivity extends ComponentActivity {
         spinnerPlantBlock.setOnClickListener(v -> spinnerPlantBlock.showDropDown());
         spinnerPlantBlock.setOnItemClickListener((parent, view, position, id) -> {
             selectedPlantation = plantations.get(position);
-            applyFieldFilters(true);
+            if (TEMP_DP.equals(currentTemplate())) {
+                applyGreenhouseFilters(true);
+            } else {
+                applyFieldFilters(true);
+            }
         });
         layoutPlantSummary.setVisibility(View.VISIBLE);
-        updateFieldSummaryPlaceholder();
+        if (TEMP_DP.equals(currentTemplate())) {
+            updateGreenhouseSummaryPlaceholder();
+        } else {
+            updateFieldSummaryPlaceholder();
+        }
     }
 
     private void applyPlantFilters(boolean showToast) {
@@ -694,6 +908,82 @@ public class MainActivity extends ComponentActivity {
         tvPlantBlockOwner.setTextColor(Color.parseColor("#555555"));
     }
 
+    private void bindGreenhouseSummary(GreenhouseLabelData greenhouse) {
+        tvPlantBlockName.setText("大棚：" + greenhouse.greenhouseName);
+        tvPlantBlockCode.setText("自编码：" + greenhouse.selfCode);
+        tvPlantBlockLocation.setText("种植园：" + greenhouse.plantationName + "，面积：" + greenhouse.area);
+        tvPlantBlockStatus.setText("状态：" + greenhouse.status);
+        tvPlantBlockStatus.setTextColor(getStatusColor(greenhouse.status));
+        tvPlantBlockOwner.setText("负责人：" + greenhouse.owner);
+        tvPlantBlockOwner.setTextColor(Color.parseColor("#555555"));
+    }
+
+    private void applyGreenhouseFilters(boolean showToast) {
+        dataList.clear();
+        if (selectedPlantation == null) {
+            updateGreenhouseSummaryPlaceholder();
+            updateDataUI();
+            return;
+        }
+
+        bindPlantationSummary(selectedPlantation);
+        List<GreenhouseLabelData> greenhouses = MockLabelRepository.getGreenhousesByPlantationName(selectedPlantation.name);
+        for (GreenhouseLabelData greenhouse : greenhouses) {
+            dataList.add(MockLabelRepository.toGreenhouseLabel(selectedPlantation.name, greenhouse));
+        }
+        updateDataUI();
+
+        if (showToast) {
+            Toast.makeText(this, "已载入“" + selectedPlantation.name + "”的大棚示例标签", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void applySeedbedFilters(boolean showToast) {
+        dataList.clear();
+        if (selectedGreenhouse == null) {
+            updateSeedbedSummaryPlaceholder();
+            updateDataUI();
+            return;
+        }
+
+        bindGreenhouseSummary(selectedGreenhouse);
+        List<SeedbedLabelData> seedbeds = MockLabelRepository.getSeedbedsByGreenhouseSelfCode(selectedGreenhouse.selfCode);
+        for (SeedbedLabelData seedbed : seedbeds) {
+            dataList.add(MockLabelRepository.toSeedbedLabel(selectedGreenhouse, seedbed));
+        }
+        updateDataUI();
+
+        if (showToast) {
+            Toast.makeText(this, "已载入“" + selectedGreenhouse.greenhouseName + "”的苗床示例标签", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void applyProductFilters(boolean showToast) {
+        dataList.clear();
+        if (selectedProductDate.isEmpty()) {
+            updateDataUI();
+            return;
+        }
+        dataList.addAll(MockLabelRepository.findProductLabelsByDate(selectedProductDate));
+        updateDataUI();
+        if (showToast) {
+            Toast.makeText(this, "已按完工日期筛选到 " + dataList.size() + " 个产成品标签", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void applyProcessFilters(boolean showToast) {
+        dataList.clear();
+        if (selectedProcessTypeKey.isEmpty() || selectedProcessDate.isEmpty()) {
+            updateDataUI();
+            return;
+        }
+        dataList.addAll(MockLabelRepository.findProcessLabelsByTypeAndDate(selectedProcessTypeKey, selectedProcessDate));
+        updateDataUI();
+        if (showToast) {
+            Toast.makeText(this, "已按类型和完工日期筛选到 " + dataList.size() + " 条加工标签", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void resetPlantFilters() {
         selectedPlantBlock = null;
         selectedPlantDate = "";
@@ -737,6 +1027,66 @@ public class MainActivity extends ComponentActivity {
         tvDataCount.setText("请选择种植园，批量打印该种植园下所有地块标签");
     }
 
+    private void resetGreenhouseFilters() {
+        selectedPlantation = null;
+        dataList.clear();
+        spinnerPlantBlock.setText("", false);
+        etPlantDate.setText("");
+        updateGreenhouseSummaryPlaceholder();
+        updateDataUI();
+    }
+
+    private void updateGreenhouseSummaryPlaceholder() {
+        tvPlantBlockName.setText("种植园：待选择");
+        tvPlantBlockCode.setText("自编码：待选择");
+        tvPlantBlockLocation.setText("总面积：待选择");
+        tvPlantBlockStatus.setText("状态：待选择");
+        tvPlantBlockStatus.setTextColor(Color.parseColor("#999999"));
+        tvPlantBlockOwner.setText("负责人：待选择");
+        tvPlantBlockOwner.setTextColor(Color.parseColor("#999999"));
+        tvPlantCount.setText("0");
+        tvDataCount.setText("请选择种植园，批量打印该种植园下所有大棚标签");
+    }
+
+    private void resetSeedbedFilters() {
+        selectedGreenhouse = null;
+        dataList.clear();
+        spinnerPlantBlock.setText("", false);
+        etPlantDate.setText("");
+        updateSeedbedSummaryPlaceholder();
+        updateDataUI();
+    }
+
+    private void updateSeedbedSummaryPlaceholder() {
+        tvPlantBlockName.setText("大棚：待选择");
+        tvPlantBlockCode.setText("自编码：待选择");
+        tvPlantBlockLocation.setText("种植园/面积：待选择");
+        tvPlantBlockStatus.setText("状态：待选择");
+        tvPlantBlockStatus.setTextColor(Color.parseColor("#999999"));
+        tvPlantBlockOwner.setText("负责人：待选择");
+        tvPlantBlockOwner.setTextColor(Color.parseColor("#999999"));
+        tvPlantCount.setText("0");
+        tvDataCount.setText("请选择大棚，批量打印该大棚下所有苗床标签");
+    }
+
+    private void resetProductFilters() {
+        selectedProductDate = "";
+        dataList.clear();
+        etPlantDate.setText("");
+        tvDataCount.setText("请选择完工日期，批量打印该日期下所有产成品标签");
+        updateDataUI();
+    }
+
+    private void resetProcessFilters() {
+        selectedProcessTypeKey = "";
+        selectedProcessDate = "";
+        dataList.clear();
+        spinnerPlantBlock.setText("", false);
+        etPlantDate.setText("");
+        tvDataCount.setText("请先选择加工类型，再选择完工日期");
+        updateDataUI();
+    }
+
     private void updateDataUI() {
         btnPrint.setText("确认打印 (" + dataList.size() + ")");
         if (TEMP_MM.equals(currentTemplate()) && selectedPlantBlock != null) {
@@ -746,7 +1096,17 @@ public class MainActivity extends ComponentActivity {
         } else if (TEMP_DK.equals(currentTemplate()) && selectedPlantation != null) {
             tvDataCount.setText("当前将打印种植园“" + selectedPlantation.name + "”中的 " + dataList.size() + " 张地块标签");
             tvPlantCount.setText(String.valueOf(dataList.size()));
-        } else if (!TEMP_MM.equals(currentTemplate()) && !TEMP_DK.equals(currentTemplate())) {
+        } else if (TEMP_DP.equals(currentTemplate()) && selectedPlantation != null) {
+            tvDataCount.setText("当前将打印种植园“" + selectedPlantation.name + "”中的 " + dataList.size() + " 张大棚标签");
+            tvPlantCount.setText(String.valueOf(dataList.size()));
+        } else if (TEMP_MC.equals(currentTemplate()) && selectedGreenhouse != null) {
+            tvDataCount.setText("当前将打印大棚“" + selectedGreenhouse.greenhouseName + "”中的 " + dataList.size() + " 张苗床标签");
+            tvPlantCount.setText(String.valueOf(dataList.size()));
+        } else if (TEMP_CJG.equals(currentTemplate()) && !selectedProcessTypeKey.isEmpty() && !selectedProcessDate.isEmpty()) {
+            tvDataCount.setText("待打印加工标签：" + dataList.size());
+        } else if (TEMP_CP.equals(currentTemplate()) && !selectedProductDate.isEmpty()) {
+            tvDataCount.setText("待打印产成品标签：" + dataList.size());
+        } else if (!TEMP_MM.equals(currentTemplate()) && !TEMP_DK.equals(currentTemplate()) && !TEMP_DP.equals(currentTemplate()) && !TEMP_MC.equals(currentTemplate()) && !TEMP_CP.equals(currentTemplate()) && !TEMP_CJG.equals(currentTemplate())) {
             tvDataCount.setText(dataList.isEmpty() ? "" : "已准备 " + dataList.size() + " 张标签");
         }
     }
@@ -911,6 +1271,328 @@ public class MainActivity extends ComponentActivity {
         dialog.show();
     }
 
+    private void showManualGreenhouseDialog() {
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(padding, padding / 2, padding, 0);
+
+        EditText input = new EditText(this);
+        input.setHint("请输入大棚自编码");
+        input.setSingleLine();
+        container.addView(input);
+
+        TextView validationText = new TextView(this);
+        validationText.setPadding(0, padding, 0, 0);
+        validationText.setTextColor(Color.parseColor("#2E7D32"));
+        container.addView(validationText);
+
+        TextView infoText = new TextView(this);
+        infoText.setPadding(0, padding / 2, 0, 0);
+        infoText.setVisibility(View.GONE);
+        container.addView(infoText);
+
+        final LabelData[] validatedLabel = new LabelData[1];
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("补打单个大棚标签")
+                .setMessage("先校验大棚自编码，再确认大棚信息后打印。")
+                .setView(container)
+                .setNeutralButton("校验自编码", null)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认打印", null)
+                .create();
+
+        dialog.setOnShowListener(dialogInterface -> {
+            Button validateButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            Button printButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            printButton.setEnabled(false);
+
+            validateButton.setOnClickListener(v -> {
+                String selfCode = input.getText().toString().trim();
+                if (selfCode.isEmpty()) {
+                    Toast.makeText(this, "请输入大棚自编码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                LabelData label = MockLabelRepository.findGreenhouseLabelBySelfCode(plantations, selfCode);
+                PlantationData plantation = selectedPlantation;
+                String status = plantation != null ? plantation.status : "正常运营";
+                if (label == null) {
+                    String plantationName = plantation != null ? plantation.name : "东山一号种植园";
+                    String owner = plantation != null ? plantation.owner : "陈大海";
+                    label = new LabelData(TEMP_DP, "", "", selfCode, plantationName, "2.0亩", owner, "", "", "GH-REPRINT-" + selfCode);
+                } else if (plantation == null) {
+                    plantation = MockLabelRepository.findPlantationByName(plantations, label.f2);
+                    status = plantation != null ? plantation.status : "正常运营";
+                }
+
+                validatedLabel[0] = label;
+                validationText.setText("自编码校验结果：正确");
+                infoText.setText("大棚自编码：" + label.f1 + "\n所属种植园：" + label.f2 + "\n面积：" + label.f3 + "\n负责人：" + label.f4 + "\n状态：" + status);
+                infoText.setTextColor(getStatusColor(status));
+                infoText.setVisibility(View.VISIBLE);
+                printButton.setEnabled(true);
+            });
+
+            printButton.setOnClickListener(v -> {
+                if (validatedLabel[0] == null) {
+                    Toast.makeText(this, "请先校验大棚自编码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                dataList.clear();
+                dataList.add(validatedLabel[0]);
+                updateDataUI();
+                tvDataCount.setText("已准备补打 1 张大棚标签，自编码：" + validatedLabel[0].f1);
+                tvPlantCount.setText("1");
+                printCurrentData();
+                dialog.dismiss();
+            });
+        });
+
+        dialog.show();
+    }
+
+    private void showManualSeedbedDialog() {
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(padding, padding / 2, padding, 0);
+
+        EditText input = new EditText(this);
+        input.setHint("请输入苗床自编码");
+        input.setSingleLine();
+        container.addView(input);
+
+        TextView validationText = new TextView(this);
+        validationText.setPadding(0, padding, 0, 0);
+        validationText.setTextColor(Color.parseColor("#2E7D32"));
+        container.addView(validationText);
+
+        TextView infoText = new TextView(this);
+        infoText.setPadding(0, padding / 2, 0, 0);
+        infoText.setVisibility(View.GONE);
+        container.addView(infoText);
+
+        final LabelData[] validatedLabel = new LabelData[1];
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("补打单个苗床标签")
+                .setMessage("先校验苗床自编码，再确认苗床信息后打印。")
+                .setView(container)
+                .setNeutralButton("校验自编码", null)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认打印", null)
+                .create();
+
+        dialog.setOnShowListener(dialogInterface -> {
+            Button validateButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            Button printButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            printButton.setEnabled(false);
+
+            validateButton.setOnClickListener(v -> {
+                String selfCode = input.getText().toString().trim();
+                if (selfCode.isEmpty()) {
+                    Toast.makeText(this, "请输入苗床自编码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                LabelData label = MockLabelRepository.findSeedbedLabelBySelfCode(greenhouses, selfCode);
+                GreenhouseLabelData greenhouse = selectedGreenhouse;
+                String status = greenhouse != null ? greenhouse.status : "正常运营";
+                if (label == null) {
+                    String greenhouseCode = greenhouse != null ? greenhouse.selfCode : "GH-201";
+                    String plantationName = greenhouse != null ? greenhouse.plantationName : "东山一号种植园";
+                    String owner = greenhouse != null ? greenhouse.owner : "陈大海";
+                    label = new LabelData(TEMP_MC, "", "", selfCode, greenhouseCode, plantationName, owner, "", "", "MC-REPRINT-" + selfCode);
+                } else if (greenhouse == null) {
+                    for (GreenhouseLabelData item : greenhouses) {
+                        if (item.selfCode.equals(label.f2)) {
+                            greenhouse = item;
+                            break;
+                        }
+                    }
+                    status = greenhouse != null ? greenhouse.status : "正常运营";
+                }
+
+                validatedLabel[0] = label;
+                validationText.setText("自编码校验结果：正确");
+                infoText.setText("苗床自编码：" + label.f1 + "\n所属大棚：" + label.f2 + "\n所属种植园：" + label.f3 + "\n负责人：" + label.f4 + "\n状态：" + status);
+                infoText.setTextColor(getStatusColor(status));
+                infoText.setVisibility(View.VISIBLE);
+                printButton.setEnabled(true);
+            });
+
+            printButton.setOnClickListener(v -> {
+                if (validatedLabel[0] == null) {
+                    Toast.makeText(this, "请先校验苗床自编码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                dataList.clear();
+                dataList.add(validatedLabel[0]);
+                updateDataUI();
+                tvDataCount.setText("已准备补打 1 张苗床标签，自编码：" + validatedLabel[0].f1);
+                tvPlantCount.setText("1");
+                printCurrentData();
+                dialog.dismiss();
+            });
+        });
+
+        dialog.show();
+    }
+
+    private void showManualProductDialog() {
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(padding, padding / 2, padding, 0);
+
+        EditText input = new EditText(this);
+        input.setHint("请输入产成品二维码");
+        input.setSingleLine();
+        container.addView(input);
+
+        TextView validationText = new TextView(this);
+        validationText.setPadding(0, padding, 0, 0);
+        validationText.setTextColor(Color.parseColor("#2E7D32"));
+        container.addView(validationText);
+
+        TextView infoText = new TextView(this);
+        infoText.setPadding(0, padding / 2, 0, 0);
+        infoText.setVisibility(View.GONE);
+        container.addView(infoText);
+
+        final LabelData[] validatedLabel = new LabelData[1];
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("补打单个产成品标签")
+                .setMessage("先校验产成品二维码，再确认信息后打印。")
+                .setView(container)
+                .setNeutralButton("校验二维码", null)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认打印", null)
+                .create();
+
+        dialog.setOnShowListener(dialogInterface -> {
+            Button validateButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            Button printButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            printButton.setEnabled(false);
+
+            validateButton.setOnClickListener(v -> {
+                String traceCode = input.getText().toString().trim();
+                if (traceCode.isEmpty()) {
+                    Toast.makeText(this, "请输入产成品二维码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                LabelData label = MockLabelRepository.findProductLabelByTraceCode(traceCode);
+                if (label == null) {
+                    label = new LabelData(TEMP_CP, "", "", "沉香礼盒", "LB-01 / 礼盒装", "20 / 2.0kg", "精品", "2024-05-24 10:00:00", "OP-01", traceCode);
+                }
+
+                validatedLabel[0] = label;
+                validationText.setText("二维码校验结果：正确");
+                infoText.setText("名称：" + label.f1 + "\n型号/规格：" + label.f2 + "\n数量/重量：" + label.f3 + "\n等级：" + label.f4 + "\n完工时间：" + label.f5);
+                infoText.setTextColor(Color.parseColor("#2E7D32"));
+                infoText.setVisibility(View.VISIBLE);
+                printButton.setEnabled(true);
+            });
+
+            printButton.setOnClickListener(v -> {
+                if (validatedLabel[0] == null) {
+                    Toast.makeText(this, "请先校验产成品二维码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                dataList.clear();
+                dataList.add(validatedLabel[0]);
+                updateDataUI();
+                tvDataCount.setText("已准备补打 1 张产成品标签，二维码：" + validatedLabel[0].traceCode);
+                printCurrentData();
+                dialog.dismiss();
+            });
+        });
+
+        dialog.show();
+    }
+
+    private void showManualProcessDialog() {
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(padding, padding / 2, padding, 0);
+
+        EditText input = new EditText(this);
+        input.setHint("请输入加工二维码");
+        input.setSingleLine();
+        container.addView(input);
+
+        TextView validationText = new TextView(this);
+        validationText.setPadding(0, padding, 0, 0);
+        validationText.setTextColor(Color.parseColor("#2E7D32"));
+        container.addView(validationText);
+
+        TextView infoText = new TextView(this);
+        infoText.setPadding(0, padding / 2, 0, 0);
+        infoText.setVisibility(View.GONE);
+        container.addView(infoText);
+
+        final LabelData[] validatedLabel = new LabelData[1];
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("补打单个加工标签")
+                .setMessage("先选择加工类型，再校验对应二维码。")
+                .setView(container)
+                .setNeutralButton("校验二维码", null)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认打印", null)
+                .create();
+
+        dialog.setOnShowListener(dialogInterface -> {
+            Button validateButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            Button printButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            printButton.setEnabled(false);
+
+            validateButton.setOnClickListener(v -> {
+                if (selectedProcessTypeKey.isEmpty()) {
+                    Toast.makeText(this, "请先选择加工类型", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                String traceCode = input.getText().toString().trim();
+                if (traceCode.isEmpty()) {
+                    Toast.makeText(this, "请输入加工二维码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                LabelData label = MockLabelRepository.findProcessLabelByTypeAndTraceCode(selectedProcessTypeKey, traceCode);
+                if (label == null) {
+                    String typeName = MockLabelRepository.PROCESS_TYPE_MATERIAL.equals(selectedProcessTypeKey) ? LabelTemplates.TYPE_INITIAL : LabelTemplates.TYPE_DEEP;
+                    String processName = MockLabelRepository.PROCESS_TYPE_MATERIAL.equals(selectedProcessTypeKey) ? "初步清理" : "精制提纯";
+                    label = new LabelData(TEMP_CJG, typeName, processName,
+                            "沉香片", "CX-1234 / 5×2", "10 / 5g", "一级",
+                            "2024-05-21 14:00:00", "OP-08", traceCode);
+                }
+
+                validatedLabel[0] = label;
+                validationText.setText("二维码校验结果：正确");
+                infoText.setText("类型：" + label.processingType + "(" + label.processName + ")" + "\n名称：" + label.f1 + "\n等级：" + label.f4 + "\n完工时间：" + label.f5);
+                infoText.setTextColor(Color.parseColor("#2E7D32"));
+                infoText.setVisibility(View.VISIBLE);
+                printButton.setEnabled(true);
+            });
+
+            printButton.setOnClickListener(v -> {
+                if (validatedLabel[0] == null) {
+                    Toast.makeText(this, "请先校验加工二维码", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                dataList.clear();
+                dataList.add(validatedLabel[0]);
+                updateDataUI();
+                tvDataCount.setText("已准备补打 1 张加工标签，二维码：" + validatedLabel[0].traceCode);
+                printCurrentData();
+                dialog.dismiss();
+            });
+        });
+
+        dialog.show();
+    }
+
     private void showDatePicker(EditText target) {
         Calendar c = Calendar.getInstance();
         DatePickerDialog datePickerDialog = new DatePickerDialog(this,
@@ -952,6 +1634,36 @@ public class MainActivity extends ComponentActivity {
                     selectedPlantDate = String.format(Locale.getDefault(), "%d-%02d-%02d", year, monthOfYear + 1, dayOfMonth);
                     etPlantDate.setText(selectedPlantDate);
                     applyPlantFilters(true);
+                },
+                c.get(Calendar.YEAR),
+                c.get(Calendar.MONTH),
+                c.get(Calendar.DAY_OF_MONTH)
+        );
+        datePickerDialog.show();
+    }
+
+    private void showProductDatePicker() {
+        Calendar c = Calendar.getInstance();
+        DatePickerDialog datePickerDialog = new DatePickerDialog(this,
+                (view, year, monthOfYear, dayOfMonth) -> {
+                    selectedProductDate = String.format(Locale.getDefault(), "%d-%02d-%02d", year, monthOfYear + 1, dayOfMonth);
+                    etPlantDate.setText(selectedProductDate);
+                    applyProductFilters(true);
+                },
+                c.get(Calendar.YEAR),
+                c.get(Calendar.MONTH),
+                c.get(Calendar.DAY_OF_MONTH)
+        );
+        datePickerDialog.show();
+    }
+
+    private void showProcessDatePicker() {
+        Calendar c = Calendar.getInstance();
+        DatePickerDialog datePickerDialog = new DatePickerDialog(this,
+                (view, year, monthOfYear, dayOfMonth) -> {
+                    selectedProcessDate = String.format(Locale.getDefault(), "%d-%02d-%02d", year, monthOfYear + 1, dayOfMonth);
+                    etPlantDate.setText(selectedProcessDate);
+                    applyProcessFilters(true);
                 },
                 c.get(Calendar.YEAR),
                 c.get(Calendar.MONTH),
