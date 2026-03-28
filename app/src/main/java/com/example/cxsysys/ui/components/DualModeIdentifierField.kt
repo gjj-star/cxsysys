@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,50 +35,46 @@ fun DualModeIdentifierField(
     onSelfCodeChange: (String) -> Unit,
     isSelfCodeMode: Boolean,
     onModeChange: (Boolean) -> Unit,
-    onScanClick: () -> Unit = {}, // 【回归初心】：加回扫码回调，默认为空以兼容已有代码
+    onScanClick: () -> Unit = {}, // 预设扫码回调
+    showModeToggle: Boolean = true, // 【新增】：是否允许切换模式，设为 false 时固定在当前模式并隐藏切换按钮
     modifier: Modifier = Modifier.fillMaxWidth()
 ) {
-    // 引入 FocusRequester，用于让键盘 Icon 也能触发输入框聚焦
     val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
-    // 仅用于文字按钮的切换逻辑
     val handleToggle = {
-        val newMode = !isSelfCodeMode
-        onModeChange(newMode)
-        // 切换模式时清空另一个模式的数据，防止后端接收到脏数据
-        if (newMode) onQrCodeChange("") else onSelfCodeChange("")
+        if (showModeToggle) {
+            val newMode = !isSelfCodeMode
+            onModeChange(newMode)
+            if (newMode) onQrCodeChange("") else onSelfCodeChange("")
+        }
     }
 
     Column(modifier = modifier) {
-        // 明确的文字引导切换按钮，放在右上角
-        Box(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-            contentAlignment = Alignment.CenterEnd
-        ) {
-            Text(
-                text = if (isSelfCodeMode) "⇌ 切换扫描二维码模式" else "⇌ 切换输入自编码模式",
-                fontSize = 13.sp,
-                color = AgGreenPrimary,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier
-                    .clickable { handleToggle() }
-                    .padding(4.dp) // 增加点击区域防误触
-            )
+        // 【修改】：根据参数决定是否渲染右上角的切换文字
+        if (showModeToggle) {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Text(
+                    text = if (isSelfCodeMode) "⇌ 切换扫描二维码模式" else "⇌ 切换输入自编码模式",
+                    fontSize = 13.sp,
+                    color = AgGreenPrimary,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clickable { handleToggle() }
+                        .padding(4.dp)
+                )
+            }
         }
 
         OutlinedTextField(
             value = if (isSelfCodeMode) selfCodeValue else qrCodeValue,
             onValueChange = {
-                if (isSelfCodeMode) {
-                    onSelfCodeChange(it)
-                } else {
-                    // 二维码模式保留注释，禁止手输
-                    // onQrCodeChange(it)
-                }
+                if (isSelfCodeMode) onSelfCodeChange(it)
             },
-            // 二维码模式下设为只读，阻止软键盘弹出
             readOnly = !isSelfCodeMode,
-
             label = {
                 Text(text = if (isSelfCodeMode) "${targetName}自编码" else "${targetName}二维码")
             },
@@ -88,28 +85,18 @@ fun DualModeIdentifierField(
                     fontSize = 14.sp
                 )
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester), // 绑定焦点请求器
+            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
             trailingIcon = {
-                // 【核心修改】：根据模式渲染不同功能的专属图标
                 if (isSelfCodeMode) {
-                    // 自编码模式：显示键盘图标，点击请求焦点（等同于点击输入框本身，呼出软键盘）
-                    IconButton(onClick = { focusRequester.requestFocus() }) {
-                        Icon(
-                            imageVector = Icons.Default.Keyboard,
-                            contentDescription = "Show Keyboard",
-                            tint = AgGreenPrimary
-                        )
+                    IconButton(onClick = {
+                        focusRequester.requestFocus()
+                        keyboardController?.show()
+                    }) {
+                        Icon(imageVector = Icons.Default.Keyboard, contentDescription = "Show Keyboard", tint = AgGreenPrimary)
                     }
                 } else {
-                    // 二维码模式：显示扫码图标，点击执行扫码回调
                     IconButton(onClick = onScanClick) {
-                        Icon(
-                            imageVector = Icons.Default.QrCodeScanner,
-                            contentDescription = "Scan QR Code",
-                            tint = AgGreenPrimary
-                        )
+                        Icon(imageVector = Icons.Default.QrCodeScanner, contentDescription = "Scan QR Code", tint = AgGreenPrimary)
                     }
                 }
             },
