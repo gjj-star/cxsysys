@@ -22,8 +22,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.model.WeatherResponse
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.viewmodel.HomeViewModel
 
 // 打印模块入口类名：使用字符串避免在关闭打印模块时出现编译期依赖
 private const val PRINTER_ACTIVITY_CLASS = "com.example.printerfeature.MainActivity"
@@ -42,9 +45,20 @@ private const val TEMP_DK = "地块二维码"
  */
 @Composable
 fun HomeScreen(
-    onNavigateToModule: (String) -> Unit
+    onNavigateToModule: (String) -> Unit,
+    homeViewModel: HomeViewModel = viewModel()
 ) {
     val context = LocalContext.current
+
+    // 观察天气数据状态
+    val weatherData by homeViewModel.weatherData.collectAsState()
+    val isLoading by homeViewModel.isLoading.collectAsState()
+    val errorMessage by homeViewModel.errorMessage.collectAsState()
+
+    // 进入页面时自动获取天气
+    LaunchedEffect(Unit) {
+        homeViewModel.fetchWeather()
+    }
 
     // 控制病虫防治弹窗状态
     var showPestDialog by remember { mutableStateOf(false) }
@@ -332,7 +346,12 @@ fun HomeScreen(
     Column(
         modifier = Modifier.fillMaxSize().background(BgGray).padding(16.dp)
     ) {
-        WeatherCard()
+        WeatherCard(
+            weatherData = weatherData,
+            isLoading = isLoading,
+            errorMessage = errorMessage,
+            onRetry = { homeViewModel.fetchWeather() }
+        )
 
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -405,25 +424,73 @@ fun MenuOptionCard(
 }
 
 @Composable
-fun WeatherCard() {
+fun WeatherCard(
+    weatherData: WeatherResponse?,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onRetry: () -> Unit
+) {
+    val weatherIcon: ImageVector = when {
+        weatherData == null && isLoading -> Icons.Default.Refresh
+        errorMessage != null -> Icons.Default.CloudOff
+        else -> when (weatherData?.weather) {
+            "晴", "晴间多云" -> Icons.Default.WbSunny
+            "多云", "阴" -> Icons.Default.Cloud
+            "小雨", "阵雨", "雷阵雨", "雷阵雨伴有冰雹" -> Icons.Default.Grain
+            "中雨", "大雨", "暴雨", "大暴雨", "特大暴雨" -> Icons.Default.WaterDrop
+            "小雪", "中雪", "大雪", "暴雪" -> Icons.Default.AcUnit
+            "雾", "霾" -> Icons.Default.VisibilityOff
+            else -> Icons.Default.WbSunny
+        }
+    }
+
+    val title = when {
+        isLoading -> "正在获取天气..."
+        errorMessage != null -> "天气获取失败"
+        weatherData != null -> "今日天气 · ${weatherData.city}种植基地"
+        else -> "今日天气 · 茂名种植基地"
+    }
+
+    val temperature = when {
+        isLoading -> "--°C  加载中"
+        errorMessage != null || weatherData == null -> "--°C  暂无数据"
+        else -> "${weatherData.temperature}°C  ${weatherData.weather}"
+    }
+
+    val detail = when {
+        isLoading -> "正在连接服务器..."
+        errorMessage != null -> "点击卡片重试"
+        weatherData != null -> "湿度 ${weatherData.humidity}% | ${weatherData.windDirection}${weatherData.windPower}"
+        else -> "-- | --"
+    }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = AgGreenPrimary),
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth().wrapContentHeight()
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+            .then(
+                if (errorMessage != null) Modifier.clickable { onRetry() }
+                else Modifier
+            )
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 24.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column {
-                Text("今日天气 · 茂名种植基地", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("26°C  多云", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                Text(text = temperature, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("湿度 65% | 东南风 2级", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
+                Text(text = detail, color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp)
             }
-            Icon(imageVector = Icons.Default.Cloud, contentDescription = "Weather", tint = Color.White, modifier = Modifier.size(56.dp))
+
+            Icon(imageVector = weatherIcon, contentDescription = "Weather", tint = Color.White, modifier = Modifier.size(56.dp))
         }
     }
 }
