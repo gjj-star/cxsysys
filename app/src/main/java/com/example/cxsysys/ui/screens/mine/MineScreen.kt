@@ -21,8 +21,10 @@ fun MineScreen() {
     } catch (e: Exception) {
         null
     }
+    @Suppress("DEPRECATION")
     val versionName = packageInfo?.versionName ?: "未知"
-    val versionCode = packageInfo?.versionCodeCompat?.toString() ?: "-"
+    @Suppress("DEPRECATION")
+    val versionCode = packageInfo?.versionCode?.toString() ?: "-"
 
     Column(
         modifier = Modifier.fillMaxSize(),
