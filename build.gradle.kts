@@ -4,3 +4,6 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
 }
+
+// 引入版本管理脚本（基于 Git Tag 自动生成 versionName / versionCode）
+apply(from = "version.gradle.kts")
