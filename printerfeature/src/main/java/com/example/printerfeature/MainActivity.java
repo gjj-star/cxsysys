@@ -716,6 +716,7 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void configurePlantBatchUI() {
+        showAllSummaryRows();
         tvBatchFilterTitle.setText("筛选苗木所在地块");
         tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择地块");
@@ -727,6 +728,7 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void configureFieldBatchUI() {
+        showAllSummaryRows();
         tvBatchFilterTitle.setText("筛选地块所在种植园");
         tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择种植园");
@@ -737,6 +739,7 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void configureGreenhouseBatchUI() {
+        showAllSummaryRows();
         tvBatchFilterTitle.setText("筛选大棚所在种植园");
         tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择种植园");
@@ -747,6 +750,7 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void configureSeedbedBatchUI() {
+        showAllSummaryRows();
         tvBatchFilterTitle.setText("筛选苗床所在大棚");
         tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择大棚");
@@ -757,21 +761,41 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void configureProductBatchUI() {
+        showAllSummaryRows();
         tvBatchFilterTitle.setText("筛选产成品完工时间");
         tilPlantBlock.setVisibility(View.GONE);
         tilPlantDate.setVisibility(View.VISIBLE);
         tilPlantDate.setHint("完工日期");
-        layoutPlantSummary.setVisibility(View.GONE);
+        layoutPlantSummary.setVisibility(View.VISIBLE);
+        tvPlantCountLabel.setText("待打印产成品标签");
+        tvPlantBlockName.setVisibility(View.GONE);
+        tvPlantBlockLocation.setVisibility(View.GONE);
+        tvPlantBlockStatus.setVisibility(View.GONE);
+        tvPlantBlockOwner.setVisibility(View.GONE);
+        updateProductSummaryPlaceholder();
     }
 
     private void configureProcessBatchUI() {
+        showAllSummaryRows();
         tvBatchFilterTitle.setText("筛选加工完工标签");
         tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择类型");
         tilPlantDate.setVisibility(View.VISIBLE);
         tilPlantDate.setHint("完工日期");
-        layoutPlantSummary.setVisibility(View.GONE);
+        layoutPlantSummary.setVisibility(View.VISIBLE);
+        tvPlantCountLabel.setText("待打印加工标签");
+        tvPlantBlockStatus.setVisibility(View.GONE);
+        tvPlantBlockOwner.setVisibility(View.GONE);
+        updateProcessSummaryPlaceholder();
         setupProcessTypeSelector();
+    }
+
+    private void showAllSummaryRows() {
+        tvPlantBlockName.setVisibility(View.VISIBLE);
+        tvPlantBlockCode.setVisibility(View.VISIBLE);
+        tvPlantBlockLocation.setVisibility(View.VISIBLE);
+        tvPlantBlockStatus.setVisibility(View.VISIBLE);
+        tvPlantBlockOwner.setVisibility(View.VISIBLE);
     }
 
     private void addData() {
@@ -1041,10 +1065,12 @@ public class MainActivity extends ComponentActivity {
     private void applyProductFilters(boolean showToast) {
         dataList.clear();
         if (selectedProductDate.isEmpty()) {
+            updateProductSummaryPlaceholder();
             updateDataUI();
             return;
         }
         dataList.addAll(MockLabelRepository.findProductLabelsByDate(selectedProductDate));
+        bindProductSummary();
         updateDataUI();
         if (showToast) {
             Toast.makeText(this, "已按完工日期筛选到 " + dataList.size() + " 个产成品标签", Toast.LENGTH_SHORT).show();
@@ -1054,10 +1080,12 @@ public class MainActivity extends ComponentActivity {
     private void applyProcessFilters(boolean showToast) {
         dataList.clear();
         if (selectedProcessTypeKey.isEmpty() || selectedProcessDate.isEmpty()) {
+            updateProcessSummaryPlaceholder();
             updateDataUI();
             return;
         }
         dataList.addAll(MockLabelRepository.findProcessLabelsByTypeAndDate(selectedProcessTypeKey, selectedProcessDate));
+        bindProcessSummary();
         updateDataUI();
         if (showToast) {
             Toast.makeText(this, "已按类型和完工日期筛选到 " + dataList.size() + " 条加工标签", Toast.LENGTH_SHORT).show();
@@ -1085,9 +1113,9 @@ public class MainActivity extends ComponentActivity {
         tvPlantBlockName.setText("地块名称：待选择");
         tvPlantBlockCode.setText("自编码：待选择");
         tvPlantBlockLocation.setText("位置：待选择");
-        tvPlantBlockStatus.setText("状态：-");
+        tvPlantBlockStatus.setText("状态：待选择");
         tvPlantBlockStatus.setTextColor(Color.parseColor("#999999"));
-        tvPlantBlockOwner.setText("负责人：-");
+        tvPlantBlockOwner.setText("负责人：待选择");
         tvPlantBlockOwner.setTextColor(Color.parseColor("#999999"));
         tvPlantCount.setText("0");
         tvDataCount.setText("请选择地块，并可按定植日期进一步筛选");
@@ -1160,6 +1188,7 @@ public class MainActivity extends ComponentActivity {
         selectedProductDate = "";
         dataList.clear();
         etPlantDate.setText("");
+        updateProductSummaryPlaceholder();
         tvDataCount.setText("请选择完工日期，批量打印该日期下所有产成品标签");
         updateDataUI();
     }
@@ -1170,6 +1199,7 @@ public class MainActivity extends ComponentActivity {
         dataList.clear();
         spinnerPlantBlock.setText("", false);
         etPlantDate.setText("");
+        updateProcessSummaryPlaceholder();
         tvDataCount.setText("请先选择加工类型，再选择完工日期");
         updateDataUI();
     }
@@ -1194,12 +1224,46 @@ public class MainActivity extends ComponentActivity {
             tvDataCount.setText("当前将打印大棚“" + selectedGreenhouse.greenhouseName + "”中的 " + dataList.size() + " 张苗床标签");
             tvPlantCount.setText(String.valueOf(dataList.size()));
         } else if (TEMP_CJG.equals(currentTemplate()) && !selectedProcessTypeKey.isEmpty() && !selectedProcessDate.isEmpty()) {
-            tvDataCount.setText("待打印加工标签：" + dataList.size());
+            tvDataCount.setText("当前将打印" + getProcessTypeDisplayName(selectedProcessTypeKey) + "在 " + selectedProcessDate + " 完工的 " + dataList.size() + " 张加工标签");
+            tvPlantCount.setText(String.valueOf(dataList.size()));
         } else if (TEMP_CP.equals(currentTemplate()) && !selectedProductDate.isEmpty()) {
-            tvDataCount.setText("待打印产成品标签：" + dataList.size());
+            tvDataCount.setText("当前将打印完工日期为 " + selectedProductDate + " 的 " + dataList.size() + " 张产成品标签");
+            tvPlantCount.setText(String.valueOf(dataList.size()));
         } else if (!TEMP_MM.equals(currentTemplate()) && !TEMP_DK.equals(currentTemplate()) && !TEMP_DP.equals(currentTemplate()) && !TEMP_MC.equals(currentTemplate()) && !TEMP_CP.equals(currentTemplate()) && !TEMP_CJG.equals(currentTemplate())) {
             tvDataCount.setText(dataList.isEmpty() ? "" : "已准备 " + dataList.size() + " 张标签");
         }
+    }
+
+    private void bindProductSummary() {
+        tvPlantBlockCode.setText("完工日期：" + selectedProductDate);
+    }
+
+    private void updateProductSummaryPlaceholder() {
+        tvPlantBlockCode.setText("完工日期：待选择");
+        tvPlantCount.setText("0");
+    }
+
+    private void bindProcessSummary() {
+        tvPlantBlockName.setText("标签类型：加工");
+        tvPlantBlockCode.setText("加工类型：" + getProcessTypeDisplayName(selectedProcessTypeKey));
+        tvPlantBlockLocation.setText("完工日期：" + selectedProcessDate);
+    }
+
+    private void updateProcessSummaryPlaceholder() {
+        tvPlantBlockName.setText("标签类型：加工");
+        tvPlantBlockCode.setText("加工类型：待选择");
+        tvPlantBlockLocation.setText("完工日期：待选择");
+        tvPlantCount.setText("0");
+    }
+
+    private String getProcessTypeDisplayName(String typeKey) {
+        if (MockLabelRepository.PROCESS_TYPE_MATERIAL.equals(typeKey)) {
+            return LabelTemplates.TYPE_INITIAL;
+        }
+        if (MockLabelRepository.PROCESS_TYPE_SEMI_FINISHED.equals(typeKey)) {
+            return LabelTemplates.TYPE_DEEP;
+        }
+        return "未知类型";
     }
 
     private void showManualPlantDialog() {
@@ -1595,6 +1659,7 @@ public class MainActivity extends ComponentActivity {
                 dataList.add(validatedLabel[0]);
                 updateDataUI();
                 tvDataCount.setText("已准备补打 1 张产成品标签，二维码：" + validatedLabel[0].traceCode);
+                tvPlantCount.setText("1");
                 printCurrentData();
                 dialog.dismiss();
             });
@@ -1676,6 +1741,7 @@ public class MainActivity extends ComponentActivity {
                 dataList.add(validatedLabel[0]);
                 updateDataUI();
                 tvDataCount.setText("已准备补打 1 张加工标签，二维码：" + validatedLabel[0].traceCode);
+                tvPlantCount.setText("1");
                 printCurrentData();
                 dialog.dismiss();
             });

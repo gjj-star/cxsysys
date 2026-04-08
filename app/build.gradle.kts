@@ -26,6 +26,7 @@ android {
         val version = rootProject.extra["versionInfo"] as Map<String, String>
         versionCode = version["versionCode"]!!.toInt()
         versionName = version["versionName"]!!
+        buildConfigField("boolean", "ENABLE_PRINTER_MODULE", enablePrinterModule.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -47,6 +48,7 @@ android {
         jvmTarget = "11"
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }

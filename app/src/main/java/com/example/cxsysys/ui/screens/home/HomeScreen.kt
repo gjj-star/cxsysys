@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.BuildConfig
 import com.example.cxsysys.model.WeatherResponse
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
@@ -54,6 +55,7 @@ fun HomeScreen(
     val weatherData by homeViewModel.weatherData.collectAsState()
     val isLoading by homeViewModel.isLoading.collectAsState()
     val errorMessage by homeViewModel.errorMessage.collectAsState()
+    val printerModuleEnabled = BuildConfig.ENABLE_PRINTER_MODULE
 
     // 进入页面时自动获取天气
     LaunchedEffect(Unit) {
@@ -364,6 +366,7 @@ fun HomeScreen(
         )
 
         LazyVerticalGrid(
+            modifier = Modifier.weight(1f),
             columns = GridCells.Fixed(2),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -380,6 +383,10 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+
+        if (!printerModuleEnabled) {
+            PrinterModuleDisabledBanner()
         }
     }
 }
@@ -515,6 +522,37 @@ fun ActionCard(item: ActionItem, onClick: () -> Unit) {
             }
             Spacer(modifier = Modifier.width(12.dp))
             Text(text = item.name, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF333333))
+        }
+    }
+}
+
+@Composable
+fun PrinterModuleDisabledBanner() {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        color = Color(0xFFFFF3CD),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.WarningAmber,
+                contentDescription = null,
+                tint = Color(0xFFB26A00)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "调试提示：当前未启用打印模块",
+                color = Color(0xFF8A5A00),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
