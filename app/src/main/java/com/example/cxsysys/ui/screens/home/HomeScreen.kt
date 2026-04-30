@@ -57,9 +57,12 @@ fun HomeScreen(
     val errorMessage by homeViewModel.errorMessage.collectAsState()
     val printerModuleEnabled = BuildConfig.ENABLE_PRINTER_MODULE
 
-    // 进入页面时自动获取天气
+    // 进入页面时，仅在数据为空且未处于加载和报错状态时获取天气
+    // 这样在底部 Tab 切换回首页时，由于 viewmodel 存活，不会重复请求网络
     LaunchedEffect(Unit) {
-        homeViewModel.fetchWeather()
+        if (homeViewModel.weatherData.value == null && !homeViewModel.isLoading.value && homeViewModel.errorMessage.value == null) {
+            homeViewModel.fetchWeather()
+        }
     }
 
     // 控制病虫防治弹窗状态
