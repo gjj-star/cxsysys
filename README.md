@@ -7,6 +7,8 @@
 - 开发语言: 100% Kotlin
 - UI 框架: Jetpack Compose (完全弃用传统的 XML 布局)
 - 架构思想: 单 Activity 架构 (Single Activity Architecture) + 声明式 UI
+- 网络请求: Retrofit2 + OkHttp4 + Gson
+- 扫码库: CameraX + ZXing
 - 版本管理: 基于 Git Tag 自动生成（详见下方「版本号管理」章节）
 
 
@@ -118,101 +120,88 @@ A: 可以。直接改 `app/build.gradle.kts` 里 defaultConfig 中的 versionCod
 A: 因为 Android 要求 versionCode 只增不减。commit 数天然递增，永远不会冲突或回退。
 
 
-#### 项目目录结构：
-\---com
-    \---example
-        \---cxsysys
-            |   MainActivity.kt
-            |   
-            \---ui
-                |   MainScreen.kt
-                |   
-                +---components
-                +---screens
-                |   +---children
-                |   |       ChildrenDetailScreen.kt
-                |   |       ChildrenScreen.kt
-                |   |       PlantDetailScreen.kt
-                |   |       PlantingScreen.kt
-                |   |       
-                |   +---home
-                |   |       HomeScreen.kt
-                |   |       
-                |   +---mine
-                |   |       MineScreen.kt
-                |   |       
-                |   +---mother
-                |   |       MotherDetailScreen.kt
-                |   |       MotherScreen.kt
-                |   |       
-                |   \---plantation
-                |           DiseasePestEntryScreen.kt
-                |           FertilizerEntryScreen.kt
-                |           GrowthEntryScreen.kt
-                |           HarvestEntryScreen.kt
-                |           IrrigationEntryScreen.kt
-                |           PesticideEntryScreen.kt
-                |           PlantingEntryScreen.kt
-                |           PruningEntryScreen.kt
-                |           PunchEntryScreen.kt
-                |           SaplingEntryScreen.kt
-                |           AgInputManagerScreen.kt
-                \---theme
-                        Color.kt
-                        Theme.kt
-                        Type.kt
+---
 
-文件解释：
-1.  children文件夹：底部Tab“幼苗”“苗木”模块
+## 📂 项目目录架构及重点文件说明
 
-- ChildrenDetailScreen.kt 幼苗详情页
-- ChildrenScreen.kt 幼苗档案管理页
-- PlantDetailScreen.kt 苗木详情页
-- PlantingScreen.kt 苗木档案管理页
+项目根目录和构建配置（`build.gradle.kts`, `settings.gradle.kts` 等）遵循标准的 Android 项目结构。
+下面重点说明应用核心代码路径：**`app/src/main/java/com/example/cxsysys/`**
+
+### `com.example.cxsysys/` 架构概览
+
+遵循现代 Android 推荐架构，按功能职责分层：
+
+```text
+com.example.cxsysys/
+├── api/           ← 网络接口层 (Retrofit service)
+├── model/         ← 数据模型层 (Data class, 请求/响应实体)
+├── repository/    ← 数据仓库层 (处理数据来源，当前暂空或按需使用)
+├── ui/            ← UI 展示层 (Compose 页面、组件、主题)
+├── utils/         ← 工具类层 (单例工具、拓展函数)
+├── viewmodel/     ← 逻辑状态层 (Jetpack ViewModel, 桥接 UI 与数据)
+└── MainActivity.kt ← 唯一 Activity 宿主
+```
+
+### 重点目录与文件说明
+
+#### 1. `MainActivity.kt`
+- **作用**：应用的单一 Activity 入口。
+- **职责**：设置整个应用的 Compose 根节点，初始化整体主题 (`CXSYSYSTheme`)，并加载根路由 (`MainScreen`)。
+
+#### 2. `ui/` 层
+这里包含所有的界面呈现逻辑，完全由 Jetpack Compose 构建。
+
+**`ui/MainScreen.kt`**
+- 主入口路由配置，包含 `NavHost` 导航图和 `BottomNavigation` (底部导航栏)。连接四大底部模块（工作台、幼苗、苗木、我的）。
+
+**`ui/theme/`**
+- 定义全局的 UI 样式，包括 `Theme.kt` (亮色/暗色模式配置)、`Color.kt` (颜色常量，如 `AgGreenPrimary`) 和 `Type.kt` (排版规范)。
+
+**`ui/components/`**
+- 存放可复用的基础 UI 组件，例如 `ScannerScreen` (真实扫码界面组件)、`TopScanCard` (顶部扫码卡片)、`DualModeIdentifierField` 等，用于在各个页面中组合复用。
+
+**`ui/screens/`** (页面目录，按业务模块划分)
+
+*   **`home/` (工作台模块)**
+    *   `HomeScreen.kt`: 首页/工作台页面，展示天气以及所有农事作业和资源管理的网格入口。
+*   **`children/` (幼苗与苗木模块)**
+    *   `ChildrenScreen.kt` & `ChildrenDetailScreen.kt`: 幼苗档案管理列表及详情。
+    *   `PlantingScreen.kt` & `PlantDetailScreen.kt`: 苗木档案管理列表及详情。
+*   **`mother/` (母树模块)**
+    *   `MotherScreen.kt` & `MotherDetailScreen.kt`: 母树资源库列表页及详情。
+*   **`mine/` (我的模块)**
+    *   `MineScreen.kt`: 个人中心页面。
+*   **`plantation/` (农事作业与录入模块 - 重点)**
+    该目录下包含所有来自“工作台”的表单录入页面，涉及真实扫码和 API 数据提交：
+    *   `AgInputManagerScreen.kt`: 药肥入库及供应商信息录入。根据 `mode` 参数区分 ("supplier", "pesticide", "fertilizer")。
+    *   `SaplingEntryScreen.kt`: 幼苗培育录入页。
+    *   `PlantingEntryScreen.kt`: 苗木定植录入页。
+    *   `IrrigationEntryScreen.kt`: 灌溉记录录入页 (涉及种植园/大棚/苗床 API 级联选择)。
+    *   `FertilizerEntryScreen.kt`: 施肥作业录入页。
+    *   `PesticideEntryScreen.kt`: 施药信息录入页。
+    *   `DiseasePestEntryScreen.kt`: 病虫害信息录入页。
+    *   `GrowthEntryScreen.kt`: 生长记录录入页。
+    *   `PruningEntryScreen.kt`: 剪枝信息录入页。
+    *   `PunchEntryScreen.kt`: 打孔结香录入页。
+    *   `HarvestEntryScreen.kt`: 采收香木录入页。
+
+#### 3. `api/` 层
+- 存放与后端接口交互的定义。
+- `PlantingApiService.kt`: 使用 Retrofit 定义了网络请求的方法，比如 `@GET("/api/v1/misc/weather")`, `@GET("/plantationList")`, 及各种作业提交的 `@POST` 请求。
+
+#### 4. `model/` 层
+- `Plantation.kt`, `PlantingModels.kt` 等：存放 Kotlin Data Class。包括 API 请求实体 (Request) 和响应实体 (Response)。
+
+#### 5. `viewmodel/` 层
+- **核心逻辑枢纽**：每个主要的 `Screen` (尤其是 `plantation/` 下的表单页) 对应一个 ViewModel (如 `SaplingViewModel`, `IrrigationViewModel` 等)。
+- **职责**：使用 Kotlin Coroutines (协程) 调用 `api/` 层获取数据，并将状态通过 `StateFlow` 暴露给 `ui/` 层进行响应式刷新，处理了加载中 (`isLoading`)、成功 (`submitSuccess`) 和失败提示 (`errorMsg`) 等逻辑。
+
+#### 6. `utils/` 层
+- `RetrofitClient.kt`: 单例配置，封装了 OkHttpClient 和 Retrofit 实例，统一配置全局的 Base URL (如 `https://dbcx.org.cn`)。
+- `QrCodeAnalyzer.kt`: 配合 CameraX 和 ZXing 使用的图像分析器，专门负责从相机帧中解析二维码字符串。
 
 
-2.  home文件夹：底部Tab“工作台”模块
-- HomeScreen.kt 主页（工作台）页面
-
-3.  mine文件夹：底部Tab“我的”模块
-- MineScreen.kt 个人主页（我的）页面
-
-4.  mother文件夹：底部Tab“母树”模块
-
-- MotherDetailScreen.kt 母树详情页
-- MotherScreen.kt 母树资源库页
-- 
-
-5.  plantation 文件夹：管理工作台页面里的模块
-
-- DiseasePestEntryScreen.kt 病虫害信息录入页
-- FertilizerEntryScreen.kt 施肥作业录入页
-- GrowthEntryScreen.kt 生长记录录入页
-- HarvestEntryScreen.kt 采收香木录入页
-- IrrigationEntryScreen.kt 灌溉记录录入页
-- PesticideEntryScreen.kt 施药信息录入页
-- PlantingEntryScreen.kt 苗木定植录入页
-- PruningEntryScreen.kt 剪枝信息录入页
-- PunchEntryScreen.kt 打孔结香录入页
-- SaplingEntryScreen.kt 幼苗培育录入页
-- AgInputManagerScreen.kt 药肥（包括供应商）信息录入页 
-- * 包含：供应商录入、农药信息入库、肥料信息入库
-- * @param mode 模式: "supplier", "pesticide", "fertilizer"
-
-
-6.  MainScreen.kt 主入口路由配置
-
-#### 安装教程
-
-1.  xxxx
-2.  xxxx
-3.  xxxx
-
-#### 使用说明
-
-1.  xxxx
-2.  xxxx
-3.  xxxx
+---
 
 #### 参与贡献
 
@@ -220,13 +209,3 @@ A: 因为 Android 要求 versionCode 只增不减。commit 数天然递增，永
 2.  新建 Feat_xxx 分支
 3.  提交代码
 4.  新建 Pull Request
-
-
-#### 特技
-
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
