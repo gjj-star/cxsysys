@@ -45,3 +45,6 @@ $RECYCLE.BIN/
 *.bak
 *.swp
 *~
+# --- Personal Workbuddy & Notes (Do not push to team repo) ---
+.workbuddy/
+WORKFLOW_RESUME_NOTES.md
