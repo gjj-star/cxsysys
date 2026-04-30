@@ -1,6 +1,9 @@
 package com.example.cxsysys.ui.screens.plantation
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -11,6 +14,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -24,13 +29,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.viewmodel.GrowthViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -42,10 +51,18 @@ import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GrowthEntryScreen(onBackClick: () -> Unit) {
+fun GrowthEntryScreen(
+    onBackClick: () -> Unit,
+    viewModel: GrowthViewModel = viewModel()
+) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+
+    // --- ViewModel 状态 ---
+    val isLoading by viewModel.isLoading.collectAsState()
+    val submitSuccess by viewModel.submitSuccess.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     // --- 表单状态 ---
     var inputMode by remember { mutableIntStateOf(0) } // 0-个别录入(苗木), 1-批量录入(地块)
@@ -53,7 +70,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
     // 将自编码模式状态上提至父页面
     var isSelfCodeMode by remember { mutableStateOf(false) }
 
-    // 【修改】：苗木只有二维码状态
+    // 苗木只有二维码状态
     var plantQrCode by remember { mutableStateOf("") }
 
     // 地块依然保留双模式
@@ -76,25 +93,49 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
 
     var remark by remember { mutableStateOf("") }
 
+    // 图片选择状态
+    val selectedImageUris = remember { mutableStateListOf<Uri>() }
+    val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents(),
+        onResult = { uris ->
+            selectedImageUris.addAll(uris)
+        }
+    )
+
     // UI 状态
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
-    var isScanning by remember { mutableStateOf(false) }
+    var showScanner by remember { mutableStateOf(false) }
 
-    fun simulateScan() {
-        scope.launch {
-            isScanning = true
-            val msg = if (inputMode == 0) "正在识别苗木二维码..." else "正在识别地块二维码..."
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            delay(1500)
-            isScanning = false
-            if (inputMode == 0) {
-                plantQrCode = "TREE-QR-V10-001" // 扫码一定是填充二维码字段
-            } else {
-                fieldQrCode = "FIELD-QR-V10-A01"
-            }
-            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+    // 监听提交结果
+    LaunchedEffect(submitSuccess, errorMessage) {
+        if (submitSuccess == true) {
+            Toast.makeText(context, "保存成功", Toast.LENGTH_SHORT).show()
+            viewModel.resetState()
+            onBackClick()
+        } else if (submitSuccess == false && errorMessage != null) {
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            viewModel.resetState()
         }
+    }
+
+    // 真实扫码界面
+    if (showScanner) {
+        com.example.cxsysys.ui.components.ScannerScreen(
+            onScanResult = { result ->
+                if (inputMode == 0) {
+                    plantQrCode = result
+                } else {
+                    fieldQrCode = result
+                }
+                showScanner = false
+                Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+            },
+            onCancel = {
+                showScanner = false
+            }
+        )
+        return
     }
 
     if (showDatePicker) {
@@ -122,7 +163,6 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 【修改】 校验逻辑：苗木只看二维码，地块看双码
                         val targetValid = if (inputMode == 0) {
                             plantQrCode.isNotEmpty()
                         } else {
@@ -132,17 +172,49 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                         if (!targetValid) {
                             val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请提供地块标识信息"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
+                            return@Button
                         }
+
+                        if (treeHeight.isBlank() || groundDiameter.isBlank() || brestHeightDiameter.isBlank() ||
+                            crownWidth.isBlank() || plantQuantity.isBlank() || straightness.isBlank()) {
+                            Toast.makeText(context, "请填写完整的生长指标", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        if (selectedImageUris.isEmpty()) {
+                            Toast.makeText(context, "请至少上传一张照片", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        viewModel.submitGrowth(
+                            context = context,
+                            plantQrcode = if (inputMode == 0) plantQrCode else null,
+                            fieldQrcode = if (inputMode == 1) fieldQrCode else null,
+                            fieldCode = if (inputMode == 1) fieldSelfCode else null,
+                            recordDate = recordDate,
+                            height = treeHeight.toDoubleOrNull() ?: 0.0,
+                            crownWidth = crownWidth.toDoubleOrNull() ?: 0.0,
+                            diameter = groundDiameter.toDoubleOrNull() ?: 0.0,
+                            chestDiameter = brestHeightDiameter.toDoubleOrNull() ?: 0.0,
+                            straightness = straightness,
+                            plantQuantity = plantQuantity.toIntOrNull() ?: 0,
+                            imageUris = selectedImageUris
+                        )
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary),
+                    enabled = !isLoading
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存信息", fontSize = 16.sp)
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("提交中...", fontSize = 16.sp)
+                    } else {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("保存信息", fontSize = 16.sp)
+                    }
                 }
             }
         }
@@ -176,17 +248,16 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                 ) { Text("批量录入 (地块)", color = if (inputMode == 1) Color.White else Color.Gray, fontWeight = if (inputMode == 1) FontWeight.Bold else FontWeight.Normal) }
             }
 
-            // 【修改】：苗木模式下卡片常驻，地块模式下根据 isSelfCodeMode 显隐
             AnimatedVisibility(
                 visible = if (inputMode == 0) true else !isSelfCodeMode,
                 enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
                 exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
             ) {
                 TopScanCard(
-                    isScanning = isScanning,
+                    isScanning = false,
                     title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
                     subtitle = if (inputMode == 0) "直接录入苗木生长记录" else "批量录入地块生长记录",
-                    onScanClick = { simulateScan() }
+                    onScanClick = { showScanner = true }
                 )
             }
 
@@ -195,22 +266,19 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(12.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
 
-                    // 引入全新的双模式输入组件
                     if (inputMode == 0) {
-                        // 【修改】：苗木锁死为二维码模式
                         DualModeIdentifierField(
                             targetName = "苗木",
                             qrCodeValue = plantQrCode,
                             onQrCodeChange = { plantQrCode = it },
                             selfCodeValue = "",
                             onSelfCodeChange = { },
-                            isSelfCodeMode = false, // 永远为 false，保持扫码模式
-                            onModeChange = { },     // 不响应切换
-                            onScanClick = { simulateScan() },
-                            showModeToggle = false  // 【关键】：隐藏右上角的切换按钮
+                            isSelfCodeMode = false,
+                            onModeChange = { },
+                            onScanClick = { showScanner = true },
+                            showModeToggle = false
                         )
                     } else {
-                        // 地块保持双模式可切换
                         DualModeIdentifierField(
                             targetName = "地块",
                             qrCodeValue = fieldQrCode,
@@ -219,7 +287,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                             onSelfCodeChange = { fieldSelfCode = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { simulateScan() }
+                            onScanClick = { showScanner = true }
                         )
                     }
 
@@ -228,7 +296,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                     OutlinedTextField(
                         value = recordDate,
                         onValueChange = { recordDate = it },
-                        readOnly = true, // 【防键盘弹起】
+                        readOnly = true,
                         label = { Text("记录日期") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = { IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary) } },
@@ -254,7 +322,7 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
                     OutlinedTextField(value = plantQuantity, onValueChange = { if (it.all { c -> c.isDigit() }) plantQuantity = it }, label = { Text("植株主干分枝数") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), trailingIcon = { Text("个", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary))
                     Spacer(modifier = Modifier.height(16.dp))
                     ExposedDropdownMenuBox(expanded = straightnessExpanded, onExpandedChange = { straightnessExpanded = !straightnessExpanded }, modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(value = straightness, onValueChange = {}, readOnly = true, label = { Text("主干通直度") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = straightnessExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary))
+                        OutlinedTextField(value = straightness, onValueChange = {}, readOnly = true, label = { Text("主干通直度") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = straightnessExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary))
                         ExposedDropdownMenu(expanded = straightnessExpanded, onDismissRequest = { straightnessExpanded = false }, modifier = Modifier.background(Color.White)) {
                             straightnessOptions.forEach { selectionOption ->
                                 DropdownMenuItem(text = { Text(selectionOption) }, onClick = { straightness = selectionOption; straightnessExpanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
@@ -268,7 +336,35 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
 
             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(12.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    GrowthPhotoUploadBox(onClick = { Toast.makeText(context, "打开相机/相册...", Toast.LENGTH_SHORT).show() })
+                    if (selectedImageUris.isNotEmpty()) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(selectedImageUris) { uri ->
+                                Box(modifier = Modifier.size(100.dp)) {
+                                    AsyncImage(
+                                        model = uri,
+                                        contentDescription = "Selected Image",
+                                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    IconButton(
+                                        onClick = { selectedImageUris.remove(uri) },
+                                        modifier = Modifier.align(Alignment.TopEnd).size(24.dp)
+                                    ) {
+                                        Icon(Icons.Default.Close, "Remove", tint = Color.Red)
+                                    }
+                                }
+                            }
+                            item {
+                                GrowthPhotoUploadBox(onClick = { multiplePhotoPickerLauncher.launch("image/*") })
+                            }
+                        }
+                    } else {
+                        GrowthPhotoUploadBox(onClick = { multiplePhotoPickerLauncher.launch("image/*") })
+                    }
+                    
                     Spacer(modifier = Modifier.height(16.dp))
                     OutlinedTextField(value = remark, onValueChange = { remark = it }, label = { Text("生长情况描述 (选填)") }, placeholder = { Text("如：长势良好、叶片发黄等", color = Color.Gray) }, modifier = Modifier.fillMaxWidth(), minLines = 3, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary))
                 }
@@ -281,13 +377,13 @@ fun GrowthEntryScreen(onBackClick: () -> Unit) {
 @Composable
 private fun GrowthPhotoUploadBox(onClick: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF5F5F5)).border(1.dp, Color.LightGray, RoundedCornerShape(8.dp)).clickable { onClick() },
+        modifier = Modifier.size(100.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF5F5F5)).border(1.dp, Color.LightGray, RoundedCornerShape(8.dp)).clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.AddAPhoto, contentDescription = "Upload", tint = Color.Gray, modifier = Modifier.size(36.dp))
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("点击上传苗木生长状态照片", color = Color.Gray, fontSize = 14.sp)
+            Icon(Icons.Default.AddAPhoto, contentDescription = "Upload", tint = Color.Gray, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("添加照片", color = Color.Gray, fontSize = 12.sp)
         }
     }
 }

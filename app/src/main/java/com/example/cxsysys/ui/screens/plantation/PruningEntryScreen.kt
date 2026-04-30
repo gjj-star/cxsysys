@@ -37,16 +37,25 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.viewmodel.PruningViewModel
+import com.example.cxsysys.viewmodel.SubmitState
+
 // 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PruningEntryScreen(onBackClick: () -> Unit) {
+fun PruningEntryScreen(
+    onBackClick: () -> Unit,
+    viewModel: PruningViewModel = viewModel()
+) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+    
+    val submitState by viewModel.submitState.collectAsState()
 
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1 (大部分情境为批量)
@@ -82,24 +91,41 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
     // UI 状态
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
-    var isScanning by remember { mutableStateOf(false) }
+    var showScanner by remember { mutableStateOf(false) }
 
-    // 模拟扫码逻辑
-    fun simulateScan() {
-        scope.launch {
-            isScanning = true
-            val msg = if (inputMode == 0) "正在识别苗木二维码..." else "正在识别地块二维码..."
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            delay(1500)
-            isScanning = false
-            // 扫码成功填入对应的二维码字段
-            if (inputMode == 0) {
-                plantQrCode = "TREE-PRUNE-V10-088"
-            } else {
-                fieldQrCode = "FIELD-PRUNE-V10-A01"
+    // 监听提交状态
+    LaunchedEffect(submitState) {
+        when (submitState) {
+            is SubmitState.Success -> {
+                Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+                onBackClick()
             }
-            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+            is SubmitState.Error -> {
+                Toast.makeText(context, (submitState as SubmitState.Error).message, Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+            }
+            else -> {}
         }
+    }
+
+    // 真实扫码界面
+    if (showScanner) {
+        com.example.cxsysys.ui.components.ScannerScreen(
+            onScanResult = { result ->
+                if (inputMode == 0) {
+                    plantQrCode = result
+                } else {
+                    fieldQrCode = result
+                }
+                showScanner = false
+                Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+            },
+            onCancel = {
+                showScanner = false
+            }
+        )
+        return
     }
 
     if (showDatePicker) {
@@ -142,16 +168,31 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
                             val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请扫码或输入地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
+                            viewModel.submitPruning(
+                                plantQrcode = if (inputMode == 0) plantQrCode else null,
+                                fieldQrcode = if (inputMode == 1 && !isSelfCodeMode) fieldQrCode else null,
+                                fieldCode = if (inputMode == 1 && isSelfCodeMode) fieldSelfCode else null,
+                                prunDate = pruning_date,
+                                prunPeriod = time_slot,
+                                prunType = pruning_type,
+                                prunTool = tool_type,
+                                prunDisinfection = disinfect_method,
+                                remark = remark.takeIf { it.isNotBlank() }
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary),
+                    enabled = submitState !is SubmitState.Loading
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存信息", fontSize = 16.sp)
+                    if (submitState is SubmitState.Loading) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("保存信息", fontSize = 16.sp)
+                    }
                 }
             }
         }
@@ -217,10 +258,10 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
                 exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
             ) {
                 TopScanCard(
-                    isScanning = isScanning,
+                    isScanning = false,
                     title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
                     subtitle = if (inputMode == 0) "直接录入苗木剪枝信息" else "批量录入地块剪枝信息",
-                    onScanClick = { simulateScan() }
+                    onScanClick = { showScanner = true }
                 )
             }
 
@@ -242,7 +283,7 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
                             onSelfCodeChange = { },
                             isSelfCodeMode = false, // 永远为 false，保持扫码模式
                             onModeChange = { },     // 不响应切换
-                            onScanClick = { simulateScan() },
+                            onScanClick = { showScanner = true },
                             showModeToggle = false  // 隐藏右上角的切换按钮
                         )
                     } else {
@@ -255,7 +296,7 @@ fun PruningEntryScreen(onBackClick: () -> Unit) {
                             onSelfCodeChange = { fieldSelfCode = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { simulateScan() }
+                            onScanClick = { showScanner = true }
                         )
                     }
 
@@ -361,7 +402,7 @@ private fun PruningSelectDropdown(label: String, selectedValue: String, options:
             value = selectedValue, onValueChange = {}, readOnly = true, label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-            modifier = Modifier.fillMaxWidth().menuAnchor()
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
             options.forEach { option ->

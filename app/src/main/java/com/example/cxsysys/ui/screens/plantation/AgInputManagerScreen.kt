@@ -1,6 +1,8 @@
 package com.example.cxsysys.ui.screens.plantation
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,11 +23,51 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.viewmodel.AgInputViewModel
+import com.example.cxsysys.viewmodel.SubmitState
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.io.File
+import android.net.Uri
+import android.provider.OpenableColumns
+import java.io.FileOutputStream
+import java.io.InputStream
+import androidx.compose.ui.layout.ContentScale
+
+// 辅助函数：将 Uri 转换为临时的 File 对象
+fun uriToFile(context: android.content.Context, uri: Uri): File? {
+    val contentResolver = context.contentResolver
+    val cursor = contentResolver.query(uri, null, null, null, null)
+    var fileName = "temp_image_${System.currentTimeMillis()}.jpg"
+    if (cursor != null && cursor.moveToFirst()) {
+        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (nameIndex != -1) {
+            val originalName = cursor.getString(nameIndex)
+            // 简单的安全过滤，防止路径穿越
+            if (originalName != null && !originalName.contains("/") && !originalName.contains("\\")) {
+                fileName = originalName
+            }
+        }
+        cursor.close()
+    }
+    
+    val tempFile = File(context.cacheDir, fileName)
+    try {
+        val inputStream: InputStream? = contentResolver.openInputStream(uri)
+        val outputStream = FileOutputStream(tempFile)
+        inputStream?.copyTo(outputStream)
+        inputStream?.close()
+        outputStream.close()
+        return tempFile
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return null
+    }
+}
 
 /**
  * 药肥基础信息管理页面
@@ -69,13 +111,30 @@ fun AgInputManagerScreen(mode: String, onBackClick: () -> Unit) {
 // ------------------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SupplierEntryContent(onSaveSuccess: () -> Unit) {
+fun SupplierEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputViewModel = viewModel()) {
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("1-肥料供应商") }
     val typeOptions = listOf("1-肥料供应商", "2-农药供应商", "3-肥料农药供应商")
+
+    val submitState by viewModel.submitState.collectAsState()
+
+    LaunchedEffect(submitState) {
+        when (submitState) {
+            is SubmitState.Success -> {
+                Toast.makeText(context, "供应商 [$name] 保存成功！", Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+                onSaveSuccess()
+            }
+            is SubmitState.Error -> {
+                Toast.makeText(context, (submitState as SubmitState.Error).message, Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+            }
+            else -> {}
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -107,11 +166,11 @@ fun SupplierEntryContent(onSaveSuccess: () -> Unit) {
 
         Button(
             onClick = {
-                if (name.isNotEmpty()) {
-                    Toast.makeText(context, "供应商 [$name] 保存成功！", Toast.LENGTH_SHORT).show()
-                    onSaveSuccess()
+                if (name.isNotEmpty() && address.isNotEmpty() && phone.isNotEmpty()) {
+                    val typeCode = type.split("-")[0].toIntOrNull() ?: 1
+                    viewModel.submitSupplier(name, address, phone, typeCode)
                 } else {
-                    Toast.makeText(context, "请输入供应商名称", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "请完善供应商基础信息", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -128,14 +187,19 @@ fun SupplierEntryContent(onSaveSuccess: () -> Unit) {
 // ------------------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PesticideInfoEntryContent(onSaveSuccess: () -> Unit) {
+fun PesticideInfoEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputViewModel = viewModel()) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    // 模拟的供应商列表（用于下拉选择）
-    val dummySuppliers = listOf("茂名农资公司", "专业植保站", "利民化工")
+    val supplierList by viewModel.supplierList.collectAsState()
+    val supplierOptions = supplierList.map { it.supplierName }
+    
+    LaunchedEffect(Unit) {
+        viewModel.fetchPesticideSuppliers()
+    }
 
     var supplierName by remember { mutableStateOf("") }
+    var supplierId by remember { mutableStateOf<Int?>(null) }
     var name by remember { mutableStateOf("") }
     var ingredient by remember { mutableStateOf("") }
     var remark by remember { mutableStateOf("") }
@@ -145,6 +209,35 @@ fun PesticideInfoEntryContent(onSaveSuccess: () -> Unit) {
     var manufactureDate by remember { mutableStateOf(dateFormat.format(Date())) }
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+
+    // 图片选择器
+    var frontImageUri by remember { mutableStateOf<Uri?>(null) }
+    var backImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    val frontImageLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        frontImageUri = uri
+    }
+    
+    val backImageLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        backImageUri = uri
+    }
+
+    val submitState by viewModel.submitState.collectAsState()
+
+    LaunchedEffect(submitState) {
+        when (submitState) {
+            is SubmitState.Success -> {
+                Toast.makeText(context, "农药 [$name] 入库成功！", Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+                onSaveSuccess()
+            }
+            is SubmitState.Error -> {
+                Toast.makeText(context, (submitState as SubmitState.Error).message, Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+            }
+            else -> {}
+        }
+    }
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -178,9 +271,12 @@ fun PesticideInfoEntryContent(onSaveSuccess: () -> Unit) {
                 // 供应商选择
                 AgDropdownField(
                     label = "生产厂家 (供应商)",
-                    selectedValue = if(supplierName.isEmpty()) "" else supplierName,
-                    options = dummySuppliers,
-                    onValueChange = { supplierName = it }
+                    selectedValue = supplierName.ifEmpty { "" },
+                    options = supplierOptions,
+                    onValueChange = { name -> 
+                        supplierName = name
+                        supplierId = supplierList.find { it.supplierName == name }?.supplierId
+                    }
                 )
 
                 OutlinedTextField(
@@ -230,24 +326,49 @@ fun PesticideInfoEntryContent(onSaveSuccess: () -> Unit) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(
-                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {},
+                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {
+                            frontImageLauncher.launch("image/*")
+                        },
                         contentAlignment = Alignment.Center
-                    ) { Text("+ 正面图", color = Color.Gray) }
+                    ) {
+                        if (frontImageUri != null) {
+                            Text("已选正面图", color = AgGreenPrimary, fontWeight = FontWeight.Bold)
+                        } else {
+                            Text("+ 正面图", color = Color.Gray)
+                        }
+                    }
                     Box(
-                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {},
+                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {
+                            backImageLauncher.launch("image/*")
+                        },
                         contentAlignment = Alignment.Center
-                    ) { Text("+ 背面图", color = Color.Gray) }
+                    ) {
+                        if (backImageUri != null) {
+                            Text("已选背面图", color = AgGreenPrimary, fontWeight = FontWeight.Bold)
+                        } else {
+                            Text("+ 背面图", color = Color.Gray)
+                        }
+                    }
                 }
             }
         }
 
         Button(
             onClick = {
-                if (supplierName.isNotEmpty() && name.isNotEmpty()) {
-                    Toast.makeText(context, "农药 [$name] 入库成功！", Toast.LENGTH_SHORT).show()
-                    onSaveSuccess()
+                if (supplierId != null && name.isNotEmpty()) {
+                    val frontFile = frontImageUri?.let { uriToFile(context, it) }
+                    val backFile = backImageUri?.let { uriToFile(context, it) }
+                    viewModel.submitPesticide(
+                        supplierId = supplierId!!,
+                        pestName = name,
+                        ingredient = ingredient,
+                        manufactureDate = manufactureDate,
+                        remark = remark,
+                        frontPhotoFile = frontFile,
+                        backPhotoFile = backFile
+                    )
                 } else {
-                    Toast.makeText(context, "请完善农药信息", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "请完善农药信息及选择供应商", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -263,20 +384,56 @@ fun PesticideInfoEntryContent(onSaveSuccess: () -> Unit) {
 // 3. 肥料信息入库内容
 // ------------------------------------------------------------------------
 @Composable
-fun FertilizerInfoEntryContent(onSaveSuccess: () -> Unit) {
+fun FertilizerInfoEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputViewModel = viewModel()) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    val dummySuppliers = listOf("茂名农资公司", "绿色生态肥业", "云天化")
+    val supplierList by viewModel.supplierList.collectAsState()
+    val supplierOptions = supplierList.map { it.supplierName }
+    
+    LaunchedEffect(Unit) {
+        viewModel.fetchFertilizerSuppliers()
+    }
+
     val typeOptions = listOf("有机肥", "复合肥", "水溶肥", "缓释肥", "其他")
 
     var supplierName by remember { mutableStateOf("") }
+    var supplierId by remember { mutableStateOf<Int?>(null) }
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("复合肥") }
     var n by remember { mutableStateOf("") }
     var p by remember { mutableStateOf("") }
     var k by remember { mutableStateOf("") }
     var remark by remember { mutableStateOf("") }
+
+    // 图片选择器
+    var frontImageUri by remember { mutableStateOf<Uri?>(null) }
+    var backImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    val frontImageLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        frontImageUri = uri
+    }
+    
+    val backImageLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        backImageUri = uri
+    }
+
+    val submitState by viewModel.submitState.collectAsState()
+
+    LaunchedEffect(submitState) {
+        when (submitState) {
+            is SubmitState.Success -> {
+                Toast.makeText(context, "肥料 [$name] 入库成功！", Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+                onSaveSuccess()
+            }
+            is SubmitState.Error -> {
+                Toast.makeText(context, (submitState as SubmitState.Error).message, Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+            }
+            else -> {}
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -294,9 +451,12 @@ fun FertilizerInfoEntryContent(onSaveSuccess: () -> Unit) {
 
                 AgDropdownField(
                     label = "生产厂家 (供应商)",
-                    selectedValue = if(supplierName.isEmpty()) "" else supplierName,
-                    options = dummySuppliers,
-                    onValueChange = { supplierName = it }
+                    selectedValue = supplierName.ifEmpty { "" },
+                    options = supplierOptions,
+                    onValueChange = { name -> 
+                        supplierName = name
+                        supplierId = supplierList.find { it.supplierName == name }?.supplierId
+                    }
                 )
 
                 OutlinedTextField(
@@ -348,24 +508,54 @@ fun FertilizerInfoEntryContent(onSaveSuccess: () -> Unit) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(
-                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {},
+                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {
+                            frontImageLauncher.launch("image/*")
+                        },
                         contentAlignment = Alignment.Center
-                    ) { Text("+ 正面图", color = Color.Gray) }
+                    ) {
+                        if (frontImageUri != null) {
+                            Text("已选正面图", color = AgGreenPrimary, fontWeight = FontWeight.Bold)
+                        } else {
+                            Text("+ 正面图", color = Color.Gray)
+                        }
+                    }
                     Box(
-                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {},
+                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {
+                            backImageLauncher.launch("image/*")
+                        },
                         contentAlignment = Alignment.Center
-                    ) { Text("+ 背面图", color = Color.Gray) }
+                    ) {
+                        if (backImageUri != null) {
+                            Text("已选背面图", color = AgGreenPrimary, fontWeight = FontWeight.Bold)
+                        } else {
+                            Text("+ 背面图", color = Color.Gray)
+                        }
+                    }
                 }
             }
         }
 
         Button(
             onClick = {
-                if (supplierName.isNotEmpty() && name.isNotEmpty()) {
-                    Toast.makeText(context, "肥料 [$name] 入库成功！", Toast.LENGTH_SHORT).show()
-                    onSaveSuccess()
+                if (supplierId != null && name.isNotEmpty()) {
+                    val frontFile = frontImageUri?.let { uriToFile(context, it) }
+                    val backFile = backImageUri?.let { uriToFile(context, it) }
+                    val nDouble = n.toDoubleOrNull() ?: 0.0
+                    val pDouble = p.toDoubleOrNull() ?: 0.0
+                    val kDouble = k.toDoubleOrNull() ?: 0.0
+                    viewModel.submitFertilizer(
+                        supplierId = supplierId!!,
+                        fertName = name,
+                        fertType = type,
+                        nutrientN = nDouble,
+                        nutrientP = pDouble,
+                        nutrientK = kDouble,
+                        remark = remark,
+                        frontPhotoFile = frontFile,
+                        backPhotoFile = backFile
+                    )
                 } else {
-                    Toast.makeText(context, "请完善肥料信息", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "请完善肥料信息及选择供应商", Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -394,7 +584,7 @@ private fun AgDropdownField(label: String, selectedValue: String, options: List<
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-            modifier = Modifier.fillMaxWidth().menuAnchor()
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
         )
         ExposedDropdownMenu(
             expanded = expanded,

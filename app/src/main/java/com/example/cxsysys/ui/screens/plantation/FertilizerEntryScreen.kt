@@ -30,8 +30,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.model.Fertilizer
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.viewmodel.FertilizerViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -42,48 +45,39 @@ import java.util.Locale
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
 
-// --- 数据模型 (模拟数据库表结构) ---
-
-// 1. 供应商信息
-data class Supplier(
-    val id: Int,
-    val name: String,
-    val address: String,
-    val phone: String,
-    val type: String // 1-肥料供应商，2-农药供应商，3-肥料农药供应商
-)
-
-// 2. 肥料信息
-data class Fertilizer(
-    val id: Int,
-    val supplierId: Int, // 关联供应商ID
-    val name: String,
-    val type: String,    // 有机肥/复合肥...
-    val n: String,       // 氮
-    val p: String,       // 磷
-    val k: String,       // 钾
-    val remark: String
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FertilizerEntryScreen(
     onBackClick: () -> Unit,
-    onNavigateToFertilizerAdd: () -> Unit = {} // [新增] 用于跳转至肥料信息入库页面
+    onNavigateToFertilizerAdd: () -> Unit = {}, // [新增] 用于跳转至肥料信息入库页面
+    viewModel: FertilizerViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
-    // --- 模拟数据库基础数据 ---
-    val suppliers = remember { mutableStateListOf(
-        Supplier(1, "茂名农资公司", "茂名市电白区人民路88号", "13800138000", "3-肥料农药供应商"),
-        Supplier(2, "绿色生态肥业", "广州市天河区", "020-88888888", "1-肥料供应商")
-    ) }
-    val fertilizers = remember { mutableStateListOf(
-        Fertilizer(1, 1, "高效复合肥", "复合肥", "15", "15", "15", "通用型"),
-        Fertilizer(2, 2, "深海鱼蛋白", "有机肥", "5", "2", "1", "促进根系生长")
-    ) }
+    // 观察 ViewModel 状态
+    val fertilizers by viewModel.fertilizers.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val submitSuccess by viewModel.submitSuccess.collectAsState()
+
+    // 处理提交成功
+    LaunchedEffect(submitSuccess) {
+        if (submitSuccess) {
+            Toast.makeText(context, "保存成功！", Toast.LENGTH_LONG).show()
+            viewModel.resetSubmitState()
+            onBackClick()
+        }
+    }
+
+    // 处理错误提示
+    LaunchedEffect(error) {
+        error?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.resetSubmitState()
+        }
+    }
 
     // --- 表单状态 ---
     // 【新增点】：将自编码模式状态上提至父页面
@@ -107,7 +101,7 @@ fun FertilizerEntryScreen(
     // UI 控制状态
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
-    var isScanning by remember { mutableStateOf(false) }
+    var showScanner by remember { mutableStateOf(false) }
 
     var showSelectFertilizerDialog by remember { mutableStateOf(false) }
 
@@ -115,16 +109,19 @@ fun FertilizerEntryScreen(
     val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时", "其他")
     val methodOptions = listOf("穴施", "沟施", "撒施", "环状施肥", "放射状施肥", "打洞填埋", "滴灌", "浇灌", "水肥一体化", "叶面施肥", "涂枝干", "其他")
 
-    // 模拟扫码逻辑
-    fun simulateScan() {
-        scope.launch {
-            isScanning = true
-            Toast.makeText(context, "正在识别地块二维码...", Toast.LENGTH_SHORT).show()
-            delay(1500)
-            isScanning = false
-            fieldQrCode = "FIELD-V10-B02" // 扫码成功填入二维码字段
-            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
-        }
+    // 真实扫码界面
+    if (showScanner) {
+        com.example.cxsysys.ui.components.ScannerScreen(
+            onScanResult = { result ->
+                fieldQrCode = result
+                showScanner = false
+                Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+            },
+            onCancel = {
+                showScanner = false
+            }
+        )
+        return
     }
 
     // 日历处理
@@ -148,11 +145,10 @@ fun FertilizerEntryScreen(
     // 肥料选择弹窗逻辑更新
     if (showSelectFertilizerDialog) {
         SelectFertilizerDialog(
-            suppliers = suppliers,
             fertilizers = fertilizers,
             onDismiss = { showSelectFertilizerDialog = false },
             onConfirm = { fertilizer ->
-                if (!selectedFertilizers.any { it.id == fertilizer.id }) selectedFertilizers.add(fertilizer)
+                if (!selectedFertilizers.any { it.fertId == fertilizer.fertId }) selectedFertilizers.add(fertilizer)
                 showSelectFertilizerDialog = false
             },
             onAddClick = {
@@ -179,21 +175,40 @@ fun FertilizerEntryScreen(
                         // 【修改点】：校验逻辑更新
                         if (fieldQrCode.isEmpty() && fieldSelfCode.isEmpty()) {
                             Toast.makeText(context, "请扫码或输入地块编码", Toast.LENGTH_SHORT).show()
+                        } else if (time_slot.isEmpty()) {
+                            Toast.makeText(context, "请选择施肥时段", Toast.LENGTH_SHORT).show()
                         } else if (selectedFertilizers.isEmpty()) {
                             Toast.makeText(context, "请至少选择一种肥料", Toast.LENGTH_SHORT).show()
                         } else if (dosage_gram_per_plant.isEmpty()) {
                             Toast.makeText(context, "请填写单株用量", Toast.LENGTH_SHORT).show()
+                        } else if (fertilizer_method.isEmpty()) {
+                            Toast.makeText(context, "请选择施用方法", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "保存成功！", Toast.LENGTH_LONG).show()
+                            viewModel.submitFertilizeWork(
+                                fieldQrcode = fieldQrCode,
+                                fieldCode = fieldSelfCode,
+                                fertiDate = fertilizer_date,
+                                fertiPeriod = time_slot,
+                                fertiIds = selectedFertilizers.map { it.fertId },
+                                fertiDosage = dosage_gram_per_plant.toDoubleOrNull() ?: 0.0,
+                                fertiMethod = fertilizer_method,
+                                fertiWater = water_fertilizer,
+                                remark = remark
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary),
+                    enabled = !isLoading
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存信息", fontSize = 16.sp)
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                    } else {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("保存信息", fontSize = 16.sp)
+                    }
                 }
             }
         }
@@ -214,10 +229,10 @@ fun FertilizerEntryScreen(
                 exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
             ) {
                 TopScanCard(
-                    isScanning = isScanning,
+                    isScanning = false,
                     title = "点击扫描地块二维码",
                     subtitle = "自动录入关联地块信息",
-                    onScanClick = { simulateScan() }
+                    onScanClick = { showScanner = true }
                 )
             }
 
@@ -247,7 +262,7 @@ fun FertilizerEntryScreen(
                         onSelfCodeChange = { fieldSelfCode = it },
                         isSelfCodeMode = isSelfCodeMode,
                         onModeChange = { isSelfCodeMode = it },
-                        onScanClick = { simulateScan() }
+                        onScanClick = { showScanner = true }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -303,12 +318,11 @@ fun FertilizerEntryScreen(
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             selectedFertilizers.forEach { fert ->
-                                val supplierName = suppliers.find { it.id == fert.supplierId }?.name ?: "未知厂商"
                                 Row(modifier = Modifier.fillMaxWidth().border(1.dp, AgGreenPrimary.copy(alpha = 0.5f), RoundedCornerShape(8.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(fert.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                        Text("$supplierName | ${fert.type}", color = Color.Gray, fontSize = 11.sp)
-                                        Text("N:${fert.n} P:${fert.p} K:${fert.k}", color = Color(0xFF1976D2), fontSize = 11.sp)
+                                        Text(fert.fertName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Text("${fert.fertSupplier} | ${fert.fertType}", color = Color.Gray, fontSize = 11.sp)
+                                        Text("N:${fert.nutrientN} P:${fert.nutrientP} K:${fert.nutrientK}", color = Color(0xFF1976D2), fontSize = 11.sp)
                                     }
                                     IconButton(onClick = { selectedFertilizers.remove(fert) }, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Close, null, tint = Color.Gray) }
                                 }
@@ -379,7 +393,6 @@ fun FertilizerEntryScreen(
 
 @Composable
 fun SelectFertilizerDialog(
-    suppliers: List<Supplier>,
     fertilizers: List<Fertilizer>,
     onDismiss: () -> Unit,
     onConfirm: (Fertilizer) -> Unit,
@@ -396,24 +409,29 @@ fun SelectFertilizerDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    fertilizers.forEach { fertilizer ->
-                        val supplierName = suppliers.find { it.id == fertilizer.supplierId }?.name ?: "未知厂商"
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onConfirm(fertilizer) }
-                                .padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(fertilizer.name, fontWeight = FontWeight.Bold)
-                                Text("$supplierName | ${fertilizer.type}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                                Text("N:${fertilizer.n} P:${fertilizer.p} K:${fertilizer.k}", color = Color(0xFF1976D2), fontSize = 11.sp)
+                    if (fertilizers.isEmpty()) {
+                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                             Text("暂无肥料数据，请先新增", color = Color.Gray)
+                         }
+                    } else {
+                        fertilizers.forEach { fertilizer ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onConfirm(fertilizer) }
+                                    .padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(fertilizer.fertName, fontWeight = FontWeight.Bold)
+                                    Text("${fertilizer.fertSupplier} | ${fertilizer.fertType}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    Text("N:${fertilizer.nutrientN} P:${fertilizer.nutrientP} K:${fertilizer.nutrientK}", color = Color(0xFF1976D2), fontSize = 11.sp)
+                                }
+                                Icon(Icons.Default.AddCircleOutline, null, tint = AgGreenPrimary)
                             }
-                            Icon(Icons.Default.AddCircleOutline, null, tint = AgGreenPrimary)
+                            HorizontalDivider(color = BgGray)
                         }
-                        HorizontalDivider(color = BgGray)
                     }
                 }
 
@@ -474,7 +492,7 @@ private fun FertilizerDropdownField(label: String, selectedValue: String, option
             value = selectedValue, onValueChange = {}, readOnly = true, label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-            modifier = Modifier.fillMaxWidth().menuAnchor()
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
             options.forEach { option ->

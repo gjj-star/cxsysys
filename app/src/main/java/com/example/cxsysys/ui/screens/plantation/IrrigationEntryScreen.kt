@@ -36,16 +36,32 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.viewmodel.IrrigationViewModel
+import com.example.cxsysys.viewmodel.SubmitState
+
 // 引入公共组件
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IrrigationEntryScreen(onBackClick: () -> Unit) {
+fun IrrigationEntryScreen(
+    onBackClick: () -> Unit,
+    viewModel: IrrigationViewModel = viewModel()
+) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+    
+    val submitState by viewModel.submitState.collectAsState()
+    val plantationList by viewModel.plantationList.collectAsState()
+    val seedbedList by viewModel.seedbedList.collectAsState()
+
+    // 初始化加载种植园列表
+    LaunchedEffect(Unit) {
+        viewModel.fetchPlantationList()
+    }
 
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量记录。默认为1
@@ -59,7 +75,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
 
     // 批量录入层级字段 (种植园 -> 大棚/地块 -> 苗床)
     var plantation_name by remember { mutableStateOf("") }
-    val plantationOptions = listOf("茂名核心种植园", "电白试验园", "化州生态园")
+    val plantationOptions = plantationList.map { it.plantationName }
 
     var region_type by remember { mutableStateOf("") }
     val regionTypeOptions = listOf("地块", "大棚")
@@ -69,14 +85,25 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
 
     // 【新增】：苗床多选状态与模拟数据
     val selectedSeedbeds = remember { mutableStateListOf<String>() }
-    // 模拟根据大棚返回的苗床列表
-    val getSeedbedsByRegion = { regionCode: String ->
-        if (regionCode.isNotEmpty()) listOf("苗床A-01", "苗床A-02", "苗床A-03", "苗床B-01") else emptyList()
+    
+    // 动态获取当前大棚的苗床列表 (从 viewModel 获取)
+    val availableSeedbeds = seedbedList.map { it.seedbedCode }
+
+    // 监听大棚编码变化，请求苗床列表
+    LaunchedEffect(regionQrCode, regionSelfCode) {
+        if (region_type == "大棚" && (regionQrCode.isNotEmpty() || regionSelfCode.isNotEmpty())) {
+            viewModel.fetchSeedbedsByGh(regionQrCode, regionSelfCode)
+        } else {
+            viewModel.clearSeedbeds()
+        }
     }
-    // 动态获取当前大棚的苗床列表
-    val availableSeedbeds = remember(regionQrCode, regionSelfCode) {
-        val currentRegion = if (regionSelfCode.isNotEmpty()) regionSelfCode else regionQrCode
-        getSeedbedsByRegion(currentRegion)
+
+    // 监听苗床列表变化，自动全选
+    LaunchedEffect(seedbedList) {
+        if (seedbedList.isNotEmpty()) {
+            selectedSeedbeds.clear()
+            selectedSeedbeds.addAll(seedbedList.map { it.seedbedCode })
+        }
     }
 
     // 灌溉基本信息
@@ -109,31 +136,46 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
         else -> true
     }
 
-    // 模拟扫码逻辑
-    fun simulateScan() {
-        if (isScanning || !showTopScanCard) return
+    // 真实扫码状态
+    var showScanner by remember { mutableStateOf(false) }
 
-        scope.launch {
-            isScanning = true
-            val msg = if (inputMode == 0) "正在识别苗木二维码..." else "正在识别区域二维码..."
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            delay(1500)
-            isScanning = false
+    if (showScanner) {
+        com.example.cxsysys.ui.components.ScannerScreen(
+            onScanResult = { result ->
+                showScanner = false
+                if (inputMode == 0) {
+                    plantQrCode = result
+                } else {
+                    isRegionSelfCodeMode = false
+                    // 默认选择第一个种植园（如果有）
+                    plantation_name = plantationList.firstOrNull()?.plantationName ?: "茂名核心种植园"
+                    region_type = "大棚"
+                    regionQrCode = result
 
-            if (inputMode == 0) {
-                plantQrCode = "TREE-IRR-001"
-            } else {
-                isRegionSelfCodeMode = false
-                plantation_name = "茂名核心种植园"
-                region_type = "大棚"
-                regionQrCode = "GH-A-01"
-
-                // 【联动】：扫码成功获取大棚后，默认全选该大棚的苗床
-                val newSeedbeds = getSeedbedsByRegion(regionQrCode)
-                selectedSeedbeds.clear()
-                selectedSeedbeds.addAll(newSeedbeds)
+                    // 扫码后会触发 LaunchedEffect 获取苗床列表
+                }
+                Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+            },
+            onCancel = {
+                showScanner = false
             }
-            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+        )
+        return // 全屏显示扫码界面
+    }
+
+    // 监听提交状态
+    LaunchedEffect(submitState) {
+        when (submitState) {
+            is SubmitState.Success -> {
+                Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+                onBackClick()
+            }
+            is SubmitState.Error -> {
+                Toast.makeText(context, (submitState as SubmitState.Error).message, Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+            }
+            else -> {}
         }
     }
 
@@ -175,16 +217,32 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                         } else if (inputMode == 1 && region_type == "大棚" && selectedSeedbeds.isEmpty()) {
                             Toast.makeText(context, "请至少选择一个苗床", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
+                            val seedbedIds = if (region_type == "大棚" && selectedSeedbeds.isNotEmpty()) selectedSeedbeds.joinToString(",") else null
+                            viewModel.submitIrrigation(
+                                plantQrcode = if (inputMode == 0) plantQrCode else null,
+                                fieldQrcode = if (inputMode == 1 && region_type == "地块" && !isRegionSelfCodeMode) regionQrCode else null,
+                                fieldCode = if (inputMode == 1 && region_type == "地块" && isRegionSelfCodeMode) regionSelfCode else null,
+                                greenhouseQrcode = if (inputMode == 1 && region_type == "大棚" && !isRegionSelfCodeMode) regionQrCode else null,
+                                greenhouseCode = if (inputMode == 1 && region_type == "大棚" && isRegionSelfCodeMode) regionSelfCode else null,
+                                seedbedId = seedbedIds,
+                                irriDate = irrigation_date,
+                                irriPeriod = time_slot,
+                                irriMethod = irrigation_method
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary),
+                    enabled = submitState !is SubmitState.Loading
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存信息", fontSize = 16.sp)
+                    if (submitState is SubmitState.Loading) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("保存信息", fontSize = 16.sp)
+                    }
                 }
             }
         }
@@ -232,7 +290,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                     isScanning = isScanning,
                     title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描区域二维码",
                     subtitle = if (inputMode == 0) "直接录入苗木灌溉记录" else "批量录入区域(地块/大棚)灌溉记录",
-                    onScanClick = { simulateScan() }
+                    onScanClick = { showScanner = true }
                 )
             }
 
@@ -254,7 +312,7 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                             onSelfCodeChange = { },
                             isSelfCodeMode = false, // 永远为 false，保持扫码模式
                             onModeChange = { },
-                            onScanClick = { simulateScan() },
+                            onScanClick = { showScanner = true },
                             showModeToggle = false  // 隐藏右上角切换按钮
                         )
                         Spacer(modifier = Modifier.height(16.dp))
@@ -306,13 +364,11 @@ fun IrrigationEntryScreen(onBackClick: () -> Unit) {
                                     selfCodeValue = regionSelfCode,
                                     onSelfCodeChange = {
                                         regionSelfCode = it
-                                        val newSeedbeds = getSeedbedsByRegion(it)
-                                        selectedSeedbeds.clear()
-                                        selectedSeedbeds.addAll(newSeedbeds)
+                                        // 更改自编码会触发 LaunchedEffect 获取苗床列表
                                     },
                                     isSelfCodeMode = isRegionSelfCodeMode,
                                     onModeChange = { isRegionSelfCodeMode = it },
-                                    onScanClick = { simulateScan() }
+                                    onScanClick = { showScanner = true }
                                 )
                             }
                         }
@@ -455,7 +511,7 @@ fun MultiSelectSeedbedDropdown(
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-            modifier = Modifier.fillMaxWidth().menuAnchor()
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
             // 【删除了原本报错的 textStyle = LocalTextStyle... 】
         )
         ExposedDropdownMenu(
@@ -501,7 +557,7 @@ private fun IrrigationSelectDropdown(label: String, selectedValue: String, optio
             value = selectedValue, onValueChange = {}, readOnly = true, label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-            modifier = Modifier.fillMaxWidth().menuAnchor()
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
             options.forEach { option ->

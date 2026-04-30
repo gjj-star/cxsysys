@@ -37,16 +37,25 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.viewmodel.HarvestViewModel
+import com.example.cxsysys.viewmodel.SubmitState
+
 // 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HarvestEntryScreen(onBackClick: () -> Unit) {
+fun HarvestEntryScreen(
+    onBackClick: () -> Unit,
+    viewModel: HarvestViewModel = viewModel()
+) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+    
+    val submitState by viewModel.submitState.collectAsState()
 
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1
@@ -73,24 +82,40 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
     // UI 控制状态
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
-    var isScanning by remember { mutableStateOf(false) }
+    var showScanner by remember { mutableStateOf(false) }
 
-    // 模拟扫码逻辑
-    fun simulateScan() {
-        scope.launch {
-            isScanning = true
-            val msg = if (inputMode == 0) "正在识别苗木二维码..." else "正在识别地块二维码..."
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            delay(1500)
-            isScanning = false
-
-            // 数据回填
-            if (inputMode == 0) {
-                plantQrCode = "HARVEST-TREE-001"
-            } else {
-                fieldQrCode = "HARVEST-FIELD-A01"
+    // 真实扫码界面
+    if (showScanner) {
+        com.example.cxsysys.ui.components.ScannerScreen(
+            onScanResult = { result ->
+                if (inputMode == 0) {
+                    plantQrCode = result
+                } else {
+                    fieldQrCode = result
+                }
+                showScanner = false
+                Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+            },
+            onCancel = {
+                showScanner = false
             }
-            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+        )
+        return
+    }
+
+    // 监听提交状态
+    LaunchedEffect(submitState) {
+        when (submitState) {
+            is SubmitState.Success -> {
+                Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+                onBackClick()
+            }
+            is SubmitState.Error -> {
+                Toast.makeText(context, (submitState as SubmitState.Error).message, Toast.LENGTH_SHORT).show()
+                viewModel.resetState()
+            }
+            else -> {}
         }
     }
 
@@ -136,16 +161,27 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
                         } else if (weight.isEmpty()) {
                             Toast.makeText(context, "请输入采收重量", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
+                            viewModel.submitHarvest(
+                                fieldCode = if (inputMode == 1 && isSelfCodeMode) fieldSelfCode else null,
+                                fieldQrcode = if (inputMode == 1 && !isSelfCodeMode) fieldQrCode else null,
+                                plantQrcode = if (inputMode == 0) plantQrCode else null,
+                                harvestDate = harvest_date,
+                                harvestWeight = weight.toDoubleOrNull() ?: 0.0
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary),
+                    enabled = submitState !is SubmitState.Loading
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存信息", fontSize = 16.sp)
+                    if (submitState is SubmitState.Loading) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("保存信息", fontSize = 16.sp)
+                    }
                 }
             }
         }
@@ -216,10 +252,10 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
                 exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
             ) {
                 TopScanCard(
-                    isScanning = isScanning,
+                    isScanning = false,
                     title = scanTitle,
                     subtitle = scanSubtitle,
-                    onScanClick = { simulateScan() }
+                    onScanClick = { showScanner = true }
                 )
             }
 
@@ -242,7 +278,7 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
                             onSelfCodeChange = { },
                             isSelfCodeMode = false, // 永远为 false，保持扫码模式
                             onModeChange = { },     // 不响应切换
-                            onScanClick = { simulateScan() },
+                            onScanClick = { showScanner = true },
                             showModeToggle = false  // 隐藏右上角的切换按钮
                         )
                     } else {
@@ -255,7 +291,7 @@ fun HarvestEntryScreen(onBackClick: () -> Unit) {
                             onSelfCodeChange = { fieldSelfCode = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { simulateScan() }
+                            onScanClick = { showScanner = true }
                         )
                     }
 

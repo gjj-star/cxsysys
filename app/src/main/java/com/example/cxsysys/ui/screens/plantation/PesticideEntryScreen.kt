@@ -30,8 +30,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.model.Pesticide
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.viewmodel.PesticideViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -42,30 +45,39 @@ import java.util.Locale
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
 
-// --- 数据模型 ---
-data class Pesticide(
-    val id: Int,
-    val supplierId: Int,
-    val name: String,
-    val ingredient: String,
-    val remark: String
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PesticideEntryScreen(
     onBackClick: () -> Unit,
-    onNavigateToPesticideAdd: () -> Unit = {} // 用于跳转至农药信息入库页面
+    onNavigateToPesticideAdd: () -> Unit = {}, // 用于跳转至农药信息入库页面
+    viewModel: PesticideViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
-    // --- 模拟数据 ---
-    val pesticides = remember { mutableStateListOf(
-        Pesticide(1, 1, "阿维菌素", "1.8% 乳油", "防治蚜虫、红蜘蛛"),
-        Pesticide(2, 2, "吡虫啉", "10% 可湿性粉剂", "内吸性杀虫剂")
-    ) }
+    // 观察 ViewModel 状态
+    val pesticides by viewModel.pesticides.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val submitSuccess by viewModel.submitSuccess.collectAsState()
+
+    // 处理提交成功
+    LaunchedEffect(submitSuccess) {
+        if (submitSuccess) {
+            Toast.makeText(context, "保存成功！", Toast.LENGTH_LONG).show()
+            viewModel.resetSubmitState()
+            onBackClick()
+        }
+    }
+
+    // 处理错误提示
+    LaunchedEffect(error) {
+        error?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.resetSubmitState()
+        }
+    }
 
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1 (大部分情境为批量)
@@ -105,22 +117,25 @@ fun PesticideEntryScreen(
     var showSelectPesticideDialog by remember { mutableStateOf(false) }
     val methodOptions = listOf("喷雾", "灌根", "涂抹", "喷粉", "其他")
 
-    // 模拟扫码逻辑
-    fun simulateScan() {
-        scope.launch {
-            isScanning = true
-            val msg = if (inputMode == 0) "正在识别苗木二维码..." else "正在识别地块二维码..."
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            delay(1500)
-            isScanning = false
-            // 扫码成功填入二维码字段
-            if (inputMode == 0) {
-                plantQrCode = "TREE-PEST-2023-001"
-            } else {
-                fieldQrCode = "FIELD-PEST-B05"
+    // 真实扫码状态
+    var showScanner by remember { mutableStateOf(false) }
+
+    if (showScanner) {
+        com.example.cxsysys.ui.components.ScannerScreen(
+            onScanResult = { result ->
+                showScanner = false
+                if (inputMode == 0) {
+                    plantQrCode = result
+                } else {
+                    fieldQrCode = result
+                }
+                Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+            },
+            onCancel = {
+                showScanner = false
             }
-            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
-        }
+        )
+        return // 全屏显示扫码界面
     }
 
     if (showDatePicker) {
@@ -178,19 +193,43 @@ fun PesticideEntryScreen(
                         if (!targetValid) {
                             val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请填写或扫码地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        } else if (pesticide_time.isEmpty()) {
+                            Toast.makeText(context, "请选择施药时段", Toast.LENGTH_SHORT).show()
                         } else if (selectedPesticide == null) {
                             Toast.makeText(context, "请选择农药", Toast.LENGTH_SHORT).show()
+                        } else if (dosage_ml_per_plant.isEmpty()) {
+                            Toast.makeText(context, "请填写单株用量", Toast.LENGTH_SHORT).show()
+                        } else if (method.isEmpty()) {
+                            Toast.makeText(context, "请选择施药方式", Toast.LENGTH_SHORT).show()
+                        } else if (concentration_ppm.isEmpty()) {
+                            Toast.makeText(context, "请填写稀释浓度", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "保存成功！", Toast.LENGTH_SHORT).show()
+                            viewModel.submitPesticideWork(
+                                plantQrcode = if (inputMode == 0) plantQrCode else null,
+                                fieldQrcode = if (inputMode == 1) fieldQrCode else null,
+                                fieldCode = if (inputMode == 1) fieldSelfCode else null,
+                                date = apply_date,
+                                period = pesticide_time,
+                                pestIds = listOf(selectedPesticide!!.pestId),
+                                pestDosage = dosage_ml_per_plant.toDoubleOrNull() ?: 0.0,
+                                pestMethod = method,
+                                pestWater = concentration_ppm.toDoubleOrNull() ?: 0.0,
+                                record = remark
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary),
+                    enabled = !isLoading
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存信息", fontSize = 16.sp)
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                    } else {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("保存信息", fontSize = 16.sp)
+                    }
                 }
             }
         }
@@ -257,7 +296,7 @@ fun PesticideEntryScreen(
                     isScanning = isScanning,
                     title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
                     subtitle = if (inputMode == 0) "直接录入关联苗木施药记录" else "批量录入关联地块施药记录",
-                    onScanClick = { simulateScan() }
+                    onScanClick = { showScanner = true }
                 )
             }
 
@@ -279,7 +318,7 @@ fun PesticideEntryScreen(
                             onSelfCodeChange = { },
                             isSelfCodeMode = false, // 永远为 false，保持扫码模式
                             onModeChange = { },     // 不响应切换
-                            onScanClick = { simulateScan() },
+                            onScanClick = { showScanner = true },
                             showModeToggle = false  // 隐藏右上角的切换按钮
                         )
                     } else {
@@ -292,7 +331,7 @@ fun PesticideEntryScreen(
                             onSelfCodeChange = { fieldSelfCode = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { simulateScan() }
+                            onScanClick = { showScanner = true }
                         )
                     }
 
@@ -352,8 +391,8 @@ fun PesticideEntryScreen(
                     } else {
                         Row(modifier = Modifier.fillMaxWidth().border(1.dp, AgGreenPrimary.copy(alpha = 0.5f), RoundedCornerShape(8.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(selectedPesticide!!.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                Text(selectedPesticide!!.ingredient, color = Color.Gray, fontSize = 11.sp)
+                                Text(selectedPesticide!!.pestName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(selectedPesticide!!.pestIngredient, color = Color.Gray, fontSize = 11.sp)
                             }
                             IconButton(onClick = { selectedPesticide = null }, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Close, null, tint = Color.Gray) }
                         }
@@ -444,22 +483,28 @@ fun PesticideSelectDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    pesticides.forEach { pesticide ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onConfirm(pesticide) }
-                                .padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(pesticide.name, fontWeight = FontWeight.Bold)
-                                Text(pesticide.ingredient, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                            }
-                            Icon(Icons.Default.AddCircleOutline, null, tint = AgGreenPrimary)
+                    if (pesticides.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("暂无农药数据，请先新增", color = Color.Gray)
                         }
-                        HorizontalDivider(color = BgGray)
+                    } else {
+                        pesticides.forEach { pesticide ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onConfirm(pesticide) }
+                                    .padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(pesticide.pestName, fontWeight = FontWeight.Bold)
+                                    Text(pesticide.pestIngredient, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                }
+                                Icon(Icons.Default.AddCircleOutline, null, tint = AgGreenPrimary)
+                            }
+                            HorizontalDivider(color = BgGray)
+                        }
                     }
                 }
 
@@ -520,7 +565,7 @@ private fun PesticideDropdownField(label: String, selectedValue: String, options
             value = selectedValue, onValueChange = {}, readOnly = true, label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-            modifier = Modifier.fillMaxWidth().menuAnchor()
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
             options.forEach { option ->

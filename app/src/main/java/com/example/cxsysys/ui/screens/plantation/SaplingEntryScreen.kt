@@ -23,44 +23,75 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.model.SaplingRequest
+import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.viewmodel.SaplingViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// 引入提取的公共组件
-import com.example.cxsysys.ui.components.TopScanCard
-import com.example.cxsysys.ui.components.DualModeIdentifierField
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SaplingEntryScreen(onBackClick: () -> Unit) {
+fun SaplingEntryScreen(
+    onBackClick: () -> Unit,
+    viewModel: SaplingViewModel = viewModel()
+) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
-    // --- 模拟数据 (V10) ---
-    val greenhouseOptions = listOf("A区-1号大棚", "A区-2号大棚", "B区-1号大棚 (连栋)")
-    val seedbedData = mapOf(
-        "A区-1号大棚" to listOf("SB-A1-001 (空闲)", "SB-A1-002 (空闲)", "SB-A1-005 (空闲)"),
-        "A区-2号大棚" to listOf("SB-A2-001 (空闲)"),
-        "B区-1号大棚 (连栋)" to listOf("SB-B1-010 (空闲)", "SB-B1-011 (空闲)")
-    )
-    val subspeciesOptions = listOf("0-野生沉香", "1-人工白木香", "2-人工奇楠沉香")
+    // 观察 ViewModel 状态
+    val greenhouseList by viewModel.greenhouseList.collectAsState()
+    val seedbedList by viewModel.seedbedList.collectAsState()
+    val subspeciesList by viewModel.subspeciesList.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMsg by viewModel.errorMsg.collectAsState()
+    val submitSuccess by viewModel.submitSuccess.collectAsState()
+
+    // 页面加载时获取初始数据
+    LaunchedEffect(Unit) {
+        viewModel.fetchInitialData()
+    }
+
+    // 错误和成功提示处理
+    LaunchedEffect(errorMsg) {
+        errorMsg?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearError()
+        }
+    }
+
+    LaunchedEffect(submitSuccess) {
+        if (submitSuccess) {
+            Toast.makeText(context, "幼苗信息已保存！", Toast.LENGTH_SHORT).show()
+            viewModel.clearSubmitSuccess()
+            onBackClick()
+        }
+    }
+
+    // 将接口返回的列表转换为字符串选项供 DropdownField 使用
+    val greenhouseOptions = greenhouseList.map { it.greenhouseCode }
+    val seedbedOptions = seedbedList.map { "${it.seedbedCode} (空闲)" }
+    val subspeciesOptions = subspeciesList.map { it.subspeciesName }
     val generationWayOptions = listOf("嫁接", "扦插", "圈枝", "组培", "其他")
 
     // --- 表单状态 ---
     var greenhouse_name by remember { mutableStateOf("") }
+    var greenhouse_id by remember { mutableStateOf<Int?>(null) }
     var seedbed_code by remember { mutableStateOf("") }
+    var seedbed_id by remember { mutableStateOf<Int?>(null) }
 
-    // 【恢复】：母树只有二维码字段
     var mother_tree_qr by remember { mutableStateOf("") }
 
     var generation by remember { mutableStateOf("") }
     var subspecies by remember { mutableStateOf("") }
+    var subspecies_id by remember { mutableStateOf<Int?>(null) }
     var generation_way by remember { mutableStateOf("") }
 
     // 日期处理
@@ -76,21 +107,21 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
     val saplingDatePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
     val entryDatePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
 
-    // 【恢复】：扫描状态
     var isScanning by remember { mutableStateOf(false) }
+    var showScanner by remember { mutableStateOf(false) }
 
-    val currentSeedbedOptions = seedbedData[greenhouse_name] ?: emptyList()
-
-    // 【恢复】：模拟母树扫码功能
-    fun simulateMotherTreeScan() {
-        scope.launch {
-            isScanning = true
-            Toast.makeText(context, "正在识别母树二维码...", Toast.LENGTH_SHORT).show()
-            delay(1500)
-            isScanning = false
-            mother_tree_qr = "MT-GEN-2023001"
-            Toast.makeText(context, "扫码成功：已关联母树", Toast.LENGTH_SHORT).show()
-        }
+    if (showScanner) {
+        com.example.cxsysys.ui.components.ScannerScreen(
+            onScanResult = { result ->
+                showScanner = false
+                mother_tree_qr = result
+                Toast.makeText(context, "扫码成功：已关联母树", Toast.LENGTH_SHORT).show()
+            },
+            onCancel = {
+                showScanner = false
+            }
+        )
+        return // 全屏显示扫码界面
     }
 
     // --- 日期选择器逻辑 ---
@@ -142,20 +173,34 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        if (seedbed_code.isNotEmpty() && initial_quantity.isNotEmpty()) {
-                            Toast.makeText(context, "幼苗信息已保存！\n关联苗床: $seedbed_code", Toast.LENGTH_SHORT).show()
-                            onBackClick()
+                        if (seedbed_id != null && subspecies_id != null && initial_quantity.isNotEmpty() && generation.isNotEmpty() && generation_way.isNotEmpty()) {
+                            val request = SaplingRequest(
+                                seedbedId = seedbed_id!!,
+                                mothertreeQrcode = mother_tree_qr.ifEmpty { null },
+                                enterpriseSubspeciesId = subspecies_id!!,
+                                generation = generation,
+                                generationWay = generation_way,
+                                saplingDate = sapling_date,
+                                entryDate = entry_date,
+                                initialQuantity = initial_quantity.toInt()
+                            )
+                            viewModel.submitSapling(request)
                         } else {
-                            Toast.makeText(context, "请补全苗床和数量信息", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary),
+                    enabled = !isLoading
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存信息", fontSize = 16.sp)
+                    if (isLoading) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("保存信息", fontSize = 16.sp)
+                    }
                 }
             }
         }
@@ -169,12 +214,11 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 【恢复】：顶部扫码卡片
             TopScanCard(
                 isScanning = isScanning,
                 title = "点击扫描母树二维码(选填)",
                 subtitle = "快速关联繁育母树档案 ",
-                onScanClick = { simulateMotherTreeScan() }
+                onScanClick = { showScanner = true }
             )
 
             // 1. 位置信息卡片 (苗床关联)
@@ -189,9 +233,15 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
                         value = greenhouse_name,
                         placeholder = "请选择大棚",
                         options = greenhouseOptions,
-                        onValueChange = {
-                            greenhouse_name = it
-                            seedbed_code = ""
+                        onValueChange = { selectedName ->
+                            greenhouse_name = selectedName
+                            val selectedGh = greenhouseList.find { it.greenhouseCode == selectedName }
+                            if (selectedGh != null) {
+                                greenhouse_id = selectedGh.greenhouseId
+                                seedbed_code = ""
+                                seedbed_id = null
+                                viewModel.fetchSeedbedsByGreenhouse(selectedGh.greenhouseId)
+                            }
                         }
                     )
 
@@ -201,8 +251,14 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
                         label = "选择空闲苗床",
                         value = seedbed_code,
                         placeholder = if (greenhouse_name.isEmpty()) "请先选择大棚" else "请选择空闲苗床",
-                        options = currentSeedbedOptions,
-                        onValueChange = { seedbed_code = it },
+                        options = if (greenhouse_name.isNotEmpty() && seedbedOptions.isEmpty()) listOf("无空闲苗床") else seedbedOptions,
+                        onValueChange = { selectedNameWithStatus ->
+                            if (selectedNameWithStatus != "无空闲苗床") {
+                                seedbed_code = selectedNameWithStatus
+                                val code = selectedNameWithStatus.replace(" (空闲)", "")
+                                seedbed_id = seedbedList.find { it.seedbedCode == code }?.seedbedId
+                            }
+                        },
                         enabled = greenhouse_name.isNotEmpty()
                     )
                 }
@@ -216,17 +272,16 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
 
-                    // 【修改】：使用复用组件，但锁死为二维码模式，禁止切换
                     DualModeIdentifierField(
                         targetName = "母树",
                         qrCodeValue = mother_tree_qr,
                         onQrCodeChange = { mother_tree_qr = it },
                         selfCodeValue = "",
                         onSelfCodeChange = { },
-                        isSelfCodeMode = false, // 永远为 false，保持扫码模式
-                        onModeChange = { },     // 不响应切换
-                        onScanClick = { simulateMotherTreeScan() },
-                        showModeToggle = false  // 【关键】：隐藏右上角的切换按钮
+                        isSelfCodeMode = false,
+                        onModeChange = { },
+                        onScanClick = { showScanner = true },
+                        showModeToggle = false
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -236,7 +291,10 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
                         value = subspecies,
                         placeholder = "请选择品种",
                         options = subspeciesOptions,
-                        onValueChange = { subspecies = it }
+                        onValueChange = { selectedName ->
+                            subspecies = selectedName
+                            subspecies_id = subspeciesList.find { it.subspeciesName == selectedName }?.enterpriseSubspeciesId
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -321,6 +379,7 @@ fun SaplingEntryScreen(onBackClick: () -> Unit) {
     }
 }
 
+
 // === 内部组件 ===
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -349,7 +408,7 @@ private fun SaplingDropdownField(
             singleLine = true,
             enabled = enabled,
             textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-            modifier = Modifier.fillMaxWidth().menuAnchor(),
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = AgGreenPrimary,

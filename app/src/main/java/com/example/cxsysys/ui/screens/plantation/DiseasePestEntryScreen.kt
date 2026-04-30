@@ -1,6 +1,9 @@
 package com.example.cxsysys.ui.screens.plantation
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -10,8 +13,9 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,28 +28,38 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.viewmodel.DiseaseViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// 引入公共组件
-import com.example.cxsysys.ui.components.DualModeIdentifierField
-import com.example.cxsysys.ui.components.TopScanCard
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
+fun DiseasePestEntryScreen(
+    onBackClick: () -> Unit,
+    viewModel: DiseaseViewModel = viewModel()
+) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+
+    // --- ViewModel 状态 ---
+    val isLoading by viewModel.isLoading.collectAsState()
+    val submitSuccess by viewModel.submitSuccess.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     // --- 表单状态 ---
     // 0: 按苗木个别录入 (默认), 1: 按地块批量录入
@@ -54,7 +68,7 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
     // 将自编码模式状态上提至父页面
     var isSelfCodeMode by remember { mutableStateOf(false) }
 
-    // 【修改】：苗木只有二维码状态
+    // 苗木只有二维码状态
     var plant_qr_code by remember { mutableStateOf("") }
 
     // 地块保持双模式
@@ -70,27 +84,51 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     var record_date by remember { mutableStateOf(dateFormat.format(Date())) }
 
+    // 图片选择状态
+    val selectedImageUris = remember { mutableStateListOf<Uri>() }
+    val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents(),
+        onResult = { uris ->
+            selectedImageUris.addAll(uris)
+        }
+    )
+
     // UI 状态
     var isScanning by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
 
-    // 模拟扫码
-    fun simulateScan() {
-        scope.launch {
-            isScanning = true
-            val msg = if (inputMode == 0) "正在识别苗木二维码..." else "正在识别地块二维码..."
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            delay(1500)
-            isScanning = false
-            // 扫码成功后，赋值给对应的 qr_code 变量
-            if (inputMode == 0) {
-                plant_qr_code = "TREE-2023-PEST-001"
-            } else {
-                field_qr_code = "FIELD-PEST-002"
-            }
-            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+    // 监听提交结果
+    LaunchedEffect(submitSuccess, errorMessage) {
+        if (submitSuccess == true) {
+            Toast.makeText(context, "保存成功", Toast.LENGTH_SHORT).show()
+            viewModel.resetState()
+            onBackClick()
+        } else if (submitSuccess == false && errorMessage != null) {
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            viewModel.resetState()
         }
+    }
+
+    // 真实扫码状态
+    var showScanner by remember { mutableStateOf(false) }
+
+    if (showScanner) {
+        com.example.cxsysys.ui.components.ScannerScreen(
+            onScanResult = { result ->
+                showScanner = false
+                if (inputMode == 0) {
+                    plant_qr_code = result
+                } else {
+                    field_qr_code = result
+                }
+                Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+            },
+            onCancel = {
+                showScanner = false
+            }
+        )
+        return // 全屏显示扫码界面
     }
 
     if (showDatePicker) {
@@ -124,7 +162,6 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 【修改】校验逻辑更新：苗木只看二维码，地块看双码
                         val isValid = if (inputMode == 0) {
                             plant_qr_code.isNotEmpty()
                         } else {
@@ -134,20 +171,39 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         if (!isValid) {
                             val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请填写或扫码地块编码"
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        } else {
-                            val target = if (inputMode == 0) "苗木二维码: $plant_qr_code"
-                            else "地块二维码: $field_qr_code\n地块自编码: $field_self_code"
-                            val pestInfo = if (selectedPests.isNotEmpty()) "虫害: ${selectedPests.joinToString(",")}" else "未选虫害"
-                            Toast.makeText(context, "保存成功！\n$target\n$pestInfo", Toast.LENGTH_LONG).show()
+                            return@Button
                         }
+
+                        if (selectedPests.isEmpty()) {
+                            Toast.makeText(context, "请至少选择一种病虫害类型", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        viewModel.submitDisease(
+                            context = context,
+                            plantQrcode = if (inputMode == 0) plant_qr_code else null,
+                            fieldQrcode = if (inputMode == 1) field_qr_code else null,
+                            fieldCode = if (inputMode == 1) field_self_code else null,
+                            recordDate = record_date,
+                            diseaseType = selectedPests.joinToString(","),
+                            diseaseDescription = description,
+                            imageUris = selectedImageUris
+                        )
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary),
+                    enabled = !isLoading
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存信息", fontSize = 16.sp)
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("提交中...", fontSize = 16.sp)
+                    } else {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("保存信息", fontSize = 16.sp)
+                    }
                 }
             }
         }
@@ -201,8 +257,7 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                 }
             }
 
-            // 2. 顶部扫码大图区 (加入平滑的收起动画)
-            // 【修改】：苗木模式下卡片常驻，地块模式下根据 isSelfCodeMode 显隐
+            // 2. 顶部扫码大图区
             AnimatedVisibility(
                 visible = if (inputMode == 0) true else !isSelfCodeMode,
                 enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
@@ -212,13 +267,12 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                     isScanning = isScanning,
                     title = if (inputMode == 0) "点击扫描苗木二维码" else "点击扫描地块二维码",
                     subtitle = if (inputMode == 0) "关联苗木ID" else "关联地块编码",
-                    onScanClick = { simulateScan() }
+                    onScanClick = { showScanner = true }
                 )
             }
 
             // 3. 根据模式动态显示内容
             if (inputMode == 0) {
-                // --- 模式A: 按苗木个别录入 ---
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(12.dp)
@@ -227,22 +281,20 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         Text("关联苗木", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AgGreenPrimary)
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // 【修改】：苗木锁死为二维码模式
                         DualModeIdentifierField(
                             targetName = "苗木",
                             qrCodeValue = plant_qr_code,
                             selfCodeValue = "",
                             onQrCodeChange = { plant_qr_code = it },
                             onSelfCodeChange = { },
-                            isSelfCodeMode = false, // 永远为 false，保持扫码模式
-                            onModeChange = { },     // 不响应切换
-                            onScanClick = { simulateScan() },
-                            showModeToggle = false  // 隐藏右上角的切换按钮
+                            isSelfCodeMode = false,
+                            onModeChange = { },
+                            onScanClick = { showScanner = true },
+                            showModeToggle = false
                         )
                     }
                 }
             } else {
-                // --- 模式B: 按地块批量录入 ---
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(12.dp)
@@ -251,7 +303,6 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                         Text("关联地块", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = AgGreenPrimary)
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // 地块保持双模式可切换
                         DualModeIdentifierField(
                             targetName = "定植地块",
                             qrCodeValue = field_qr_code,
@@ -260,7 +311,7 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                             onSelfCodeChange = { field_self_code = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { simulateScan() }
+                            onScanClick = { showScanner = true }
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -286,7 +337,7 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                     OutlinedTextField(
                         value = record_date,
                         onValueChange = { record_date = it },
-                        readOnly = true, // 防止点开弹出键盘
+                        readOnly = true,
                         label = { Text("记录日期") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
@@ -340,9 +391,35 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
                     // photo_url
                     Text("病虫害照片 (支持多张)", fontWeight = FontWeight.Medium, color = Color.Gray)
                     Spacer(modifier = Modifier.height(8.dp))
-                    DiseasePhotoUploadBox(onClick = {
-                        Toast.makeText(context, "图片上传功能开发中", Toast.LENGTH_SHORT).show()
-                    })
+                    
+                    if (selectedImageUris.isNotEmpty()) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(selectedImageUris) { uri ->
+                                Box(modifier = Modifier.size(100.dp)) {
+                                    AsyncImage(
+                                        model = uri,
+                                        contentDescription = "Selected Image",
+                                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    IconButton(
+                                        onClick = { selectedImageUris.remove(uri) },
+                                        modifier = Modifier.align(Alignment.TopEnd).size(24.dp)
+                                    ) {
+                                        Icon(Icons.Default.Close, "Remove", tint = Color.Red)
+                                    }
+                                }
+                            }
+                            item {
+                                DiseasePhotoUploadBox(onClick = { multiplePhotoPickerLauncher.launch("image/*") })
+                            }
+                        }
+                    } else {
+                        DiseasePhotoUploadBox(onClick = { multiplePhotoPickerLauncher.launch("image/*") })
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(60.dp))
@@ -355,14 +432,14 @@ fun DiseasePestEntryScreen(onBackClick: () -> Unit) {
 @Composable
 private fun DiseasePhotoUploadBox(onClick: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(8.dp))
+        modifier = Modifier.size(100.dp).clip(RoundedCornerShape(8.dp))
             .background(Color(0xFFF5F5F5)).border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.AddAPhoto, null, tint = Color.Gray)
-            Text("点击上传照片", color = Color.Gray, fontSize = 12.sp)
+            Text("添加照片", color = Color.Gray, fontSize = 12.sp)
         }
     }
 }

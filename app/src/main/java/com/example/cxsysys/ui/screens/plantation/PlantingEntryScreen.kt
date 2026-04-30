@@ -28,24 +28,56 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.model.PlantingRequest
+import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.viewmodel.PlantingViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// 引入提取的公共组件
-import com.example.cxsysys.ui.components.TopScanCard
-import com.example.cxsysys.ui.components.DualModeIdentifierField
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlantingEntryScreen(onBackClick: () -> Unit) {
+fun PlantingEntryScreen(
+    onBackClick: () -> Unit,
+    viewModel: PlantingViewModel = viewModel()
+) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+
+    val subspeciesList by viewModel.subspeciesList.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMsg by viewModel.errorMsg.collectAsState()
+    val submitSuccess by viewModel.submitSuccess.collectAsState()
+    
+    // 页面加载时获取初始数据
+    LaunchedEffect(Unit) {
+        viewModel.fetchInitialData()
+    }
+
+    LaunchedEffect(errorMsg) {
+        errorMsg?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearError()
+        }
+    }
+
+    var showPrintConfirmDialog by remember { mutableStateOf(false) }
+    
+    // 提交成功后不直接退出，而是弹出打印提示
+    LaunchedEffect(submitSuccess) {
+        if (submitSuccess) {
+            Toast.makeText(context, "苗木定植信息保存成功！", Toast.LENGTH_SHORT).show()
+            viewModel.clearSubmitSuccess()
+            showPrintConfirmDialog = true
+        }
+    }
 
     // 【新增】：将自编码模式状态上提至父页面
     var isSelfCodeMode by remember { mutableStateOf(false) }
@@ -58,9 +90,10 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
     // 【修改】：母树改为二维码状态
     var motherTreeQrCode by remember { mutableStateOf("") }
 
-    // 沉香品种 (V10: subspecies_id 沉香品种细分id: 0-野生沉香，1-人工白木香，2-人工奇楠沉香)
-    var subspeciesIdLabel by remember { mutableStateOf("2-人工奇楠沉香") }
-    val subspeciesOptions = listOf("0-野生沉香", "1-人工白木香", "2-人工奇楠沉香")
+    // 沉香品种
+    var subspeciesIdLabel by remember { mutableStateOf("") }
+    var subspeciesId by remember { mutableStateOf<Int?>(null) }
+    val subspeciesOptions = subspeciesList.map { it.subspeciesName }
 
     var generation by remember { mutableStateOf("1") }    // 苗木代数
 
@@ -83,29 +116,29 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
     // UI 状态
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
-    var isScanning by remember { mutableStateOf(false) }
-    var showPrintConfirmDialog by remember { mutableStateOf(false) }
+    var showScanner by remember { mutableStateOf(false) }
+    
+    // 用于区分当前是在扫地块还是扫母树
+    var scanTarget by remember { mutableStateOf("field") } // "field" 或 "motherTree"
 
-    // 模拟地块扫码
-    fun simulateScan() {
-        scope.launch {
-            isScanning = true
-            Toast.makeText(context, "正在识别地块二维码...", Toast.LENGTH_SHORT).show()
-            delay(1500)
-            isScanning = false
-            fieldQrCode = "FIELD-A-03" // 扫码成功填入二维码字段
-            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // 【新增】：模拟母树专属扫码逻辑
-    fun simulateMotherTreeScan() {
-        scope.launch {
-            Toast.makeText(context, "正在识别母树二维码...", Toast.LENGTH_SHORT).show()
-            delay(1500)
-            motherTreeQrCode = "MT-QR-2023001"
-            Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
-        }
+    // 真实扫码界面
+    if (showScanner) {
+        com.example.cxsysys.ui.components.ScannerScreen(
+            onScanResult = { result ->
+                showScanner = false
+                if (scanTarget == "field") {
+                    fieldQrCode = result
+                    Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+                } else if (scanTarget == "motherTree") {
+                    motherTreeQrCode = result
+                    Toast.makeText(context, "扫码成功", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onCancel = {
+                showScanner = false
+            }
+        )
+        return
     }
 
     if (showDatePicker) {
@@ -127,7 +160,10 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
 
     if (showPrintConfirmDialog) {
         AlertDialog(
-            onDismissRequest = { showPrintConfirmDialog = false },
+            onDismissRequest = { 
+                showPrintConfirmDialog = false
+                onBackClick() // 取消打印也退出页面
+            },
             title = { Text("打印提示") },
             text = { Text("是否打印本次录入的 $plantCount 株苗木标签？") },
             confirmButton = {
@@ -145,11 +181,15 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                             generationWay = generationWay,
                             motherTreeSelfCode = motherTreeQrCode // 传入更新后的变量
                         )
+                        onBackClick() // 打印后退出页面
                     }
                 ) { Text("确定", color = AgGreenPrimary) }
             },
             dismissButton = {
-                TextButton(onClick = { showPrintConfirmDialog = false }) {
+                TextButton(onClick = { 
+                    showPrintConfirmDialog = false
+                    onBackClick()
+                }) {
                     Text("暂不打印", color = Color.Gray)
                 }
             }
@@ -173,23 +213,42 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                         // 校验：二维码或自编码必填其一
                         if (fieldQrCode.isEmpty() && fieldSelfCode.isEmpty()) {
                             Toast.makeText(context, "请扫码或输入地块编码", Toast.LENGTH_SHORT).show()
-                        } else if (plantCount.isEmpty()) {
-                            Toast.makeText(context, "请输入定植数量", Toast.LENGTH_SHORT).show()
+                        } else if (subspeciesId == null) {
+                            Toast.makeText(context, "请选择品种细分", Toast.LENGTH_SHORT).show()
+                        } else if (plantCount.isEmpty() || caveDepth.isEmpty() || caveWidth.isEmpty() || plantSpacing.isEmpty()) {
+                            Toast.makeText(context, "请补全种植规格信息", Toast.LENGTH_SHORT).show()
                         } else if ((plantCount.toIntOrNull() ?: 0) > 999) {
                             Toast.makeText(context, "定植株数超过上限(999)", Toast.LENGTH_SHORT).show()
                         } else {
                             entryDateTime = dateTimeFormat.format(Date())
-                            Toast.makeText(context, "苗木定植信息保存成功！", Toast.LENGTH_SHORT).show()
-                            showPrintConfirmDialog = true
+                            val request = PlantingRequest(
+                                fieldQrcode = fieldQrCode.ifEmpty { null },
+                                fieldCode = fieldSelfCode.ifEmpty { null },
+                                mothertreeQrcode = motherTreeQrCode.ifEmpty { null },
+                                enterpriseSubspeciesId = subspeciesId!!,
+                                generationWay = generationWay,
+                                generation = generation,
+                                saplingDate = plantingDate,
+                                holeDepth = caveDepth.toDoubleOrNull() ?: 0.0,
+                                holeWidth = caveWidth.toDoubleOrNull() ?: 0.0,
+                                plantSpacing = plantSpacing.toDoubleOrNull() ?: 0.0,
+                                quantity = plantCount.toIntOrNull() ?: 0
+                            )
+                            viewModel.submitPlanting(request)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary),
+                    enabled = !isLoading
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存信息", fontSize = 16.sp)
+                    if (isLoading) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("保存信息", fontSize = 16.sp)
+                    }
                 }
             }
         }
@@ -210,10 +269,13 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                 exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
             ) {
                 TopScanCard(
-                    isScanning = isScanning,
+                    isScanning = false,
                     title = "点击扫描地块二维码",
                     subtitle = "直接关联地块信息",
-                    onScanClick = { simulateScan() }
+                    onScanClick = {
+                        scanTarget = "field"
+                        showScanner = true
+                    }
                 )
             }
 
@@ -234,7 +296,10 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                         onSelfCodeChange = { fieldSelfCode = it },
                         isSelfCodeMode = isSelfCodeMode,
                         onModeChange = { isSelfCodeMode = it },
-                        onScanClick = { simulateScan() }
+                        onScanClick = {
+                            scanTarget = "field"
+                            showScanner = true
+                        }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -248,7 +313,10 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         trailingIcon = {
-                            IconButton(onClick = { simulateMotherTreeScan() }) {
+                            IconButton(onClick = {
+                                scanTarget = "motherTree"
+                                showScanner = true
+                            }) {
                                 Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan", tint = AgGreenPrimary)
                             }
                         },
@@ -265,7 +333,10 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                         label = "品种细分",
                         selectedValue = subspeciesIdLabel,
                         options = subspeciesOptions,
-                        onValueChange = { subspeciesIdLabel = it }
+                        onValueChange = { selectedLabel -> 
+                            subspeciesIdLabel = selectedLabel
+                            subspeciesId = subspeciesList.find { it.subspeciesName == selectedLabel }?.enterpriseSubspeciesId
+                        }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -317,7 +388,7 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                         // 穴深
                         OutlinedTextField(
                             value = caveDepth,
-                            onValueChange = { if (it.all { c -> c.isDigit() }) caveDepth = it },
+                            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) caveDepth = it },
                             label = { Text("穴深") },
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -327,7 +398,7 @@ fun PlantingEntryScreen(onBackClick: () -> Unit) {
                         // 穴宽
                         OutlinedTextField(
                             value = caveWidth,
-                            onValueChange = { if (it.all { c -> c.isDigit() }) caveWidth = it },
+                            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) caveWidth = it },
                             label = { Text("穴宽") },
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -385,7 +456,7 @@ private fun PlantingSelectDropdown(label: String, selectedValue: String, options
             value = selectedValue, onValueChange = {}, readOnly = true, label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-            modifier = Modifier.fillMaxWidth().menuAnchor()
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
             options.forEach { option ->
