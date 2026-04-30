@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -12,6 +13,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,7 +22,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.cxsysys.utils.QrCodeAnalyzer
+import com.example.cxsysys.utils.ScanFrameArea
 import java.util.concurrent.Executors
 
 /**
@@ -44,6 +57,9 @@ fun ScannerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val density = LocalDensity.current
+    var scanFrameArea by remember { mutableStateOf<ScanFrameArea?>(null) }
+    val currentScanFrameArea by rememberUpdatedState(scanFrameArea)
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -66,6 +82,10 @@ fun ScannerScreen(
         }
     }
 
+    BackHandler {
+        onCancel()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -83,6 +103,13 @@ fun ScannerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .onSizeChanged { size ->
+                    scanFrameArea = calculateScanFrameArea(
+                        width = size.width,
+                        height = size.height,
+                        density = density.density
+                    )
+                }
                 .background(Color.Black),
             contentAlignment = Alignment.Center
         ) {
@@ -115,21 +142,24 @@ fun ScannerScreen(
                                 .also {
                                     it.setAnalyzer(
                                         Executors.newSingleThreadExecutor(),
-                                        QrCodeAnalyzer { result ->
-                                            if (!isScanned) {
-                                                isScanned = true
-                                                // 过滤结果：只保留字母、数字和连字符 "-"
-                                                val filteredResult = result.replace(Regex("[^a-zA-Z0-9\\-]"), "")
-                                                if (filteredResult.isNotEmpty()) {
-                                                    // 切回主线程回调
-                                                    previewView.post {
-                                                        onScanResult(filteredResult)
+                                        QrCodeAnalyzer(
+                                            scanFrameAreaProvider = { currentScanFrameArea },
+                                            onQrCodeScanned = { result ->
+                                                if (!isScanned) {
+                                                    isScanned = true
+                                                    // 过滤结果：只保留字母、数字和连字符 "-"
+                                                    val filteredResult = result.replace(Regex("[^a-zA-Z0-9\\-]"), "")
+                                                    if (filteredResult.isNotEmpty()) {
+                                                        // 切回主线程回调
+                                                        previewView.post {
+                                                            onScanResult(filteredResult)
+                                                        }
+                                                    } else {
+                                                        isScanned = false // 如果过滤后为空，继续扫
                                                     }
-                                                } else {
-                                                    isScanned = false // 如果过滤后为空，继续扫
                                                 }
                                             }
-                                        }
+                                        )
                                     )
                                 }
 
@@ -150,16 +180,10 @@ fun ScannerScreen(
 
                 // 扫码框 UI (简单的中间挖空效果)
                 Box(
-                    modifier = Modifier
-                        .size(250.dp)
-                        .background(Color.Transparent)
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     // 可以在这里画四个角，目前为了简洁只留边框提示
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Transparent)
-                    )
+                    ScannerFrameOverlay(modifier = Modifier.fillMaxSize())
                 }
                 
                 Text(
@@ -189,3 +213,90 @@ fun ScannerScreen(
         }
     }
 }
+
+@Composable
+private fun ScannerFrameOverlay(
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val frameSize = calculateScanFrameSize(size.width, 280.dp.toPx())
+        val frameLeft = calculateScanFrameLeft(size.width, frameSize)
+        val frameTop = calculateScanFrameTop(size.height, frameSize, 24.dp.toPx())
+        val frameRect = Rect(
+            left = frameLeft,
+            top = frameTop,
+            right = frameLeft + frameSize,
+            bottom = frameTop + frameSize
+        )
+        val cornerRadius = 18.dp.toPx()
+        val overlayPath = Path().apply {
+            fillType = PathFillType.EvenOdd
+            addRect(Rect(0f, 0f, size.width, size.height))
+            addRoundRect(
+                androidx.compose.ui.geometry.RoundRect(
+                    rect = frameRect,
+                    cornerRadius = CornerRadius(cornerRadius, cornerRadius)
+                )
+            )
+        }
+
+        drawPath(overlayPath, color = Color.Black.copy(alpha = 0.52f))
+
+        drawRoundRect(
+            color = Color.White.copy(alpha = 0.35f),
+            topLeft = Offset(frameRect.left, frameRect.top),
+            size = Size(frameSize, frameSize),
+            cornerRadius = CornerRadius(cornerRadius, cornerRadius),
+            style = Stroke(width = 1.dp.toPx())
+        )
+
+        val cornerLength = 46.dp.toPx()
+        val cornerStrokeWidth = 5.dp.toPx()
+        val cornerColor = Color(0xFF6EE7B7)
+        val inset = 2.dp.toPx()
+
+        drawLine(cornerColor, Offset(frameRect.left + inset, frameRect.top), Offset(frameRect.left + cornerLength, frameRect.top), strokeWidth = cornerStrokeWidth, cap = StrokeCap.Round)
+        drawLine(cornerColor, Offset(frameRect.left, frameRect.top + inset), Offset(frameRect.left, frameRect.top + cornerLength), strokeWidth = cornerStrokeWidth, cap = StrokeCap.Round)
+        drawLine(cornerColor, Offset(frameRect.right - cornerLength, frameRect.top), Offset(frameRect.right - inset, frameRect.top), strokeWidth = cornerStrokeWidth, cap = StrokeCap.Round)
+        drawLine(cornerColor, Offset(frameRect.right, frameRect.top + inset), Offset(frameRect.right, frameRect.top + cornerLength), strokeWidth = cornerStrokeWidth, cap = StrokeCap.Round)
+        drawLine(cornerColor, Offset(frameRect.left + inset, frameRect.bottom), Offset(frameRect.left + cornerLength, frameRect.bottom), strokeWidth = cornerStrokeWidth, cap = StrokeCap.Round)
+        drawLine(cornerColor, Offset(frameRect.left, frameRect.bottom - cornerLength), Offset(frameRect.left, frameRect.bottom - inset), strokeWidth = cornerStrokeWidth, cap = StrokeCap.Round)
+        drawLine(cornerColor, Offset(frameRect.right - cornerLength, frameRect.bottom), Offset(frameRect.right - inset, frameRect.bottom), strokeWidth = cornerStrokeWidth, cap = StrokeCap.Round)
+        drawLine(cornerColor, Offset(frameRect.right, frameRect.bottom - cornerLength), Offset(frameRect.right, frameRect.bottom - inset), strokeWidth = cornerStrokeWidth, cap = StrokeCap.Round)
+    }
+}
+
+private fun calculateScanFrameArea(
+    width: Int,
+    height: Int,
+    density: Float
+): ScanFrameArea? {
+    if (width <= 0 || height <= 0) return null
+
+    val frameSize = calculateScanFrameSize(width.toFloat(), 280f * density)
+    val frameLeft = calculateScanFrameLeft(width.toFloat(), frameSize)
+    val frameTop = calculateScanFrameTop(height.toFloat(), frameSize, 24f * density)
+
+    return ScanFrameArea(
+        leftRatio = frameLeft / width,
+        topRatio = frameTop / height,
+        widthRatio = frameSize / width,
+        heightRatio = frameSize / height
+    )
+}
+
+private fun calculateScanFrameSize(
+    width: Float,
+    maxFrameSize: Float
+): Float = minOf(width * 0.72f, maxFrameSize)
+
+private fun calculateScanFrameLeft(
+    width: Float,
+    frameSize: Float
+): Float = (width - frameSize) / 2f
+
+private fun calculateScanFrameTop(
+    height: Float,
+    frameSize: Float,
+    topOffset: Float
+): Float = (height - frameSize) / 2f - topOffset
