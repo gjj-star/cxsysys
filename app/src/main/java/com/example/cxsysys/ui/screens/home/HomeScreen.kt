@@ -33,8 +33,8 @@ import com.example.cxsysys.viewmodel.HomeViewModel
 private const val PRINTER_ACTIVITY_CLASS = "com.example.printerfeature.MainActivity"
 private const val EXTRA_TARGET_TEMPLATE = "target_template"
 private const val TEMP_MM = "苗木二维码"
-private const val TEMP_CJG = "加工二维码"
-private const val TEMP_CP = "产成品二维码"
+//private const val TEMP_CJG = "加工二维码"
+//private const val TEMP_CP = "产成品二维码"
 private const val TEMP_DP = "大棚二维码"
 private const val TEMP_MC = "苗床二维码"
 private const val TEMP_DK = "地块二维码"
@@ -302,33 +302,34 @@ fun HomeScreen(
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    MenuOptionCard(
-                        title = "加工二维码",
-                        subtitle = "为加工过程打印溯源码",
-                        icon = Icons.Default.Build,
-                        backgroundColor = Color(0xFFFFF3E0),
-                        contentColor = Color(0xFFEF6C00),
-                        onClick = {
-                            showQrDialog = false
-                            launchPrinterFeature(context, TEMP_CJG)
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    MenuOptionCard(
-                        title = "产成品二维码",
-                        subtitle = "为产成品打印最终溯源码",
-                        icon = Icons.Default.Inventory2,
-                        backgroundColor = Color(0xFFE0F7FA),
-                        contentColor = Color(0xFF00838F),
-                        onClick = {
-                            showQrDialog = false
-                            launchPrinterFeature(context, TEMP_CP)
-                        }
-                    )
+                    //2026.5.1 删除“加工二维码”和“产成品二维码”
+//                    Spacer(modifier = Modifier.height(12.dp))
+//
+//                    MenuOptionCard(
+//                        title = "加工二维码",
+//                        subtitle = "为加工过程打印溯源码",
+//                        icon = Icons.Default.Build,
+//                        backgroundColor = Color(0xFFFFF3E0),
+//                        contentColor = Color(0xFFEF6C00),
+//                        onClick = {
+//                            showQrDialog = false
+//                            launchPrinterFeature(context, TEMP_CJG)
+//                        }
+//                    )
+//
+//                    Spacer(modifier = Modifier.height(12.dp))
+//
+//                    MenuOptionCard(
+//                        title = "产成品二维码",
+//                        subtitle = "为产成品打印最终溯源码",
+//                        icon = Icons.Default.Inventory2,
+//                        backgroundColor = Color(0xFFE0F7FA),
+//                        contentColor = Color(0xFF00838F),
+//                        onClick = {
+//                            showQrDialog = false
+//                            launchPrinterFeature(context, TEMP_CP)
+//                        }
+//                    )
 
                     Spacer(modifier = Modifier.height(24.dp))
 
