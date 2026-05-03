@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.cxsysys.ui.components.PhotoSourcePickerDialog
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
 import com.example.cxsysys.viewmodel.GrowthViewModel
@@ -48,6 +49,7 @@ import java.util.Locale
 // 引入公共组件
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.rememberCameraPhotoLauncher
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,6 +103,10 @@ fun GrowthEntryScreen(
             selectedImageUris.addAll(uris)
         }
     )
+    var showPhotoSourcePicker by remember { mutableStateOf(false) }
+    val cameraPhotoLauncher = rememberCameraPhotoLauncher { uri ->
+        selectedImageUris.add(uri)
+    }
 
     // UI 状态
     var showDatePicker by remember { mutableStateOf(false) }
@@ -150,6 +156,13 @@ fun GrowthEntryScreen(
             dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("取消", color = Color.Gray) } }
         ) { DatePicker(state = datePickerState, showModeToggle = false) }
     }
+
+    PhotoSourcePickerDialog(
+        visible = showPhotoSourcePicker,
+        onDismiss = { showPhotoSourcePicker = false },
+        onTakePhoto = { cameraPhotoLauncher() },
+        onPickImages = { multiplePhotoPickerLauncher.launch("image/*") }
+    )
 
     Scaffold(
         topBar = {
@@ -358,11 +371,11 @@ fun GrowthEntryScreen(
                                 }
                             }
                             item {
-                                GrowthPhotoUploadBox(onClick = { multiplePhotoPickerLauncher.launch("image/*") })
+                                GrowthPhotoUploadBox(onClick = { showPhotoSourcePicker = true })
                             }
                         }
                     } else {
-                        GrowthPhotoUploadBox(onClick = { multiplePhotoPickerLauncher.launch("image/*") })
+                        GrowthPhotoUploadBox(onClick = { showPhotoSourcePicker = true })
                     }
                     
                     Spacer(modifier = Modifier.height(16.dp))

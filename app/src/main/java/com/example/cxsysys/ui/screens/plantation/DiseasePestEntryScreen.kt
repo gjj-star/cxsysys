@@ -36,7 +36,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.PhotoSourcePickerDialog
 import com.example.cxsysys.ui.components.TopScanCard
+import com.example.cxsysys.ui.components.rememberCameraPhotoLauncher
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
 import com.example.cxsysys.viewmodel.DiseaseViewModel
@@ -92,6 +94,10 @@ fun DiseasePestEntryScreen(
             selectedImageUris.addAll(uris)
         }
     )
+    var showPhotoSourcePicker by remember { mutableStateOf(false) }
+    val cameraPhotoLauncher = rememberCameraPhotoLauncher { uri ->
+        selectedImageUris.add(uri)
+    }
 
     // UI 状态
     var isScanning by remember { mutableStateOf(false) }
@@ -147,6 +153,13 @@ fun DiseasePestEntryScreen(
             }
         ) { DatePicker(state = datePickerState, showModeToggle = false) }
     }
+
+    PhotoSourcePickerDialog(
+        visible = showPhotoSourcePicker,
+        onDismiss = { showPhotoSourcePicker = false },
+        onTakePhoto = { cameraPhotoLauncher() },
+        onPickImages = { multiplePhotoPickerLauncher.launch("image/*") }
+    )
 
     Scaffold(
         topBar = {
@@ -414,11 +427,11 @@ fun DiseasePestEntryScreen(
                                 }
                             }
                             item {
-                                DiseasePhotoUploadBox(onClick = { multiplePhotoPickerLauncher.launch("image/*") })
+                                DiseasePhotoUploadBox(onClick = { showPhotoSourcePicker = true })
                             }
                         }
                     } else {
-                        DiseasePhotoUploadBox(onClick = { multiplePhotoPickerLauncher.launch("image/*") })
+                        DiseasePhotoUploadBox(onClick = { showPhotoSourcePicker = true })
                     }
                 }
             }
