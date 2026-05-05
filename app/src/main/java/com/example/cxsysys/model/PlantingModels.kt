@@ -24,7 +24,105 @@ data class BaseResponse<T>(
     val hasMore: Boolean? = null
 )
 
-// 大棚数据模型
+// ========== 苗木管理模型 ==========
+
+data class Plant(
+    @SerializedName("plant_id") val plantId: String,
+    @SerializedName("plant_qrcode") val plantQrcode: String,
+    @SerializedName("subspecies_name") val subspeciesName: String,
+    @SerializedName("plant_height") val plantHeight: String?,
+    @SerializedName("field_code") val fieldCode: String,
+    val status: String
+)
+
+data class PlantDetail(
+    @SerializedName("subspecies_name") val subspeciesName: String,
+    @SerializedName("plant_qrcode") val plantQrcode: String,
+    @SerializedName("tree_age") val treeAge: String,
+    @SerializedName("field_code") val fieldCode: String,
+    val status: String
+)
+
+data class FarmingRecord(
+    val fert: FertRecord?,
+    val disease: DiseaseRecordItem?,
+    val pest: PestRecord?,
+    val irri: IrriRecord?,
+    val prun: PrunRecord?,
+    val plant: PlantRecord?
+)
+
+data class FertRecord(
+    val hasRecord: Boolean,
+    val name: String?,
+    val date: String?,
+    val dosage: String?,
+    val method: String?
+)
+
+data class DiseaseRecordItem(
+    val hasRecord: Boolean,
+    val date: String?,
+    val type: String?,
+    val description: String?
+)
+
+data class PestRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    val name: String?,
+    val method: String?
+)
+
+data class IrriRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    val period: String?,
+    val method: String?
+)
+
+data class PrunRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    val type: String?
+)
+
+data class PlantRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    val depth: String?,
+    @SerializedName("field_code") val fieldCode: String?
+)
+
+data class GrowthRecordItem(
+    @SerializedName("record_id") val recordId: Int,
+    @SerializedName("record_date") val recordDate: String,
+    @SerializedName("tree_height") val treeHeight: Double,
+    @SerializedName("ground_diameter") val groundDiameter: Double
+)
+
+data class PunchHarvestRecord(
+    val punch: PunchRecordItem,
+    val harvest: HarvestRecordItem
+)
+
+data class PunchRecordItem(
+    val hasRecord: Boolean,
+    @SerializedName("？") val unknownField: String?
+)
+
+data class HarvestRecordItem(
+    val hasRecord: Boolean,
+    val date: String,
+    val weight: Double
+)
+
+data class PlantRecordSearchItem(
+    @SerializedName("plant_qrcode") val plantQrcode: String,
+    val description: String
+)
+
+// ========== 大棚数据模型 ==========
 data class Greenhouse(
     @SerializedName("greenhouse_id") val greenhouseId: Int,
     @SerializedName("greenhouse_code") val greenhouseCode: String

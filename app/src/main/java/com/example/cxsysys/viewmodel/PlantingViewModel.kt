@@ -2,8 +2,7 @@ package com.example.cxsysys.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.cxsysys.model.PlantingRequest
-import com.example.cxsysys.model.Subspecies
+import com.example.cxsysys.model.*
 import com.example.cxsysys.utils.RetrofitClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,8 +13,35 @@ class PlantingViewModel : ViewModel() {
 
     private val api = RetrofitClient.businessRetrofit.create(com.example.cxsysys.api.PlantingApiService::class.java)
 
+    // 苗木列表状态
+    private val _plantList = MutableStateFlow<List<Plant>>(emptyList())
+    val plantList: StateFlow<List<Plant>> = _plantList.asStateFlow()
+
+    // 苗木详情基础信息
+    private val _plantDetail = MutableStateFlow<PlantDetail?>(null)
+    val plantDetail: StateFlow<PlantDetail?> = _plantDetail.asStateFlow()
+
+    // 农事记录列表
+    private val _farmingList = MutableStateFlow<List<FarmingRecord>>(emptyList())
+    val farmingList: StateFlow<List<FarmingRecord>> = _farmingList.asStateFlow()
+
+    // 生长记录列表
+    private val _growthList = MutableStateFlow<List<GrowthRecordItem>>(emptyList())
+    val growthList: StateFlow<List<GrowthRecordItem>> = _growthList.asStateFlow()
+
+    // 结香采收记录列表
+    private val _punchList = MutableStateFlow<List<PunchHarvestRecord>>(emptyList())
+    val punchList: StateFlow<List<PunchHarvestRecord>> = _punchList.asStateFlow()
+
+    // 阶段记录搜索列表
+    private val _stageRecordList = MutableStateFlow<List<PlantRecordSearchItem>>(emptyList())
+    val stageRecordList: StateFlow<List<PlantRecordSearchItem>> = _stageRecordList.asStateFlow()
+
     private val _subspeciesList = MutableStateFlow<List<Subspecies>>(emptyList())
     val subspeciesList: StateFlow<List<Subspecies>> = _subspeciesList.asStateFlow()
+
+    private val _fieldList = MutableStateFlow<List<Field>>(emptyList())
+    val fieldList: StateFlow<List<Field>> = _fieldList.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -26,20 +52,107 @@ class PlantingViewModel : ViewModel() {
     private val _submitSuccess = MutableStateFlow(false)
     val submitSuccess: StateFlow<Boolean> = _submitSuccess.asStateFlow()
 
-    init {
-        // 移除 init 中的自动调用，改为由 UI 层的 LaunchedEffect(Unit) 触发
-    }
-
+    // 获取苗木管理页初始所需选项数据和列表数据
     fun fetchInitialData() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                // 并发获取品种和地块供筛选使用，以及首屏苗木列表
                 val subResponse = api.getSubspeciesList()
                 if (subResponse.code == 0 || subResponse.code == 200) {
                     _subspeciesList.value = subResponse.data ?: emptyList()
                 }
+                
+                val fieldResponse = api.getFieldList()
+                if (fieldResponse.code == 0 || fieldResponse.code == 200) {
+                    _fieldList.value = fieldResponse.data ?: emptyList()
+                }
+
+                fetchPlantList()
             } catch (e: Exception) {
                 _errorMsg.value = "加载初始数据失败: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    // 获取苗木列表 (带筛选)
+    fun fetchPlantList(
+        qrcode: String? = null,
+        fieldId: Int? = null,
+        plantDate: String? = null
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val response = api.getPlantList(
+                    plantQrcode = qrcode,
+                    fieldId = fieldId,
+                    plantDate = plantDate
+                )
+                if (response.code == 0 || response.code == 200) {
+                    _plantList.value = response.data ?: emptyList()
+                } else {
+                    _errorMsg.value = response.message
+                }
+            } catch (e: Exception) {
+                _errorMsg.value = "获取苗木列表失败: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    // 搜索指定阶段的苗木记录
+    fun fetchPlantRecordSearch(fieldId: Int, recordDate: String, type: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val response = api.getPlantRecordSearch(
+                    fieldId = fieldId,
+                    recordDate = recordDate,
+                    type = type
+                )
+                if (response.code == 0 || response.code == 200) {
+                    _stageRecordList.value = response.data ?: emptyList()
+                } else {
+                    _errorMsg.value = response.message
+                }
+            } catch (e: Exception) {
+                _errorMsg.value = "阶段记录搜索失败: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    // 获取苗木详情页的所有数据
+    fun fetchPlantDetailAll(plantId: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val detailResponse = api.getPlantDetail(plantId)
+                if (detailResponse.code == 0 || detailResponse.code == 200) {
+                    _plantDetail.value = detailResponse.data
+                }
+
+                val farmingResponse = api.getPlantFarmingList(plantId)
+                if (farmingResponse.code == 0 || farmingResponse.code == 200) {
+                    _farmingList.value = farmingResponse.data ?: emptyList()
+                }
+
+                val growthResponse = api.getPlantGrowthList(plantId)
+                if (growthResponse.code == 0 || growthResponse.code == 200) {
+                    _growthList.value = growthResponse.data ?: emptyList()
+                }
+
+                val punchResponse = api.getPlantPunchList(plantId)
+                if (punchResponse.code == 0 || punchResponse.code == 200) {
+                    _punchList.value = punchResponse.data ?: emptyList()
+                }
+            } catch (e: Exception) {
+                _errorMsg.value = "获取详情数据失败: ${e.message}"
             } finally {
                 _isLoading.value = false
             }

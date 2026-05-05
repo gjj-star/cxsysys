@@ -54,6 +54,48 @@ interface PlantingApiService {
         @Query("greenhouse_code") greenhouseCode: String? = null
     ): BaseResponse<List<Seedbed>>
 
+    // ========== 苗木管理接口 ==========
+
+    @GET("plantList")
+    suspend fun getPlantList(
+        @Query("plant_qrcode") plantQrcode: String? = null,
+        @Query("field_id") fieldId: Int? = null,
+        @Query("plant_date") plantDate: String? = null,
+        @Query("lastid") lastid: Int? = null,
+        @Query("limit") limit: Int? = null
+    ): BaseResponse<List<Plant>>
+
+    @GET("plants/{plant_id}")
+    suspend fun getPlantDetail(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<PlantDetail>
+
+    @GET("plants/{plant_id}/farmingList")
+    suspend fun getPlantFarmingList(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<List<FarmingRecord>>
+
+    @GET("plants/{plant_id}/growthList")
+    suspend fun getPlantGrowthList(
+        @retrofit2.http.Path("plant_id") plantId: String,
+        @Query("lastid") lastid: Int? = null,
+        @Query("limit") limit: Int? = null
+    ): BaseResponse<List<GrowthRecordItem>>
+
+    @GET("plants/{plant_id}/punchList")
+    suspend fun getPlantPunchList(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<List<PunchHarvestRecord>>
+
+    @GET("plantRecordSearch")
+    suspend fun getPlantRecordSearch(
+        @Query("field_id") fieldId: Int,
+        @Query("record_date") recordDate: String,
+        @Query("type") type: String,
+        @Query("limit") limit: Int? = null,
+        @Query("lastid") lastid: Int? = null
+    ): BaseResponse<List<PlantRecordSearchItem>>
+
     // ========== 通用文件上传接口 ==========
     @retrofit2.http.Multipart
     @POST("upload")

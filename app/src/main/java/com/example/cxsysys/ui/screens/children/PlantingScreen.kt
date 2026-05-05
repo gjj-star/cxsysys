@@ -22,27 +22,33 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.model.Plant
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.viewmodel.PlantingViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 // 农事阶段枚举
-enum class FarmingStage(val label: String) {
-    Growth("生长记录"),
-    Fertilizer("施肥作业"),
-    Disease("病虫害"),
-    Pesticide("施药信息"),
-    Irrigation("灌溉记录"),
-    Pruning("剪枝修整"),
-    Punch("打孔结香"),
-    Harvest("采收香木")
+enum class FarmingStage(val label: String, val apiKey: String) {
+    Growth("生长记录", "growth"),
+    Fertilizer("施肥作业", "fertilize"),
+    Disease("病虫害", "disease"),
+    Pesticide("施药信息", "pesticide"),
+    Irrigation("灌溉记录", "irrigation"),
+    Pruning("剪枝修整", "pruning"),
+    Punch("打孔结香", "punch"),
+    Harvest("采收香木", "harvest")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlantingScreen(onNavigateToDetail: (String) -> Unit) {
+fun PlantingScreen(
+    onNavigateToDetail: (String) -> Unit,
+    viewModel: PlantingViewModel = viewModel()
+) {
     val context = LocalContext.current
 
     // --- 状态管理 ---
@@ -63,6 +69,41 @@ fun PlantingScreen(onNavigateToDetail: (String) -> Unit) {
     // 辅助状态
     val isStageLevel = selectedStage != null // 是否筛选到了"阶段"等级
 
+    // 观察 ViewModel 数据
+    val plantList by viewModel.plantList.collectAsState()
+    val fieldList by viewModel.fieldList.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.fetchInitialData()
+    }
+
+    // 地块选项转换
+    val fieldOptions = fieldList.map { it.fieldCode }
+
+    // 触发搜索
+    fun triggerSearch() {
+        if (!isStageLevel) {
+            val fieldId = fieldList.find { it.fieldCode == selectedField }?.fieldId
+            viewModel.fetchPlantList(
+                qrcode = searchText.ifEmpty { null },
+                fieldId = fieldId,
+                plantDate = selectedDate
+            )
+        } else {
+            val fieldId = fieldList.find { it.fieldCode == selectedField }?.fieldId
+            if (fieldId != null && selectedDate != null && selectedStage != null) {
+                viewModel.fetchPlantRecordSearch(
+                    fieldId = fieldId,
+                    recordDate = selectedDate!!,
+                    type = selectedStage!!.apiKey
+                )
+            } else {
+                Toast.makeText(context, "阶段搜索需同时选择地块、日期和阶段", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // 重置所有筛选
     fun resetFilters() {
         selectedField = null
@@ -70,6 +111,7 @@ fun PlantingScreen(onNavigateToDetail: (String) -> Unit) {
         selectedStage = null
         searchText = ""
         selectedBatchIds = emptySet() // 清空选中
+        triggerSearch()
     }
 
     // 处理日期回调
@@ -81,6 +123,7 @@ fun PlantingScreen(onNavigateToDetail: (String) -> Unit) {
                     datePickerState.selectedDateMillis?.let { millis ->
                         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                         selectedDate = dateFormat.format(Date(millis))
+                        triggerSearch()
                     }
                     showDatePicker = false
                 }) { Text("确定", color = AgGreenPrimary) }
@@ -149,12 +192,13 @@ fun PlantingScreen(onNavigateToDetail: (String) -> Unit) {
                         isActive = true,
                         isSelected = selectedField != null,
                         modifier = Modifier.weight(1f),
-                        options = listOf("A区-01", "A区-02", "A区-03", "B区-01"),
+                        options = fieldOptions,
                         onOptionSelected = {
                             selectedField = it
                             selectedDate = null
                             selectedStage = null
                             selectedBatchIds = emptySet()
+                            triggerSearch()
                         }
                     )
 
@@ -177,6 +221,7 @@ fun PlantingScreen(onNavigateToDetail: (String) -> Unit) {
                         onOptionSelected = { label ->
                             selectedStage = FarmingStage.entries.find { it.label == label }
                             selectedBatchIds = emptySet()
+                            triggerSearch()
                         }
                     )
 
@@ -225,8 +270,10 @@ fun PlantingScreen(onNavigateToDetail: (String) -> Unit) {
                 // 模式 B: 显示具体操作记录 (支持批量勾选)
                 OperationList(
                     stage = selectedStage!!,
-                    field = selectedField!!,
-                    date = selectedDate!!,
+                    field = selectedField ?: "未知地块",
+                    date = selectedDate ?: "未知日期",
+                    recordList = viewModel.stageRecordList.collectAsState().value,
+                    isLoading = isLoading,
                     selectedIds = selectedBatchIds,
                     onToggleSelect = { id ->
                         selectedBatchIds = if (selectedBatchIds.contains(id)) {
@@ -241,6 +288,8 @@ fun PlantingScreen(onNavigateToDetail: (String) -> Unit) {
                 ForestList(
                     searchText = searchText,
                     filterField = selectedField,
+                    plantList = plantList,
+                    isLoading = isLoading,
                     onItemClick = onNavigateToDetail
                 )
             }
@@ -251,20 +300,21 @@ fun PlantingScreen(onNavigateToDetail: (String) -> Unit) {
 // === 列表视图组件 ===
 
 @Composable
-fun ForestList(searchText: String, filterField: String?, onItemClick: (String) -> Unit) {
-    // 模拟数据
-    val allTrees = listOf(
-        ForestTree("苗木-A-001", "金丝油", "3.5米", 0, "A区-03", "2020-05-01"),
-        ForestTree("苗木-A-002", "金丝油", "3.2米", 0, "A区-03", "2020-05-01"),
-        ForestTree("苗木-B-088", "奇楠1号", "2.8米", 1, "B区-01", "2021-03-12") // 1=冻结
-    )
-
-    val filteredTrees = allTrees.filter { tree ->
-        (searchText.isEmpty() || tree.code.contains(searchText)) &&
-                (filterField == null || tree.location.contains(filterField))
+fun ForestList(
+    searchText: String,
+    filterField: String?,
+    plantList: List<Plant>,
+    isLoading: Boolean,
+    onItemClick: (String) -> Unit
+) {
+    if (isLoading && plantList.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = AgGreenPrimary)
+        }
+        return
     }
 
-    if (filteredTrees.isEmpty()) {
+    if (plantList.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("未找到符合条件的苗木", color = Color.Gray)
         }
@@ -280,8 +330,8 @@ fun ForestList(searchText: String, filterField: String?, onItemClick: (String) -
                     fontSize = 13.sp
                 )
             }
-            items(filteredTrees.size) { index ->
-                ForestTreeCard(filteredTrees[index], onClick = { onItemClick(filteredTrees[index].code) })
+            items(plantList.size) { index ->
+                ForestTreeCard(plantList[index], onClick = { onItemClick(plantList[index].plantId) })
             }
         }
     }
@@ -292,9 +342,25 @@ fun OperationList(
     stage: FarmingStage,
     field: String,
     date: String,
+    recordList: List<com.example.cxsysys.model.PlantRecordSearchItem>,
+    isLoading: Boolean,
     selectedIds: Set<String>,
     onToggleSelect: (String) -> Unit
 ) {
+    if (isLoading && recordList.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = AgGreenPrimary)
+        }
+        return
+    }
+
+    if (recordList.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("未查找到阶段记录", color = Color.Gray)
+        }
+        return
+    }
+
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -313,19 +379,14 @@ fun OperationList(
             }
         }
 
-        items(5) { index ->
-            val uniqueId = "op-$index"
-            val treeCode = "苗木-${field.takeLast(2)}-00${index + 1}"
+        items(recordList.size) { index ->
+            val record = recordList[index]
+            val uniqueId = record.plantQrcode
 
             OperationCard(
-                treeCode = treeCode,
+                treeCode = record.plantQrcode,
                 stage = stage,
-                detail = when(stage) {
-                    FarmingStage.Fertilizer -> "复合肥 50g | 穴施"
-                    FarmingStage.Disease -> "发现卷叶虫 | 轻度"
-                    FarmingStage.Pruning -> "疏剪 | 3枝"
-                    else -> "常规作业记录"
-                },
+                detail = record.description,
                 isSelected = selectedIds.contains(uniqueId),
                 onToggleSelect = { onToggleSelect(uniqueId) }
             )
@@ -339,17 +400,8 @@ fun OperationList(
 
 // === 卡片组件 ===
 
-data class ForestTree(
-    val code: String,
-    val species: String,
-    val height: String,
-    val status: Int,
-    val location: String,
-    val date: String
-)
-
 @Composable
-fun ForestTreeCard(item: ForestTree, onClick: () -> Unit) {
+fun ForestTreeCard(item: Plant, onClick: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(12.dp),
@@ -363,18 +415,19 @@ fun ForestTreeCard(item: ForestTree, onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Text(item.code, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(item.plantQrcode, fontWeight = FontWeight.Bold, fontSize = 16.sp)
 
                     val (statusText, statusColor) = when(item.status) {
-                        0 -> "正常" to AgGreenPrimary
-                        1 -> "冻结" to Color(0xFFFFA000)
+                        "0" -> "正常" to AgGreenPrimary
+                        "1" -> "冻结" to Color(0xFFFFA000)
                         else -> "死亡" to Color.Red
                     }
                     Text(statusText, color = statusColor, fontSize = 12.sp)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("${item.species} | 树高 ${item.height}", fontSize = 13.sp, color = Color.Gray)
-                Text("位置：${item.location}", fontSize = 13.sp, color = Color.Gray)
+                val heightStr = item.plantHeight?.let { " | 树高 $it" } ?: ""
+                Text("${item.subspeciesName}$heightStr", fontSize = 13.sp, color = Color.Gray)
+                Text("位置：${item.fieldCode}", fontSize = 13.sp, color = Color.Gray)
             }
             Spacer(modifier = Modifier.width(8.dp))
             Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray)
