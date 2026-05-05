@@ -25,43 +25,45 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.model.PlantDetail
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.viewmodel.PlantingViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlantDetailScreen(plantId: String, initialStatus: Int = 0, onBackClick: () -> Unit) {
+fun PlantDetailScreen(
+    plantId: String, 
+    onBackClick: () -> Unit,
+    viewModel: PlantingViewModel = viewModel()
+) {
     val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("生长态势", "农事记录", "结香采收")
 
-    // --- 模拟数据对齐逻辑 ---
-    // 根据传入的 ID 和 status 初始化，确保与列表页一致
-    // 列表页数据参考：
-    // 苗木-A-001 -> 0 (正常)
-    // 苗木-A-002 -> 0 (正常)
-    // 苗木-B-088 -> 1 (冻结)
+    val plantDetail by viewModel.plantDetail.collectAsState()
+    val farmingList by viewModel.farmingList.collectAsState()
+    val growthList by viewModel.growthList.collectAsState()
+    val punchList by viewModel.punchList.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
-    // 如果是通过路由传参，initialStatus 可能会丢失，这里做个简单的模拟映射兜底
-    val currentStatus = remember {
-        when {
-            plantId.contains("B-088") -> 1 // 冻结
-            else -> initialStatus
-        }
+    LaunchedEffect(plantId) {
+        viewModel.fetchPlantDetailAll(plantId)
     }
 
     // 修改弹窗状态
     var showEditDialog by remember { mutableStateOf(false) }
     var editItemTitle by remember { mutableStateOf("") }
 
-    // 模拟修改弹窗
+    // 模拟修改弹窗 (接口待定)
     if (showEditDialog) {
         AlertDialog(
             onDismissRequest = { showEditDialog = false },
             title = { Text("修改 $editItemTitle") },
             text = {
                 Column {
-                    Text("此处显示原数据并允许修改。", fontSize = 14.sp, color = Color.Gray)
+                    Text("接口待定，当前无法保存修改。", fontSize = 14.sp, color = Color.Gray)
                     Spacer(modifier = Modifier.height(16.dp))
                     OutlinedTextField(
                         value = "模拟回填数据",
@@ -76,7 +78,7 @@ fun PlantDetailScreen(plantId: String, initialStatus: Int = 0, onBackClick: () -
             confirmButton = {
                 Button(
                     onClick = {
-                        Toast.makeText(context, "修改申请已提交", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "批量及修改接口暂未完成", Toast.LENGTH_SHORT).show()
                         showEditDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
@@ -92,7 +94,7 @@ fun PlantDetailScreen(plantId: String, initialStatus: Int = 0, onBackClick: () -
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("档案详情: $plantId", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+                title = { Text("档案详情", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
@@ -101,11 +103,20 @@ fun PlantDetailScreen(plantId: String, initialStatus: Int = 0, onBackClick: () -
         },
         containerColor = BgGray
     ) { padding ->
+        if (isLoading && plantDetail == null) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = AgGreenPrimary)
+            }
+            return@Scaffold
+        }
+
         Column(modifier = Modifier.padding(padding)) {
-            // 1. 顶部基础信息 (传入状态)
-            PlantHeaderCard(plantId, currentStatus) {
-                editItemTitle = "定植基本信息"
-                showEditDialog = true
+            // 1. 顶部基础信息
+            plantDetail?.let { detail ->
+                PlantHeaderCard(detail) {
+                    editItemTitle = "定植基本信息"
+                    showEditDialog = true
+                }
             }
 
             // 2. Tabs
@@ -138,178 +149,202 @@ fun PlantDetailScreen(plantId: String, initialStatus: Int = 0, onBackClick: () -
                 when (selectedTab) {
                     0 -> { // 生长记录
                         item { SectionTitle("全部生长记录") }
-                        items(3) { i ->
-                            RecordItemCard(
-                                title = "生长监测记录 #${3-i}",
-                                date = "2023-12-0${i+1}",
-                                summary = "树高: ${3.0+i*0.2}m | 地径: ${8+i}cm",
-                                details = mapOf(
-                                    "记录日期" to "2023-12-0${i+1}",
-                                    "树高" to "${3.0+i*0.2} 米",
-                                    "地径" to "${8+i} 厘米",
-                                    "分枝数" to "${5+i} 枝",
-                                    "照片" to "已上传 (点击查看)"
-                                ),
-                                icon = Icons.Default.Timeline,
-                                color = Color(0xFFE3F2FD),
-                                onEditClick = { editItemTitle = "生长记录"; showEditDialog = true }
-                            )
+                        if (growthList.isEmpty()) {
+                            item { Text("暂无记录", color = Color.Gray, modifier = Modifier.padding(top = 16.dp)) }
+                        } else {
+                            items(growthList.size) { i ->
+                                val record = growthList[i]
+                                RecordItemCard(
+                                    title = "生长监测记录 #${record.recordId}",
+                                    date = record.recordDate,
+                                    summary = "树高: ${record.treeHeight}m | 地径: ${record.groundDiameter}cm",
+                                    details = mapOf(
+                                        "记录日期" to record.recordDate,
+                                        "树高" to "${record.treeHeight} 米",
+                                        "地径" to "${record.groundDiameter} 厘米"
+                                    ),
+                                    icon = Icons.Default.Timeline,
+                                    color = Color(0xFFE3F2FD),
+                                    onEditClick = { editItemTitle = "生长记录"; showEditDialog = true }
+                                )
+                            }
                         }
                     }
                     1 -> { // 农事记录
                         item { SectionTitle("近期农事操作日志") }
-
-                        // 1. 施肥
-                        item {
-                            RecordItemCard(
-                                title = "施肥作业",
-                                date = "2023-12-15",
-                                summary = "复合肥 50g/株 | 穴施",
-                                details = mapOf(
-                                    "施肥时段" to "9-11时",
-                                    "肥料名称" to "通用型复合肥",
-                                    "单株用量" to "50g",
-                                    "施用方法" to "穴施",
-                                    "水肥配比" to "无",
-                                    "备注" to "雨后施肥"
-                                ),
-                                icon = Icons.Default.Spa,
-                                color = Color(0xFFF1F8E9), // 绿
-                                onEditClick = { editItemTitle = "施肥记录"; showEditDialog = true }
-                            )
-                        }
-
-                        // 2. 病虫害信息
-                        item {
-                            RecordItemCard(
-                                title = "病虫害记录",
-                                date = "2023-12-10",
-                                summary = "发现卷叶虫 | 轻度",
-                                details = mapOf(
-                                    "记录日期" to "2023-12-10",
-                                    "病虫害描述" to "叶片出现卷曲，发现少量幼虫",
-                                    "照片" to "2张 (点击查看)"
-                                ),
-                                icon = Icons.Default.BugReport,
-                                color = Color(0xFFFFEBEE), // 红
-                                onEditClick = { editItemTitle = "病虫害信息"; showEditDialog = true }
-                            )
-                        }
-
-                        // 3. 施药记录
-                        item {
-                            RecordItemCard(
-                                title = "施药作业",
-                                date = "2023-12-11",
-                                summary = "阿维菌素 | 喷雾",
-                                details = mapOf(
-                                    "施药日期" to "2023-12-11",
-                                    "施药时段" to "15-17时",
-                                    "农药名称" to "阿维菌素",
-                                    "稀释浓度" to "1500 ppm",
-                                    "单株用量" to "200 ml",
-                                    "施药方式" to "喷雾",
-                                    "防治对象" to "卷叶虫",
-                                    "安全间隔" to "7天"
-                                ),
-                                icon = Icons.Default.Science,
-                                color = Color(0xFFFFF3E0), // 橙
-                                onEditClick = { editItemTitle = "施药记录"; showEditDialog = true }
-                            )
-                        }
-
-                        // 4. 灌溉
-                        item {
-                            RecordItemCard(
-                                title = "灌溉记录",
-                                date = "2023-12-08",
-                                summary = "滴灌 | 9-11时",
-                                details = mapOf(
-                                    "灌溉日期" to "2023-12-08",
-                                    "灌溉时段" to "9-11时",
-                                    "灌溉方式" to "滴灌"
-                                ),
-                                icon = Icons.Default.WaterDrop,
-                                color = Color(0xFFE0F7FA), // 蓝
-                                onEditClick = { editItemTitle = "灌溉记录"; showEditDialog = true }
-                            )
-                        }
-
-                        // 5. 剪枝
-                        item {
-                            RecordItemCard(
-                                title = "剪枝修整",
-                                date = "2023-11-20",
-                                summary = "疏剪 | 5枝",
-                                details = mapOf(
-                                    "剪枝日期" to "2023-11-20",
-                                    "剪枝时段" to "15-17时",
-                                    "剪枝类型" to "疏剪",
-                                    "剪除分枝数" to "5枝",
-                                    "最大剪口" to "1.5 cm",
-                                    "工具类型" to "手剪",
-                                    "消毒方式" to "酒精",
-                                    "备注" to "清理内膛枝"
-                                ),
-                                icon = Icons.Default.ContentCut,
-                                color = Color(0xFFF3E5F5), // 紫
-                                onEditClick = { editItemTitle = "剪枝记录"; showEditDialog = true }
-                            )
-                        }
-
-                        // 补充苗木定植卡片
-                        item {
-                            RecordItemCard(
-                                title = "苗木定植",
-                                date = "2020-05-01",
-                                summary = "A区-03地块 | 穴深40cm",
-                                details = mapOf(
-                                    "定植日期" to "2020-05-01",
-                                    "幼苗来源" to "幼苗-2023-001 (嫁接)",
-                                    "沉香品种" to "金丝油",
-                                    "代数" to "2代",
-                                    "种植规格" to "穴深40cm x 穴宽40cm",
-                                    "种植间距" to "2.5米",
-                                    "定植地块" to "A区-03号地"
-                                ),
-                                icon = Icons.Default.Forest,
-                                color = Color(0xFFE8F5E9), // 浅绿
-                                onEditClick = { editItemTitle = "定植信息"; showEditDialog = true }
-                            )
+                        
+                        if (farmingList.isEmpty()) {
+                            item { Text("暂无记录", color = Color.Gray, modifier = Modifier.padding(top = 16.dp)) }
+                        } else {
+                            // 暂时只展示返回的第一组对象的各农事记录
+                            val fRecord = farmingList.first()
+                            
+                            // 1. 施肥
+                            fRecord.fert?.let { fert ->
+                                if (fert.hasRecord) {
+                                    item {
+                                        RecordItemCard(
+                                            title = "施肥作业",
+                                            date = fert.date ?: "未知",
+                                            summary = "${fert.name ?: "未知肥料"} | ${fert.method ?: "未知方式"}",
+                                            details = mapOf(
+                                                "肥料名称" to (fert.name ?: ""),
+                                                "单株用量" to (fert.dosage ?: ""),
+                                                "施用方法" to (fert.method ?: "")
+                                            ),
+                                            icon = Icons.Default.Spa,
+                                            color = Color(0xFFF1F8E9),
+                                            onEditClick = { editItemTitle = "施肥记录"; showEditDialog = true }
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // 2. 病虫害
+                            fRecord.disease?.let { disease ->
+                                if (disease.hasRecord) {
+                                    item {
+                                        RecordItemCard(
+                                            title = "病虫害记录",
+                                            date = disease.date ?: "未知",
+                                            summary = "${disease.type ?: "未知病害"} | 有记录",
+                                            details = mapOf(
+                                                "病虫害描述" to (disease.description ?: "")
+                                            ),
+                                            icon = Icons.Default.BugReport,
+                                            color = Color(0xFFFFEBEE),
+                                            onEditClick = { editItemTitle = "病虫害信息"; showEditDialog = true }
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // 3. 施药
+                            fRecord.pest?.let { pest ->
+                                if (pest.hasRecord) {
+                                    item {
+                                        RecordItemCard(
+                                            title = "施药作业",
+                                            date = pest.date ?: "未知",
+                                            summary = "${pest.name ?: "未知农药"} | ${pest.method ?: "未知方式"}",
+                                            details = mapOf(
+                                                "农药名称" to (pest.name ?: ""),
+                                                "施药方式" to (pest.method ?: "")
+                                            ),
+                                            icon = Icons.Default.Science,
+                                            color = Color(0xFFFFF3E0),
+                                            onEditClick = { editItemTitle = "施药记录"; showEditDialog = true }
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // 4. 灌溉
+                            fRecord.irri?.let { irri ->
+                                if (irri.hasRecord) {
+                                    item {
+                                        RecordItemCard(
+                                            title = "灌溉记录",
+                                            date = irri.date ?: "未知",
+                                            summary = "${irri.method ?: "未知方式"} | ${irri.period ?: "未知时段"}",
+                                            details = mapOf(
+                                                "灌溉方式" to (irri.method ?: ""),
+                                                "时段" to (irri.period ?: "")
+                                            ),
+                                            icon = Icons.Default.WaterDrop,
+                                            color = Color(0xFFE0F7FA),
+                                            onEditClick = { editItemTitle = "灌溉记录"; showEditDialog = true }
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // 5. 剪枝
+                            fRecord.prun?.let { prun ->
+                                if (prun.hasRecord) {
+                                    item {
+                                        RecordItemCard(
+                                            title = "剪枝修整",
+                                            date = prun.date ?: "未知",
+                                            summary = "${prun.type ?: "未知类型"} | 有记录",
+                                            details = mapOf(
+                                                "剪枝类型" to (prun.type ?: "")
+                                            ),
+                                            icon = Icons.Default.ContentCut,
+                                            color = Color(0xFFF3E5F5),
+                                            onEditClick = { editItemTitle = "剪枝记录"; showEditDialog = true }
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // 6. 定植
+                            fRecord.plant?.let { plant ->
+                                if (plant.hasRecord) {
+                                    item {
+                                        RecordItemCard(
+                                            title = "苗木定植",
+                                            date = plant.date ?: "未知",
+                                            summary = "${plant.fieldCode ?: "未知地块"} | 深度 ${plant.depth ?: "未知"}",
+                                            details = mapOf(
+                                                "深度" to (plant.depth ?: ""),
+                                                "关联地块" to (plant.fieldCode ?: "")
+                                            ),
+                                            icon = Icons.Default.Forest,
+                                            color = Color(0xFFE8F5E9),
+                                            onEditClick = { editItemTitle = "定植信息"; showEditDialog = true }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                     2 -> { // 结香采收
                         item { SectionTitle("结香与采收溯源") }
-                        item {
-                            RecordItemCard(
-                                title = "打孔结香",
-                                date = "2023-06-01",
-                                summary = "4孔 | 孔径5mm",
-                                details = mapOf(
-                                    "打孔日期" to "2023-06-01",
-                                    "打孔时段" to "9-11时",
-                                    "平均孔深" to "3.0 cm",
-                                    "孔径" to "5.0 mm",
-                                    "平均孔距" to "10 cm",
-                                    "打孔数量" to "4 个",
-                                    "备注" to "使用电钻"
-                                ),
-                                icon = Icons.Default.Hardware,
-                                color = Color(0xFFFFF8E1), // 黄
-                                onEditClick = { editItemTitle = "打孔记录"; showEditDialog = true }
-                            )
-                        }
-                        item {
-                            RecordItemCard(
-                                title = "采收香木",
-                                date = "暂无记录",
-                                summary = "该苗木尚未进行采收作业",
-                                details = emptyMap(),
-                                icon = Icons.Default.Inventory,
-                                color = Color(0xFFF5F5F5), // 灰
-                                showEdit = false,
-                                onEditClick = {}
-                            )
+                        if (punchList.isEmpty()) {
+                            item { Text("暂无记录", color = Color.Gray, modifier = Modifier.padding(top = 16.dp)) }
+                        } else {
+                            val record = punchList.first()
+                            if (record.punch.hasRecord) {
+                                item {
+                                    RecordItemCard(
+                                        title = "打孔结香",
+                                        date = "有记录",
+                                        summary = record.punch.unknownField ?: "已打孔",
+                                        details = emptyMap(),
+                                        icon = Icons.Default.Hardware,
+                                        color = Color(0xFFFFF8E1),
+                                        onEditClick = { editItemTitle = "打孔记录"; showEditDialog = true }
+                                    )
+                                }
+                            }
+                            
+                            if (record.harvest.hasRecord) {
+                                item {
+                                    RecordItemCard(
+                                        title = "采收香木",
+                                        date = record.harvest.date,
+                                        summary = "重量: ${record.harvest.weight}",
+                                        details = mapOf("采香重量" to "${record.harvest.weight}"),
+                                        icon = Icons.Default.Inventory,
+                                        color = Color(0xFFE0F7FA),
+                                        onEditClick = { editItemTitle = "采收记录"; showEditDialog = true }
+                                    )
+                                }
+                            } else {
+                                item {
+                                    RecordItemCard(
+                                        title = "采收香木",
+                                        date = "暂无记录",
+                                        summary = "该苗木尚未进行采收作业",
+                                        details = emptyMap(),
+                                        icon = Icons.Default.Inventory,
+                                        color = Color(0xFFF5F5F5),
+                                        showEdit = false,
+                                        onEditClick = {}
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -321,11 +356,11 @@ fun PlantDetailScreen(plantId: String, initialStatus: Int = 0, onBackClick: () -
 // === 组件 ===
 
 @Composable
-fun PlantHeaderCard(plantId: String, status: Int, onEditClick: () -> Unit) {
+fun PlantHeaderCard(detail: PlantDetail, onEditClick: () -> Unit) {
     // 状态显示逻辑
-    val (statusText, statusColor) = when(status) {
-        0 -> "正常" to AgGreenPrimary
-        1 -> "冻结" to Color(0xFFFFA000)
+    val (statusText, statusColor) = when(detail.status) {
+        "0" -> "正常" to AgGreenPrimary
+        "1" -> "冻结" to Color(0xFFFFA000)
         else -> "死亡" to Color.Red
     }
 
@@ -337,8 +372,8 @@ fun PlantHeaderCard(plantId: String, status: Int, onEditClick: () -> Unit) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Column {
-                    Text("金丝油 (奇楠)", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = AgGreenPrimary)
-                    Text("二维码: $plantId", color = Color.Gray, fontSize = 12.sp)
+                    Text(detail.subspeciesName, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = AgGreenPrimary)
+                    Text("二维码: ${detail.plantQrcode}", color = Color.Gray, fontSize = 12.sp)
                 }
                 IconButton(onClick = onEditClick) {
                     Icon(Icons.Default.Edit, "Edit Base Info", tint = AgGreenPrimary)
@@ -346,10 +381,9 @@ fun PlantHeaderCard(plantId: String, status: Int, onEditClick: () -> Unit) {
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = BgGray)
             Row(modifier = Modifier.fillMaxWidth()) {
-                InfoItem("树龄", "3.5年", Modifier.weight(1f))
-                InfoItem("地块", if(plantId.contains("B")) "B区-01" else "A区-03", Modifier.weight(1f)) // 简单模拟地块
+                InfoItem("树龄", detail.treeAge, Modifier.weight(1f))
+                InfoItem("地块", detail.fieldCode, Modifier.weight(1f)) 
 
-                // [修改] 使用传入的状态显示
                 Column(modifier = Modifier.weight(1f)) {
                     Text("状态", fontSize = 12.sp, color = Color.Gray)
                     Text(statusText, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = statusColor)
