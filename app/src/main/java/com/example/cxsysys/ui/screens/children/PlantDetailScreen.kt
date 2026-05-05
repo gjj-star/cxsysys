@@ -310,8 +310,8 @@ fun PlantDetailScreen(
                                     RecordItemCard(
                                         title = "打孔结香",
                                         date = "有记录",
-                                        summary = record.punch.unknownField ?: "已打孔",
-                                        details = emptyMap(),
+                                        summary = "已打孔",
+                                        details = mapOf("打孔状态" to "已完成"),
                                         icon = Icons.Default.Hardware,
                                         color = Color(0xFFFFF8E1),
                                         onEditClick = { editItemTitle = "打孔记录"; showEditDialog = true }
