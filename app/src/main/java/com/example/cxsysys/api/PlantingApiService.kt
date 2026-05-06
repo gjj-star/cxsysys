@@ -87,6 +87,16 @@ interface PlantingApiService {
         @retrofit2.http.Path("plant_id") plantId: String
     ): BaseResponse<List<PunchHarvestRecord>>
 
+    @GET("plants/{plant_id}/punch/punching")
+    suspend fun getPlantPunchDetail(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<List<PunchDetailWrapper>>
+
+    @GET("plants/{plant_id}/punch/harvest")
+    suspend fun getPlantHarvestDetail(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<List<HarvestDetailWrapper>>
+
     @GET("plantRecordSearch")
     suspend fun getPlantRecordSearch(
         @Query("field_id") fieldId: Int,

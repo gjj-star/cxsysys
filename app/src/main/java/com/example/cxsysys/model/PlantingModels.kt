@@ -117,6 +117,34 @@ data class HarvestRecordItem(
     val weight: Double
 )
 
+// 打孔结香详情记录（来自 /punch/punching 接口）
+data class PunchDetailRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    val period: String?,
+    val depth: Double?,
+    val diameter: Double?,
+    val pitch: Double?,
+    val remark: String?
+)
+
+// 打孔结香详情响应包装
+data class PunchDetailWrapper(
+    val punch: PunchDetailRecord
+)
+
+// 采收香木详情记录（来自 /punch/harvest 接口）
+data class HarvestDetailRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    val weight: Double?
+)
+
+// 采收香木详情响应包装
+data class HarvestDetailWrapper(
+    val harvest: HarvestDetailRecord
+)
+
 data class PlantRecordSearchItem(
     @SerializedName("plant_qrcode") val plantQrcode: String,
     val description: String

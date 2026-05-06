@@ -33,6 +33,14 @@ class PlantingViewModel : ViewModel() {
     private val _punchList = MutableStateFlow<List<PunchHarvestRecord>>(emptyList())
     val punchList: StateFlow<List<PunchHarvestRecord>> = _punchList.asStateFlow()
 
+    // 打孔结香详情
+    private val _punchDetail = MutableStateFlow<PunchDetailRecord?>(null)
+    val punchDetail: StateFlow<PunchDetailRecord?> = _punchDetail.asStateFlow()
+
+    // 采收香木详情
+    private val _harvestDetail = MutableStateFlow<HarvestDetailRecord?>(null)
+    val harvestDetail: StateFlow<HarvestDetailRecord?> = _harvestDetail.asStateFlow()
+
     // 阶段记录搜索列表
     private val _stageRecordList = MutableStateFlow<List<PlantRecordSearchItem>>(emptyList())
     val stageRecordList: StateFlow<List<PlantRecordSearchItem>> = _stageRecordList.asStateFlow()
@@ -151,6 +159,22 @@ class PlantingViewModel : ViewModel() {
                 if (punchResponse.code == 0 || punchResponse.code == 200) {
                     _punchList.value = punchResponse.data ?: emptyList()
                 }
+
+                // 获取打孔结香详情
+                try {
+                    val punchDetailResp = api.getPlantPunchDetail(plantId)
+                    if (punchDetailResp.code == 0 || punchDetailResp.code == 200) {
+                        _punchDetail.value = punchDetailResp.data?.firstOrNull()?.punch
+                    }
+                } catch (e: Exception) { /* 打孔详情可选 */ }
+
+                // 获取采收香木详情
+                try {
+                    val harvestDetailResp = api.getPlantHarvestDetail(plantId)
+                    if (harvestDetailResp.code == 0 || harvestDetailResp.code == 200) {
+                        _harvestDetail.value = harvestDetailResp.data?.firstOrNull()?.harvest
+                    }
+                } catch (e: Exception) { /* 采收详情可选 */ }
             } catch (e: Exception) {
                 _errorMsg.value = "获取详情数据失败: ${e.message}"
             } finally {

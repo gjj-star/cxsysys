@@ -46,6 +46,8 @@ fun PlantDetailScreen(
     val farmingList by viewModel.farmingList.collectAsState()
     val growthList by viewModel.growthList.collectAsState()
     val punchList by viewModel.punchList.collectAsState()
+    val punchDetail by viewModel.punchDetail.collectAsState()
+    val harvestDetail by viewModel.harvestDetail.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
     LaunchedEffect(plantId) {
@@ -301,11 +303,31 @@ fun PlantDetailScreen(
                     }
                     2 -> { // 结香采收
                         item { SectionTitle("结香与采收溯源") }
-                        if (punchList.isEmpty()) {
+                        if (punchList.isEmpty() && punchDetail == null && harvestDetail == null) {
                             item { Text("暂无记录", color = Color.Gray, modifier = Modifier.padding(top = 16.dp)) }
                         } else {
-                            val record = punchList.first()
-                            if (record.punch.hasRecord) {
+                            // 打孔结香 —— 优先使用详情接口数据，回退到列表数据
+                            val punch = punchDetail
+                            if (punch != null && punch.hasRecord) {
+                                item {
+                                    RecordItemCard(
+                                        title = "打孔结香",
+                                        date = punch.date ?: "未知",
+                                        summary = "孔深 ${punch.depth ?: "-"} | 孔径 ${punch.diameter ?: "-"} | 孔距 ${punch.pitch ?: "-"}",
+                                        details = buildMap {
+                                            punch.date?.let { put("日期", it) }
+                                            punch.period?.let { put("时段", it) }
+                                            punch.depth?.let { put("孔深", "$it") }
+                                            punch.diameter?.let { put("孔径", "$it") }
+                                            punch.pitch?.let { put("孔距", "$it") }
+                                            punch.remark?.takeIf { it.isNotBlank() }?.let { put("备注", it) }
+                                        },
+                                        icon = Icons.Default.Hardware,
+                                        color = Color(0xFFFFF8E1),
+                                        onEditClick = { editItemTitle = "打孔记录"; showEditDialog = true }
+                                    )
+                                }
+                            } else if (punchList.isNotEmpty() && punchList.first().punch.hasRecord) {
                                 item {
                                     RecordItemCard(
                                         title = "打孔结香",
@@ -318,14 +340,31 @@ fun PlantDetailScreen(
                                     )
                                 }
                             }
-                            
-                            if (record.harvest.hasRecord) {
+
+                            // 采收香木 —— 优先使用详情接口数据，回退到列表数据
+                            val harvest = harvestDetail
+                            if (harvest != null && harvest.hasRecord) {
                                 item {
                                     RecordItemCard(
                                         title = "采收香木",
-                                        date = record.harvest.date,
-                                        summary = "重量: ${record.harvest.weight}",
-                                        details = mapOf("采香重量" to "${record.harvest.weight}"),
+                                        date = harvest.date ?: "未知",
+                                        summary = "采香重量: ${harvest.weight ?: "-"}",
+                                        details = buildMap {
+                                            harvest.date?.let { put("采香日期", it) }
+                                            harvest.weight?.let { put("采香重量", "$it") }
+                                        },
+                                        icon = Icons.Default.Inventory,
+                                        color = Color(0xFFE0F7FA),
+                                        onEditClick = { editItemTitle = "采收记录"; showEditDialog = true }
+                                    )
+                                }
+                            } else if (punchList.isNotEmpty() && punchList.first().harvest.hasRecord) {
+                                item {
+                                    RecordItemCard(
+                                        title = "采收香木",
+                                        date = punchList.first().harvest.date,
+                                        summary = "重量: ${punchList.first().harvest.weight}",
+                                        details = mapOf("采香重量" to "${punchList.first().harvest.weight}"),
                                         icon = Icons.Default.Inventory,
                                         color = Color(0xFFE0F7FA),
                                         onEditClick = { editItemTitle = "采收记录"; showEditDialog = true }
