@@ -48,6 +48,12 @@ fun PlantDetailScreen(
     val punchList by viewModel.punchList.collectAsState()
     val punchDetail by viewModel.punchDetail.collectAsState()
     val harvestDetail by viewModel.harvestDetail.collectAsState()
+    val fertDetail by viewModel.fertDetail.collectAsState()
+    val diseaseDetail by viewModel.diseaseDetail.collectAsState()
+    val pestDetail by viewModel.pestDetail.collectAsState()
+    val irriDetail by viewModel.irriDetail.collectAsState()
+    val prunDetail by viewModel.prunDetail.collectAsState()
+    val plantingDetail by viewModel.plantingDetail.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
     LaunchedEffect(plantId) {
@@ -174,126 +180,235 @@ fun PlantDetailScreen(
                     }
                     1 -> { // 农事记录
                         item { SectionTitle("近期农事操作日志") }
-                        
-                        if (farmingList.isEmpty()) {
+
+                        val hasAny = fertDetail != null || diseaseDetail != null || pestDetail != null ||
+                                irriDetail != null || prunDetail != null || plantingDetail != null ||
+                                farmingList.isNotEmpty()
+                        if (!hasAny) {
                             item { Text("暂无记录", color = Color.Gray, modifier = Modifier.padding(top = 16.dp)) }
                         } else {
-                            // 暂时只展示返回的第一组对象的各农事记录
-                            val fRecord = farmingList.first()
-                            
-                            // 1. 施肥
-                            fRecord.fert?.let { fert ->
-                                if (fert.hasRecord) {
+                            val fRecord = farmingList.firstOrNull()
+
+                            // 1. 施肥 —— 优先详情接口
+                            val fert = fertDetail
+                            if (fert != null && fert.hasRecord) {
+                                item {
+                                    RecordItemCard(
+                                        title = "施肥作业",
+                                        date = fert.date ?: "未知",
+                                        summary = "${fert.name ?: "未知肥料"} | ${fert.method ?: "未知方式"}",
+                                        details = buildMap {
+                                            fert.name?.let { put("肥料名称", it) }
+                                            fert.date?.let { put("日期", it) }
+                                            fert.dosage?.let { put("单株用量", it) }
+                                            fert.method?.let { put("施用方法", it) }
+                                            fert.water?.let { put("水肥配比", it) }
+                                            fert.remark?.takeIf { it.isNotBlank() }?.let { put("备注", it) }
+                                        },
+                                        icon = Icons.Default.Spa,
+                                        color = Color(0xFFF1F8E9),
+                                        onEditClick = { editItemTitle = "施肥记录"; showEditDialog = true }
+                                    )
+                                }
+                            } else {
+                                fRecord?.fert?.takeIf { it.hasRecord }?.let { fert ->
                                     item {
                                         RecordItemCard(
-                                            title = "施肥作业",
-                                            date = fert.date ?: "未知",
+                                            title = "施肥作业", date = fert.date ?: "未知",
                                             summary = "${fert.name ?: "未知肥料"} | ${fert.method ?: "未知方式"}",
-                                            details = mapOf(
-                                                "肥料名称" to (fert.name ?: ""),
-                                                "单株用量" to (fert.dosage ?: ""),
-                                                "施用方法" to (fert.method ?: "")
-                                            ),
-                                            icon = Icons.Default.Spa,
-                                            color = Color(0xFFF1F8E9),
+                                            details = buildMap {
+                                                fert.name?.let { put("肥料名称", it) }
+                                                fert.dosage?.let { put("单株用量", it) }
+                                                fert.method?.let { put("施用方法", it) }
+                                            },
+                                            icon = Icons.Default.Spa, color = Color(0xFFF1F8E9),
                                             onEditClick = { editItemTitle = "施肥记录"; showEditDialog = true }
                                         )
                                     }
                                 }
                             }
-                            
-                            // 2. 病虫害
-                            fRecord.disease?.let { disease ->
-                                if (disease.hasRecord) {
+
+                            // 2. 病虫害 —— 优先详情接口
+                            val disease = diseaseDetail
+                            if (disease != null && disease.hasRecord) {
+                                item {
+                                    RecordItemCard(
+                                        title = "病虫害记录",
+                                        date = disease.date ?: "未知",
+                                        summary = disease.type ?: "未知病害",
+                                        details = buildMap {
+                                            disease.date?.let { put("记录日期", it) }
+                                            disease.type?.let { put("病虫害类型", it) }
+                                            disease.description?.let { put("描述", it) }
+                                            disease.photoUrl?.takeIf { it.isNotEmpty() }?.let { put("照片数量", "${it.size}张") }
+                                        },
+                                        icon = Icons.Default.BugReport,
+                                        color = Color(0xFFFFEBEE),
+                                        onEditClick = { editItemTitle = "病虫害信息"; showEditDialog = true }
+                                    )
+                                }
+                            } else {
+                                fRecord?.disease?.takeIf { it.hasRecord }?.let { disease ->
                                     item {
                                         RecordItemCard(
-                                            title = "病虫害记录",
-                                            date = disease.date ?: "未知",
-                                            summary = "${disease.type ?: "未知病害"} | 有记录",
-                                            details = mapOf(
-                                                "病虫害描述" to (disease.description ?: "")
-                                            ),
-                                            icon = Icons.Default.BugReport,
-                                            color = Color(0xFFFFEBEE),
+                                            title = "病虫害记录", date = disease.date ?: "未知",
+                                            summary = disease.type ?: "未知病害",
+                                            details = buildMap {
+                                                disease.type?.let { put("病虫害类型", it) }
+                                                disease.description?.let { put("描述", it) }
+                                            },
+                                            icon = Icons.Default.BugReport, color = Color(0xFFFFEBEE),
                                             onEditClick = { editItemTitle = "病虫害信息"; showEditDialog = true }
                                         )
                                     }
                                 }
                             }
-                            
-                            // 3. 施药
-                            fRecord.pest?.let { pest ->
-                                if (pest.hasRecord) {
+
+                            // 3. 施药 —— 优先详情接口
+                            val pest = pestDetail
+                            if (pest != null && pest.hasRecord) {
+                                item {
+                                    RecordItemCard(
+                                        title = "施药作业",
+                                        date = pest.date ?: "未知",
+                                        summary = "${pest.name ?: "未知农药"} | ${pest.method ?: "未知方式"}",
+                                        details = buildMap {
+                                            pest.date?.let { put("日期", it) }
+                                            pest.period?.let { put("时段", it) }
+                                            pest.name?.let { put("农药名称", it) }
+                                            pest.ppm?.let { put("稀释浓度", it) }
+                                            pest.dosage?.let { put("单株用量", it) }
+                                            pest.method?.let { put("施药方式", it) }
+                                        },
+                                        icon = Icons.Default.Science,
+                                        color = Color(0xFFFFF3E0),
+                                        onEditClick = { editItemTitle = "施药记录"; showEditDialog = true }
+                                    )
+                                }
+                            } else {
+                                fRecord?.pest?.takeIf { it.hasRecord }?.let { pest ->
                                     item {
                                         RecordItemCard(
-                                            title = "施药作业",
-                                            date = pest.date ?: "未知",
+                                            title = "施药作业", date = pest.date ?: "未知",
                                             summary = "${pest.name ?: "未知农药"} | ${pest.method ?: "未知方式"}",
-                                            details = mapOf(
-                                                "农药名称" to (pest.name ?: ""),
-                                                "施药方式" to (pest.method ?: "")
-                                            ),
-                                            icon = Icons.Default.Science,
-                                            color = Color(0xFFFFF3E0),
+                                            details = buildMap {
+                                                pest.name?.let { put("农药名称", it) }
+                                                pest.method?.let { put("施药方式", it) }
+                                            },
+                                            icon = Icons.Default.Science, color = Color(0xFFFFF3E0),
                                             onEditClick = { editItemTitle = "施药记录"; showEditDialog = true }
                                         )
                                     }
                                 }
                             }
-                            
-                            // 4. 灌溉
-                            fRecord.irri?.let { irri ->
-                                if (irri.hasRecord) {
+
+                            // 4. 灌溉 —— 优先详情接口
+                            val irri = irriDetail
+                            if (irri != null && irri.hasRecord) {
+                                item {
+                                    RecordItemCard(
+                                        title = "灌溉记录",
+                                        date = irri.date ?: "未知",
+                                        summary = "${irri.method ?: "未知方式"} | ${irri.period ?: "未知时段"}",
+                                        details = buildMap {
+                                            irri.date?.let { put("日期", it) }
+                                            irri.period?.let { put("时段", it) }
+                                            irri.method?.let { put("方式", it) }
+                                        },
+                                        icon = Icons.Default.WaterDrop,
+                                        color = Color(0xFFE0F7FA),
+                                        onEditClick = { editItemTitle = "灌溉记录"; showEditDialog = true }
+                                    )
+                                }
+                            } else {
+                                fRecord?.irri?.takeIf { it.hasRecord }?.let { irri ->
                                     item {
                                         RecordItemCard(
-                                            title = "灌溉记录",
-                                            date = irri.date ?: "未知",
+                                            title = "灌溉记录", date = irri.date ?: "未知",
                                             summary = "${irri.method ?: "未知方式"} | ${irri.period ?: "未知时段"}",
-                                            details = mapOf(
-                                                "灌溉方式" to (irri.method ?: ""),
-                                                "时段" to (irri.period ?: "")
-                                            ),
-                                            icon = Icons.Default.WaterDrop,
-                                            color = Color(0xFFE0F7FA),
+                                            details = buildMap {
+                                                irri.method?.let { put("方式", it) }
+                                                irri.period?.let { put("时段", it) }
+                                            },
+                                            icon = Icons.Default.WaterDrop, color = Color(0xFFE0F7FA),
                                             onEditClick = { editItemTitle = "灌溉记录"; showEditDialog = true }
                                         )
                                     }
                                 }
                             }
-                            
-                            // 5. 剪枝
-                            fRecord.prun?.let { prun ->
-                                if (prun.hasRecord) {
+
+                            // 5. 剪枝 —— 优先详情接口
+                            val prun = prunDetail
+                            if (prun != null && prun.hasRecord) {
+                                item {
+                                    RecordItemCard(
+                                        title = "剪枝修整",
+                                        date = prun.date ?: "未知",
+                                        summary = "${prun.type ?: "未知类型"} | ${prun.tool ?: "未知工具"}",
+                                        details = buildMap {
+                                            prun.date?.let { put("日期", it) }
+                                            prun.period?.let { put("时段", it) }
+                                            prun.type?.let { put("剪枝类型", it) }
+                                            prun.tool?.let { put("工具", it) }
+                                            prun.disinfect?.let { put("消毒方式", it) }
+                                            prun.remark?.takeIf { it.isNotBlank() }?.let { put("备注", it) }
+                                        },
+                                        icon = Icons.Default.ContentCut,
+                                        color = Color(0xFFF3E5F5),
+                                        onEditClick = { editItemTitle = "剪枝记录"; showEditDialog = true }
+                                    )
+                                }
+                            } else {
+                                fRecord?.prun?.takeIf { it.hasRecord }?.let { prun ->
                                     item {
                                         RecordItemCard(
-                                            title = "剪枝修整",
-                                            date = prun.date ?: "未知",
-                                            summary = "${prun.type ?: "未知类型"} | 有记录",
-                                            details = mapOf(
-                                                "剪枝类型" to (prun.type ?: "")
-                                            ),
-                                            icon = Icons.Default.ContentCut,
-                                            color = Color(0xFFF3E5F5),
+                                            title = "剪枝修整", date = prun.date ?: "未知",
+                                            summary = prun.type ?: "未知类型",
+                                            details = buildMap {
+                                                prun.type?.let { put("剪枝类型", it) }
+                                            },
+                                            icon = Icons.Default.ContentCut, color = Color(0xFFF3E5F5),
                                             onEditClick = { editItemTitle = "剪枝记录"; showEditDialog = true }
                                         )
                                     }
                                 }
                             }
-                            
-                            // 6. 定植
-                            fRecord.plant?.let { plant ->
-                                if (plant.hasRecord) {
+
+                            // 6. 定植 —— 优先详情接口
+                            val planting = plantingDetail
+                            if (planting != null && planting.hasRecord) {
+                                item {
+                                    RecordItemCard(
+                                        title = "苗木定植",
+                                        date = planting.date ?: "未知",
+                                        summary = "${planting.fieldCode ?: "未知地块"} | 深度 ${planting.depth ?: "-"}",
+                                        details = buildMap {
+                                            planting.date?.let { put("日期", it) }
+                                            planting.saplingQrcode?.let { put("母树二维码", it) }
+                                            planting.method?.let { put("育苗方式", it) }
+                                            planting.subspecies?.let { put("品种", it) }
+                                            planting.generation?.let { put("代数", it) }
+                                            planting.depth?.let { put("深度", it) }
+                                            planting.width?.let { put("宽度", it) }
+                                            planting.distance?.let { put("间距", it) }
+                                            planting.fieldCode?.let { put("关联地块", it) }
+                                        },
+                                        icon = Icons.Default.Forest,
+                                        color = Color(0xFFE8F5E9),
+                                        onEditClick = { editItemTitle = "定植信息"; showEditDialog = true }
+                                    )
+                                }
+                            } else {
+                                fRecord?.plant?.takeIf { it.hasRecord }?.let { plant ->
                                     item {
                                         RecordItemCard(
-                                            title = "苗木定植",
-                                            date = plant.date ?: "未知",
+                                            title = "苗木定植", date = plant.date ?: "未知",
                                             summary = "${plant.fieldCode ?: "未知地块"} | 深度 ${plant.depth ?: "未知"}",
-                                            details = mapOf(
-                                                "深度" to (plant.depth ?: ""),
-                                                "关联地块" to (plant.fieldCode ?: "")
-                                            ),
-                                            icon = Icons.Default.Forest,
-                                            color = Color(0xFFE8F5E9),
+                                            details = buildMap {
+                                                plant.depth?.let { put("深度", it) }
+                                                plant.fieldCode?.let { put("关联地块", it) }
+                                            },
+                                            icon = Icons.Default.Forest, color = Color(0xFFE8F5E9),
                                             onEditClick = { editItemTitle = "定植信息"; showEditDialog = true }
                                         )
                                     }

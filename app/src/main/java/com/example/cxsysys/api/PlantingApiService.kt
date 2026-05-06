@@ -97,6 +97,36 @@ interface PlantingApiService {
         @retrofit2.http.Path("plant_id") plantId: String
     ): BaseResponse<List<HarvestDetailWrapper>>
 
+    @GET("plants/{plant_id}/farming/fertilize")
+    suspend fun getPlantFertDetail(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<List<FertDetailWrapper>>
+
+    @GET("plants/{plant_id}/farming/disease")
+    suspend fun getPlantDiseaseDetail(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<List<DiseaseDetailWrapper>>
+
+    @GET("plants/{plant_id}/farming/pesticide")
+    suspend fun getPlantPestDetail(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<List<PestDetailWrapper>>
+
+    @GET("plants/{plant_id}/farming/irrigation")
+    suspend fun getPlantIrriDetail(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<List<IrriDetailWrapper>>
+
+    @GET("plants/{plant_id}/farming/pruning")
+    suspend fun getPlantPrunDetail(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<List<PrunDetailWrapper>>
+
+    @GET("plants/{plant_id}/farming/plant")
+    suspend fun getPlantPlantingDetail(
+        @retrofit2.http.Path("plant_id") plantId: String
+    ): BaseResponse<List<PlantingDetailWrapper>>
+
     @GET("plantRecordSearch")
     suspend fun getPlantRecordSearch(
         @Query("field_id") fieldId: Int,

@@ -41,6 +41,25 @@ class PlantingViewModel : ViewModel() {
     private val _harvestDetail = MutableStateFlow<HarvestDetailRecord?>(null)
     val harvestDetail: StateFlow<HarvestDetailRecord?> = _harvestDetail.asStateFlow()
 
+    // 农事详情（6个）
+    private val _fertDetail = MutableStateFlow<FertDetailRecord?>(null)
+    val fertDetail: StateFlow<FertDetailRecord?> = _fertDetail.asStateFlow()
+
+    private val _diseaseDetail = MutableStateFlow<DiseaseDetailRecord?>(null)
+    val diseaseDetail: StateFlow<DiseaseDetailRecord?> = _diseaseDetail.asStateFlow()
+
+    private val _pestDetail = MutableStateFlow<PestDetailRecord?>(null)
+    val pestDetail: StateFlow<PestDetailRecord?> = _pestDetail.asStateFlow()
+
+    private val _irriDetail = MutableStateFlow<IrriDetailRecord?>(null)
+    val irriDetail: StateFlow<IrriDetailRecord?> = _irriDetail.asStateFlow()
+
+    private val _prunDetail = MutableStateFlow<PrunDetailRecord?>(null)
+    val prunDetail: StateFlow<PrunDetailRecord?> = _prunDetail.asStateFlow()
+
+    private val _plantingDetail = MutableStateFlow<PlantingDetailRecord?>(null)
+    val plantingDetail: StateFlow<PlantingDetailRecord?> = _plantingDetail.asStateFlow()
+
     // 阶段记录搜索列表
     private val _stageRecordList = MutableStateFlow<List<PlantRecordSearchItem>>(emptyList())
     val stageRecordList: StateFlow<List<PlantRecordSearchItem>> = _stageRecordList.asStateFlow()
@@ -175,6 +194,37 @@ class PlantingViewModel : ViewModel() {
                         _harvestDetail.value = harvestDetailResp.data?.firstOrNull()?.harvest
                     }
                 } catch (e: Exception) { /* 采收详情可选 */ }
+
+                // 获取6个农事详情
+                try {
+                    val r1 = api.getPlantFertDetail(plantId)
+                    if (r1.code == 0 || r1.code == 200) _fertDetail.value = r1.data?.firstOrNull()?.fert
+                } catch (e: Exception) { }
+
+                try {
+                    val r2 = api.getPlantDiseaseDetail(plantId)
+                    if (r2.code == 0 || r2.code == 200) _diseaseDetail.value = r2.data?.firstOrNull()?.disease
+                } catch (e: Exception) { }
+
+                try {
+                    val r3 = api.getPlantPestDetail(plantId)
+                    if (r3.code == 0 || r3.code == 200) _pestDetail.value = r3.data?.firstOrNull()?.pest
+                } catch (e: Exception) { }
+
+                try {
+                    val r4 = api.getPlantIrriDetail(plantId)
+                    if (r4.code == 0 || r4.code == 200) _irriDetail.value = r4.data?.firstOrNull()?.irri
+                } catch (e: Exception) { }
+
+                try {
+                    val r5 = api.getPlantPrunDetail(plantId)
+                    if (r5.code == 0 || r5.code == 200) _prunDetail.value = r5.data?.firstOrNull()?.prun
+                } catch (e: Exception) { }
+
+                try {
+                    val r6 = api.getPlantPlantingDetail(plantId)
+                    if (r6.code == 0 || r6.code == 200) _plantingDetail.value = r6.data?.firstOrNull()?.plant
+                } catch (e: Exception) { }
             } catch (e: Exception) {
                 _errorMsg.value = "获取详情数据失败: ${e.message}"
             } finally {

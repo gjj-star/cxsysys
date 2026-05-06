@@ -145,6 +145,78 @@ data class HarvestDetailWrapper(
     val harvest: HarvestDetailRecord
 )
 
+// ========== 农事详情模型（来自各/farming/xxx接口） ==========
+
+// 施肥详情（来自 /farming/fertilize）
+data class FertDetailRecord(
+    val hasRecord: Boolean,
+    val name: String?,
+    val date: String?,
+    val dosage: String?,
+    val method: String?,
+    val water: String?,
+    val remark: String?
+)
+data class FertDetailWrapper(val fert: FertDetailRecord)
+
+// 病虫害详情（来自 /farming/disease）
+data class DiseaseDetailRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    val type: String?,
+    val description: String?,
+    @SerializedName("photo_url") val photoUrl: List<String>?
+)
+data class DiseaseDetailWrapper(val disease: DiseaseDetailRecord)
+
+// 施药详情（来自 /farming/pesticide）
+data class PestDetailRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    val period: String?,
+    val name: String?,
+    val ppm: String?,
+    val dosage: String?,
+    val method: String?
+)
+data class PestDetailWrapper(val pest: PestDetailRecord)
+
+// 灌溉详情（来自 /farming/irrigation）
+data class IrriDetailRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    val period: String?,
+    val method: String?
+)
+data class IrriDetailWrapper(val irri: IrriDetailRecord)
+
+// 剪枝详情（来自 /farming/pruning）
+data class PrunDetailRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    val period: String?,
+    val type: String?,
+    val tool: String?,
+    val disinfect: String?,
+    val remark: String?
+)
+data class PrunDetailWrapper(val prun: PrunDetailRecord)
+
+// 苗木定植详情（来自 /farming/plant）
+data class PlantingDetailRecord(
+    val hasRecord: Boolean,
+    val date: String?,
+    @SerializedName("sapling_qrcode") val saplingQrcode: String?,
+    val method: String?,
+    val subspecies: String?,
+    val generation: String?,
+    val depth: String?,
+    val width: String?,
+    val distance: String?,
+    @SerializedName("field_code") val fieldCode: String?
+)
+data class PlantingDetailWrapper(val plant: PlantingDetailRecord)
+
 data class PlantRecordSearchItem(
     @SerializedName("plant_qrcode") val plantQrcode: String,
     val description: String
