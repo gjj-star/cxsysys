@@ -36,7 +36,11 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import java.io.FileOutputStream
 import java.io.InputStream
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import com.example.cxsysys.ui.components.PhotoSourcePickerDialog
+import com.example.cxsysys.ui.components.rememberCameraPhotoLauncher
 
 // 辅助函数：将 Uri 转换为临时的 File 对象
 fun uriToFile(context: android.content.Context, uri: Uri): File? {
@@ -213,13 +217,23 @@ fun PesticideInfoEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputViewM
     // 图片选择器
     var frontImageUri by remember { mutableStateOf<Uri?>(null) }
     var backImageUri by remember { mutableStateOf<Uri?>(null) }
+    var photoTarget by remember { mutableStateOf<String?>(null) } // "front" or "back"
+    var showPhotoSourcePicker by remember { mutableStateOf(false) }
 
-    val frontImageLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
-        frontImageUri = uri
+    val galleryLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            when (photoTarget) {
+                "front" -> frontImageUri = uri
+                "back" -> backImageUri = uri
+            }
+        }
     }
-    
-    val backImageLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
-        backImageUri = uri
+
+    val cameraPhotoLauncher = rememberCameraPhotoLauncher { uri ->
+        when (photoTarget) {
+            "front" -> frontImageUri = uri
+            "back" -> backImageUri = uri
+        }
     }
 
     val submitState by viewModel.submitState.collectAsState()
@@ -238,6 +252,13 @@ fun PesticideInfoEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputViewM
             else -> {}
         }
     }
+
+    PhotoSourcePickerDialog(
+        visible = showPhotoSourcePicker,
+        onDismiss = { showPhotoSourcePicker = false },
+        onTakePhoto = { cameraPhotoLauncher() },
+        onPickImages = { galleryLauncher.launch("image/*") }
+    )
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -325,28 +346,58 @@ fun PesticideInfoEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputViewM
                 Text("外包装照片", fontWeight = FontWeight.Bold, color = Color.Gray)
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // 正面图
                     Box(
-                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {
-                            frontImageLauncher.launch("image/*")
-                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgGray, RoundedCornerShape(8.dp))
+                            .clickable {
+                                photoTarget = "front"
+                                showPhotoSourcePicker = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         if (frontImageUri != null) {
-                            Text("已选正面图", color = AgGreenPrimary, fontWeight = FontWeight.Bold)
+                            AsyncImage(
+                                model = frontImageUri,
+                                contentDescription = "正面图",
+                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
                         } else {
-                            Text("+ 正面图", color = Color.Gray)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.AddAPhoto, null, tint = Color.Gray)
+                                Text("正面图", color = Color.Gray, fontSize = 12.sp)
+                            }
                         }
                     }
+                    // 背面图
                     Box(
-                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {
-                            backImageLauncher.launch("image/*")
-                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgGray, RoundedCornerShape(8.dp))
+                            .clickable {
+                                photoTarget = "back"
+                                showPhotoSourcePicker = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         if (backImageUri != null) {
-                            Text("已选背面图", color = AgGreenPrimary, fontWeight = FontWeight.Bold)
+                            AsyncImage(
+                                model = backImageUri,
+                                contentDescription = "背面图",
+                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
                         } else {
-                            Text("+ 背面图", color = Color.Gray)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.AddAPhoto, null, tint = Color.Gray)
+                                Text("背面图", color = Color.Gray, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -409,13 +460,23 @@ fun FertilizerInfoEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputView
     // 图片选择器
     var frontImageUri by remember { mutableStateOf<Uri?>(null) }
     var backImageUri by remember { mutableStateOf<Uri?>(null) }
+    var photoTarget by remember { mutableStateOf<String?>(null) } // "front" or "back"
+    var showPhotoSourcePicker by remember { mutableStateOf(false) }
 
-    val frontImageLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
-        frontImageUri = uri
+    val galleryLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            when (photoTarget) {
+                "front" -> frontImageUri = uri
+                "back" -> backImageUri = uri
+            }
+        }
     }
-    
-    val backImageLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
-        backImageUri = uri
+
+    val cameraPhotoLauncher = rememberCameraPhotoLauncher { uri ->
+        when (photoTarget) {
+            "front" -> frontImageUri = uri
+            "back" -> backImageUri = uri
+        }
     }
 
     val submitState by viewModel.submitState.collectAsState()
@@ -434,6 +495,13 @@ fun FertilizerInfoEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputView
             else -> {}
         }
     }
+
+    PhotoSourcePickerDialog(
+        visible = showPhotoSourcePicker,
+        onDismiss = { showPhotoSourcePicker = false },
+        onTakePhoto = { cameraPhotoLauncher() },
+        onPickImages = { galleryLauncher.launch("image/*") }
+    )
 
     Column(
         modifier = Modifier
@@ -507,28 +575,58 @@ fun FertilizerInfoEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputView
                 Text("外包装照片", fontWeight = FontWeight.Bold, color = Color.Gray)
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // 正面图
                     Box(
-                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {
-                            frontImageLauncher.launch("image/*")
-                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgGray, RoundedCornerShape(8.dp))
+                            .clickable {
+                                photoTarget = "front"
+                                showPhotoSourcePicker = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         if (frontImageUri != null) {
-                            Text("已选正面图", color = AgGreenPrimary, fontWeight = FontWeight.Bold)
+                            AsyncImage(
+                                model = frontImageUri,
+                                contentDescription = "正面图",
+                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
                         } else {
-                            Text("+ 正面图", color = Color.Gray)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.AddAPhoto, null, tint = Color.Gray)
+                                Text("正面图", color = Color.Gray, fontSize = 12.sp)
+                            }
                         }
                     }
+                    // 背面图
                     Box(
-                        modifier = Modifier.weight(1f).height(100.dp).background(BgGray, RoundedCornerShape(8.dp)).clickable {
-                            backImageLauncher.launch("image/*")
-                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(BgGray, RoundedCornerShape(8.dp))
+                            .clickable {
+                                photoTarget = "back"
+                                showPhotoSourcePicker = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         if (backImageUri != null) {
-                            Text("已选背面图", color = AgGreenPrimary, fontWeight = FontWeight.Bold)
+                            AsyncImage(
+                                model = backImageUri,
+                                contentDescription = "背面图",
+                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
                         } else {
-                            Text("+ 背面图", color = Color.Gray)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.AddAPhoto, null, tint = Color.Gray)
+                                Text("背面图", color = Color.Gray, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
