@@ -1,4 +1,5 @@
 //优化：不再负责具体打印指令，只管理UI框架、页面切换、权限等
+//2026.5.1 删除加工二维码（临时数据名称为TEMP_CJG）和产成品二维码（TEMP_CP）
 package com.example.printerfeature;
 
 import android.app.AlertDialog;
@@ -7,8 +8,11 @@ import android.app.ProgressDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
+import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -25,6 +29,9 @@ import androidx.activity.ComponentActivity;
 
 import com.example.printerfeature.data.LabelTemplates;
 import com.example.printerfeature.data.MockLabelRepository;
+import com.example.printerfeature.data.PrinterApiClient;
+import com.example.printerfeature.data.PrinterApiModels;
+import com.example.printerfeature.data.PrinterApiService;
 import com.example.printerfeature.model.FieldLabelData;
 import com.example.printerfeature.model.GreenhouseLabelData;
 import com.example.printerfeature.model.LabelData;
@@ -38,14 +45,20 @@ import com.google.android.material.textfield.TextInputLayout;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class MainActivity extends ComponentActivity {
 
     public static final String TEMP_MM = LabelTemplates.TEMP_MM;
-    public static final String TEMP_CJG = LabelTemplates.TEMP_CJG;
-    public static final String TEMP_CP = LabelTemplates.TEMP_CP;
+//    public static final String TEMP_CJG = LabelTemplates.TEMP_CJG;
+//    public static final String TEMP_CP = LabelTemplates.TEMP_CP;
     public static final String TEMP_DP = LabelTemplates.TEMP_DP;
     public static final String TEMP_MC = LabelTemplates.TEMP_MC;
     public static final String TEMP_DK = LabelTemplates.TEMP_DK;
@@ -105,6 +118,8 @@ public class MainActivity extends ComponentActivity {
     private LinearLayout layoutModelSpec;
     private LinearLayout layoutNumWeight;
     private LinearLayout layoutPlantSummary;
+    private LinearLayout layoutQrPreviewList;
+    private TextView tvQrPreviewMore;
 
     private AutoCompleteTextView spinnerTemplate;
     private AutoCompleteTextView spinnerProcessingType;
@@ -119,11 +134,18 @@ public class MainActivity extends ComponentActivity {
 
     private ProgressDialog loadingDialog;
     private final LabelPrintManager printManager = new LabelPrintManager();
+    private final PrinterApiService printerApiService = PrinterApiClient.service();
 
     private final List<LabelData> dataList = new ArrayList<>();
     private List<PlantBlockData> plantBlocks = new ArrayList<>();
     private List<PlantationData> plantations = new ArrayList<>();
     private List<GreenhouseLabelData> greenhouses = new ArrayList<>();
+    private boolean plantBlocksLoaded = false;
+    private boolean plantationsLoaded = false;
+    private boolean greenhousesLoaded = false;
+    private boolean plantBlocksLoading = false;
+    private boolean plantationsLoading = false;
+    private boolean greenhousesLoading = false;
     private PlantBlockData selectedPlantBlock;
     private PlantationData selectedPlantation;
     private GreenhouseLabelData selectedGreenhouse;
@@ -215,6 +237,8 @@ public class MainActivity extends ComponentActivity {
         layoutModelSpec = findViewById(R.id.layoutModelSpec);
         layoutNumWeight = findViewById(R.id.layoutNumWeight);
         layoutPlantSummary = findViewById(R.id.layoutPlantSummary);
+        layoutQrPreviewList = findViewById(R.id.layoutQrPreviewList);
+        tvQrPreviewMore = findViewById(R.id.tvQrPreviewMore);
 
         spinnerTemplate = findViewById(R.id.spinnerTemplate);
         spinnerProcessingType = findViewById(R.id.spinnerProcessingType);
@@ -246,16 +270,17 @@ public class MainActivity extends ComponentActivity {
         etPlantDate.setOnClickListener(v -> {
             if (TEMP_MM.equals(currentTemplate())) {
                 showPlantDatePicker();
-            } else if (TEMP_CJG.equals(currentTemplate())) {
-                showProcessDatePicker();
-            } else if (TEMP_CP.equals(currentTemplate())) {
-                showProductDatePicker();
             }
+//            } else if (TEMP_CJG.equals(currentTemplate())) {
+//                showProcessDatePicker();
+//            } else if (TEMP_CP.equals(currentTemplate())) {
+//                showProductDatePicker();
+//            }
         });
 
-        plantBlocks = MockLabelRepository.getPlantBlocks();
-        plantations = MockLabelRepository.getPlantations();
-        greenhouses = MockLabelRepository.getAllGreenhouses();
+        plantBlocks = new ArrayList<>();
+        plantations = new ArrayList<>();
+        greenhouses = new ArrayList<>();
     }
 
     private void setupTemplateSelectors() {
@@ -264,6 +289,191 @@ public class MainActivity extends ComponentActivity {
             updateUIByTemplate(template);
             tvToolbarTitle.setText(template + "打印");
         });
+    }
+
+    private void ensurePlantationsLoaded() {
+        if (plantationsLoaded) {
+            setupPlantationSelector();
+            return;
+        }
+        if (plantationsLoading) return;
+        loadPlantations();
+    }
+
+    private void ensureFieldsLoaded() {
+        if (plantBlocksLoaded) {
+            setupPlantBlockSelector();
+            return;
+        }
+        if (plantBlocksLoading) return;
+        loadFields();
+    }
+
+    private void ensureGreenhousesLoaded() {
+        if (greenhousesLoaded) {
+            setupGreenhouseSelector();
+            return;
+        }
+        if (greenhousesLoading) return;
+        loadGreenhouses();
+    }
+
+    private void loadPlantations() {
+        plantationsLoading = true;
+        printerApiService.getPlantations().enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantationOption>>>() {
+            @Override
+            public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantationOption>>> call,
+                                   Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantationOption>>> response) {
+                plantationsLoading = false;
+                PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantationOption>> body = response.body();
+                if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                    toastApiError("种植园列表", body);
+                    return;
+                }
+                List<PlantationData> next = new ArrayList<>();
+                for (PrinterApiModels.PlantationOption item : body.data) {
+                    next.add(new PlantationData(
+                            item.plantationId,
+                            safe(item.plantationName, ""),
+                            safe(item.plantationCode, ""),
+                            "",
+                            "",
+                            "",
+                            new ArrayList<>()
+                    ));
+                }
+                plantations = next;
+                plantationsLoaded = true;
+                if (TEMP_DK.equals(currentTemplate()) || TEMP_DP.equals(currentTemplate())) {
+                    setupPlantationSelector();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantationOption>>> call, Throwable t) {
+                plantationsLoading = false;
+                toast("种植园列表加载失败：" + t.getMessage());
+            }
+        });
+    }
+
+    private void loadFields() {
+        plantBlocksLoading = true;
+        printerApiService.getFields().enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>>>() {
+            @Override
+            public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>>> call,
+                                   Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>>> response) {
+                plantBlocksLoading = false;
+                PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>> body = response.body();
+                if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                    toastApiError("地块列表", body);
+                    return;
+                }
+                List<PlantBlockData> next = new ArrayList<>();
+                for (PrinterApiModels.FieldOption item : body.data) {
+                    next.add(new PlantBlockData(
+                            item.fieldId,
+                            safe(item.fieldCode, ""),
+                            safe(item.fieldCode, ""),
+                            buildFieldLocation(item),
+                            safe(item.fieldStatus, ""),
+                            new ArrayList<>()
+                    ));
+                }
+                plantBlocks = next;
+                plantBlocksLoaded = true;
+                if (TEMP_MM.equals(currentTemplate())) {
+                    setupPlantBlockSelector();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>>> call, Throwable t) {
+                plantBlocksLoading = false;
+                toast("地块列表加载失败：" + t.getMessage());
+            }
+        });
+    }
+
+    private void loadGreenhouses() {
+        greenhousesLoading = true;
+        printerApiService.getGreenhouses().enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhouseOption>>>() {
+            @Override
+            public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhouseOption>>> call,
+                                   Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhouseOption>>> response) {
+                greenhousesLoading = false;
+                PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhouseOption>> body = response.body();
+                if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                    toastApiError("大棚列表", body);
+                    return;
+                }
+                List<GreenhouseLabelData> next = new ArrayList<>();
+                for (PrinterApiModels.GreenhouseOption item : body.data) {
+                    String code = item.displayCode();
+                    next.add(new GreenhouseLabelData(
+                            item.greenhouseId,
+                            code,
+                            code,
+                            "",
+                            "",
+                            "",
+                            "",
+                            ""
+                    ));
+                }
+                greenhouses = next;
+                greenhousesLoaded = true;
+                if (TEMP_MC.equals(currentTemplate())) {
+                    setupGreenhouseSelector();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhouseOption>>> call, Throwable t) {
+                greenhousesLoading = false;
+                toast("大棚列表加载失败：" + t.getMessage());
+            }
+        });
+    }
+
+    private String buildFieldLocation(PrinterApiModels.FieldOption item) {
+        List<String> parts = new ArrayList<>();
+        if (item.soilType != null && !item.soilType.trim().isEmpty()) {
+            parts.add("土壤：" + item.soilType.trim());
+        }
+        if (item.fieldArea != null && !item.fieldArea.trim().isEmpty()) {
+            parts.add("面积：" + item.fieldArea.trim());
+        }
+        if (parts.isEmpty()) return "";
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) builder.append("，");
+            builder.append(parts.get(i));
+        }
+        return builder.toString();
+    }
+
+    private void toastApiError(String name, PrinterApiModels.ApiResponse<?> body) {
+        String message = body == null || body.message == null || body.message.trim().isEmpty()
+                ? "接口返回异常"
+                : body.message;
+        toast(name + "加载失败：" + message);
+    }
+
+    private void showPrintDataErrorDialog(PrinterApiModels.ApiResponse<?> body, Response<?> response) {
+        String message;
+        if (body != null && body.message != null && !body.message.trim().isEmpty()) {
+            message = body.message.trim();
+        } else if (response != null && !response.message().trim().isEmpty()) {
+            message = response.message().trim();
+        } else {
+            message = "接口返回异常";
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("获取打印数据失败")
+                .setMessage(message)
+                .setPositiveButton("确定", null)
+                .show();
     }
 
     private void setupActions() {
@@ -281,10 +491,10 @@ public class MainActivity extends ComponentActivity {
                 resetGreenhouseFilters();
             } else if (TEMP_MC.equals(currentTemplate())) {
                 resetSeedbedFilters();
-            } else if (TEMP_CJG.equals(currentTemplate())) {
-                resetProcessFilters();
-            } else if (TEMP_CP.equals(currentTemplate())) {
-                resetProductFilters();
+//            } else if (TEMP_CJG.equals(currentTemplate())) {
+//                resetProcessFilters();
+//            } else if (TEMP_CP.equals(currentTemplate())) {
+//                resetProductFilters();
             } else {
                 resetPlantFilters();
             }
@@ -305,28 +515,12 @@ public class MainActivity extends ComponentActivity {
             return;
         }
 
-        String fieldCode = safe(intent.getStringExtra(EXTRA_ENTRY_FIELD_CODE), "未填写地块编码");
+        String fieldCode = safe(intent.getStringExtra(EXTRA_ENTRY_FIELD_CODE), "");
         String plantingDate = safe(intent.getStringExtra(EXTRA_ENTRY_PLANTING_DATE), "");
         String entryRecordTime = safe(intent.getStringExtra(EXTRA_ENTRY_RECORD_TIME), "");
-        String subspecies = safe(intent.getStringExtra(EXTRA_ENTRY_SUBSPECIES), "未知品种");
-        String generation = safe(intent.getStringExtra(EXTRA_ENTRY_GENERATION), "1");
-        String generationWay = safe(intent.getStringExtra(EXTRA_ENTRY_GENERATION_WAY), "嫁接");
-        String motherTreeCode = safe(intent.getStringExtra(EXTRA_ENTRY_MOTHER_TREE_SELF_CODE), "-");
-
-        dataList.clear();
-        for (int i = 1; i <= plantCount; i++) {
-            dataList.add(new LabelData(
-                    TEMP_MM,
-                    "",
-                    "",
-                    subspecies,
-                    generation,
-                    generationWay,
-                    fieldCode,
-                    motherTreeCode,
-                    plantingDate,
-                    buildEntryTraceCode(plantingDate, i)
-            ));
+        if (fieldCode.isEmpty() || plantingDate.isEmpty()) {
+            Toast.makeText(this, "录入批次缺少地块编码或定植日期，无法获取打印数据", Toast.LENGTH_SHORT).show();
+            return;
         }
 
         isPlantingEntryPrintMode = true;
@@ -343,20 +537,145 @@ public class MainActivity extends ComponentActivity {
         tvPlantBlockCode.setText("定植地块：" + fieldCode);
         tvPlantBlockLocation.setText("录入时间：" + (entryRecordTime.isEmpty() ? "未填写" : entryRecordTime));
 
-
+        dataList.clear();
         updateDataUI();
-        Toast.makeText(this, "已加载本次录入的 " + plantCount + " 株苗木标签", Toast.LENGTH_SHORT).show();
+        tvDataCount.setText("正在加载本次录入的苗木标签...");
+        loadPlantingEntryPrintLabels(fieldCode, plantingDate, plantCount);
     }
 
-    private String buildEntryTraceCode(String plantingDate, int index) {
-        String datePart = plantingDate == null || plantingDate.isEmpty()
-                ? "00000000"
-                : plantingDate.replace("-", "");
-        return String.format(Locale.getDefault(), "MM-ENTRY-%s-%03d", datePart, index);
+    private void loadPlantingEntryPrintLabels(String fieldCode, String plantingDate, int plantCount) {
+        showLoading("正在匹配地块信息...");
+        printerApiService.getFields().enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>>>() {
+            @Override
+            public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>>> call,
+                                   Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>>> response) {
+                PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>> body = response.body();
+                if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                    hideLoading();
+                    showPrintDataErrorDialog(body, response);
+                    tvDataCount.setText("地块信息加载失败，请稍后重试");
+                    return;
+                }
+
+                PrinterApiModels.FieldOption matchedField = findFieldOptionByCode(body.data, fieldCode);
+                if (matchedField == null || matchedField.fieldId <= 0) {
+                    hideLoading();
+                    tvDataCount.setText("未找到地块“" + fieldCode + "”，无法获取本次录入标签");
+                    Toast.makeText(MainActivity.this, "未在地块列表中找到对应地块", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                selectedPlantBlock = new PlantBlockData(
+                        matchedField.fieldId,
+                        safe(matchedField.fieldCode, fieldCode),
+                        safe(matchedField.fieldCode, fieldCode),
+                        buildFieldLocation(matchedField),
+                        safe(matchedField.fieldStatus, ""),
+                        new ArrayList<>()
+                );
+                loadPlantingEntryPlantPrintData(matchedField.fieldId, plantingDate, plantCount);
+            }
+
+            @Override
+            public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>>> call, Throwable t) {
+                hideLoading();
+                tvDataCount.setText("地块信息加载失败，请稍后重试");
+                toast("地块列表加载失败：" + t.getMessage());
+            }
+        });
+    }
+
+    private void loadPlantingEntryPlantPrintData(int fieldId, String plantingDate, int plantCount) {
+        showLoading("正在加载本次录入的苗木标签...");
+        printerApiService.getPlantPrintData(fieldId, plantingDate)
+                .enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>>() {
+                    @Override
+                    public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> call,
+                                           Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> response) {
+                        hideLoading();
+                        PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>> body = response.body();
+                        if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                            showPrintDataErrorDialog(body, response);
+                            updateDataUI();
+                            return;
+                        }
+
+                        List<PrinterApiModels.PlantPrintData> latestItems = latestPlantPrintData(body.data, plantCount);
+                        dataList.clear();
+                        for (PrinterApiModels.PlantPrintData item : latestItems) {
+                            dataList.add(item.toLabelData());
+                        }
+                        updateDataUI();
+                        if (dataList.size() < plantCount) {
+                            Toast.makeText(MainActivity.this, "接口仅返回 " + dataList.size() + " 条可打印苗木标签", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(MainActivity.this, "已加载本次录入的 " + dataList.size() + " 株苗木标签", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> call, Throwable t) {
+                        hideLoading();
+                        updateDataUI();
+                        toast("苗木标签数据加载失败：" + t.getMessage());
+                    }
+                });
+    }
+
+    private PrinterApiModels.FieldOption findFieldOptionByCode(List<PrinterApiModels.FieldOption> fields, String fieldCode) {
+        String target = normalizeCode(fieldCode);
+        for (PrinterApiModels.FieldOption field : fields) {
+            if (target.equals(normalizeCode(field.fieldCode)) || target.equals(normalizeCode(field.fieldQrcode))) {
+                return field;
+            }
+        }
+        return null;
+    }
+
+    private List<PrinterApiModels.PlantPrintData> latestPlantPrintData(List<PrinterApiModels.PlantPrintData> source, int plantCount) {
+        List<PrinterApiModels.PlantPrintData> sorted = new ArrayList<>(source);
+        Collections.sort(sorted, new Comparator<PrinterApiModels.PlantPrintData>() {
+            @Override
+            public int compare(PrinterApiModels.PlantPrintData left, PrinterApiModels.PlantPrintData right) {
+                return Integer.compare(right.plantId, left.plantId);
+            }
+        });
+        if (sorted.size() > plantCount) {
+            sorted = new ArrayList<>(sorted.subList(0, plantCount));
+        }
+        Collections.sort(sorted, new Comparator<PrinterApiModels.PlantPrintData>() {
+            @Override
+            public int compare(PrinterApiModels.PlantPrintData left, PrinterApiModels.PlantPrintData right) {
+                return Integer.compare(left.plantId, right.plantId);
+            }
+        });
+        return sorted;
+    }
+
+    private String normalizeCode(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
     private String safe(String value, String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private LabelData findLoadedLabelByTraceCode(String template, String traceCode) {
+        for (LabelData item : dataList) {
+            if (template.equals(item.template) && traceCode.equals(item.traceCode)) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private LabelData findLoadedLabelBySelfCode(String template, String selfCode) {
+        for (LabelData item : dataList) {
+            if (template.equals(item.template) && selfCode.equals(item.f1)) {
+                return item;
+            }
+        }
+        return null;
     }
 
     private void toast(String msg) {
@@ -391,10 +710,10 @@ public class MainActivity extends ComponentActivity {
                 message = "请先选择种植园或补打一座大棚";
             } else if (TEMP_MC.equals(template)) {
                 message = "请先选择大棚或补打一个苗床";
-            } else if (TEMP_CJG.equals(template)) {
-                message = "请先选择加工类型和完工日期，或补打一个加工标签";
-            } else if (TEMP_CP.equals(template)) {
-                message = "请先选择完工日期或补打一个产成品";
+//            } else if (TEMP_CJG.equals(template)) {
+//                message = "请先选择加工类型和完工日期，或补打一个加工标签";
+//            } else if (TEMP_CP.equals(template)) {
+//                message = "请先选择完工日期或补打一个产成品";
             } else {
                 message = "请先录入数据";
             }
@@ -417,10 +736,10 @@ public class MainActivity extends ComponentActivity {
                         applyGreenhouseFilters(false);
                     } else if (TEMP_MC.equals(currentTemplate()) && selectedGreenhouse != null) {
                         applySeedbedFilters(false);
-                    } else if (TEMP_CJG.equals(currentTemplate()) && !selectedProcessTypeKey.isEmpty() && !selectedProcessDate.isEmpty()) {
-                        applyProcessFilters(false);
-                    } else if (TEMP_CP.equals(currentTemplate()) && !selectedProductDate.isEmpty()) {
-                        applyProductFilters(false);
+//                    } else if (TEMP_CJG.equals(currentTemplate()) && !selectedProcessTypeKey.isEmpty() && !selectedProcessDate.isEmpty()) {
+//                        applyProcessFilters(false);
+//                    } else if (TEMP_CP.equals(currentTemplate()) && !selectedProductDate.isEmpty()) {
+//                        applyProductFilters(false);
                     } else {
                         dataList.clear();
                         updateDataUI();
@@ -461,14 +780,14 @@ public class MainActivity extends ComponentActivity {
                 if (!ensurePrinterConnected()) return;
                 showManualSeedbedDialog();
                 return;
-            case TEMP_CJG:
-                if (!ensurePrinterConnected()) return;
-                showManualProcessDialog();
-                return;
-            case TEMP_CP:
-                if (!ensurePrinterConnected()) return;
-                showManualProductDialog();
-                return;
+//            case TEMP_CJG:
+//                if (!ensurePrinterConnected()) return;
+//                showManualProcessDialog();
+//                return;
+//            case TEMP_CP:
+//                if (!ensurePrinterConnected()) return;
+//                showManualProductDialog();
+//                return;
             default:
                 fillExampleData();
         }
@@ -513,22 +832,22 @@ public class MainActivity extends ComponentActivity {
             }
             return;
         }
-        if (TEMP_CJG.equals(currentTemplate())) {
-            configureProcessBatchUI();
-            selectedProcessTypeKey = MockLabelRepository.PROCESS_TYPE_MATERIAL;
-            spinnerPlantBlock.setText("初加工 (material)", false);
-            selectedProcessDate = "2024-05-21";
-            etPlantDate.setText(selectedProcessDate);
-            applyProcessFilters(true);
-            return;
-        }
-        if (TEMP_CP.equals(currentTemplate())) {
-            configureProductBatchUI();
-            selectedProductDate = "2024-05-22";
-            etPlantDate.setText(selectedProductDate);
-            applyProductFilters(true);
-            return;
-        }
+//        if (TEMP_CJG.equals(currentTemplate())) {
+//            configureProcessBatchUI();
+//            selectedProcessTypeKey = MockLabelRepository.PROCESS_TYPE_MATERIAL;
+//            spinnerPlantBlock.setText("初加工 (material)", false);
+//            selectedProcessDate = "2024-05-21";
+//            etPlantDate.setText(selectedProcessDate);
+//            applyProcessFilters(true);
+//            return;
+//        }
+//        if (TEMP_CP.equals(currentTemplate())) {
+//            configureProductBatchUI();
+//            selectedProductDate = "2024-05-22";
+//            etPlantDate.setText(selectedProductDate);
+//            applyProductFilters(true);
+//            return;
+//        }
 
         TemplateExampleData exampleData = MockLabelRepository.getTemplateExample(currentTemplate());
         if (exampleData == null) return;
@@ -578,18 +897,18 @@ public class MainActivity extends ComponentActivity {
             btnExample.setText("补打单棵");
             configurePlantBatchUI();
             resetPlantFilters();
-        } else if (TEMP_CJG.equals(template)) {
-            cardManualForm.setVisibility(View.GONE);
-            cardPlantBatch.setVisibility(View.VISIBLE);
-            btnExample.setText("补打单条");
-            configureProcessBatchUI();
-            resetProcessFilters();
-        } else if (TEMP_CP.equals(template)) {
-            cardManualForm.setVisibility(View.GONE);
-            cardPlantBatch.setVisibility(View.VISIBLE);
-            btnExample.setText("补打单品");
-            configureProductBatchUI();
-            resetProductFilters();
+//        } else if (TEMP_CJG.equals(template)) {
+//            cardManualForm.setVisibility(View.GONE);
+//            cardPlantBatch.setVisibility(View.VISIBLE);
+//            btnExample.setText("补打单条");
+//            configureProcessBatchUI();
+//            resetProcessFilters();
+//        } else if (TEMP_CP.equals(template)) {
+//            cardManualForm.setVisibility(View.GONE);
+//            cardPlantBatch.setVisibility(View.VISIBLE);
+//            btnExample.setText("补打单品");
+//            configureProductBatchUI();
+//            resetProductFilters();
         } else if (TEMP_DP.equals(template)) {
             cardManualForm.setVisibility(View.GONE);
             cardPlantBatch.setVisibility(View.VISIBLE);
@@ -633,7 +952,7 @@ public class MainActivity extends ComponentActivity {
         tvDataCount.setText("");
     }
 
-    private void showProcessingTemplate() {
+/*    private void showProcessingTemplate() {
         tilProcessingType.setVisibility(View.VISIBLE);
         tilProcessName.setVisibility(View.VISIBLE);
         tilF1.setHint("名称");
@@ -652,7 +971,7 @@ public class MainActivity extends ComponentActivity {
         etF5.setOnClickListener(v -> showDateTimePicker(etF5));
         etF6.setFocusableInTouchMode(true);
         etF6.setOnClickListener(null);
-    }
+    }*/
 
     private void showProductTemplate() {
         tilF1.setHint("产成品名称");
@@ -716,7 +1035,7 @@ public class MainActivity extends ComponentActivity {
     }
 
     private void configurePlantBatchUI() {
-        showAllSummaryRows();
+        hideBatchDetailRows();
         tvBatchFilterTitle.setText("筛选苗木所在地块");
         tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择地块");
@@ -724,43 +1043,43 @@ public class MainActivity extends ComponentActivity {
         tilPlantDate.setHint("定植日期");
         layoutPlantSummary.setVisibility(View.VISIBLE);
         tvPlantCountLabel.setText("待打印苗木标签");
-        setupPlantBlockSelector();
+        ensureFieldsLoaded();
     }
 
     private void configureFieldBatchUI() {
-        showAllSummaryRows();
+        hideBatchDetailRows();
         tvBatchFilterTitle.setText("筛选地块所在种植园");
         tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择种植园");
         tilPlantDate.setVisibility(View.GONE);
         layoutPlantSummary.setVisibility(View.VISIBLE);
         tvPlantCountLabel.setText("待打印地块标签");
-        setupPlantationSelector();
+        ensurePlantationsLoaded();
     }
 
     private void configureGreenhouseBatchUI() {
-        showAllSummaryRows();
+        hideBatchDetailRows();
         tvBatchFilterTitle.setText("筛选大棚所在种植园");
         tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择种植园");
         tilPlantDate.setVisibility(View.GONE);
         layoutPlantSummary.setVisibility(View.VISIBLE);
         tvPlantCountLabel.setText("待打印大棚标签");
-        setupPlantationSelector();
+        ensurePlantationsLoaded();
     }
 
     private void configureSeedbedBatchUI() {
-        showAllSummaryRows();
+        hideBatchDetailRows();
         tvBatchFilterTitle.setText("筛选苗床所在大棚");
         tilPlantBlock.setVisibility(View.VISIBLE);
         tilPlantBlock.setHint("选择大棚");
         tilPlantDate.setVisibility(View.GONE);
         layoutPlantSummary.setVisibility(View.VISIBLE);
         tvPlantCountLabel.setText("待打印苗床标签");
-        setupGreenhouseSelector();
+        ensureGreenhousesLoaded();
     }
 
-    private void configureProductBatchUI() {
+/*    private void configureProductBatchUI() {
         showAllSummaryRows();
         tvBatchFilterTitle.setText("筛选产成品完工时间");
         tilPlantBlock.setVisibility(View.GONE);
@@ -788,7 +1107,7 @@ public class MainActivity extends ComponentActivity {
         tvPlantBlockOwner.setVisibility(View.GONE);
         updateProcessSummaryPlaceholder();
         setupProcessTypeSelector();
-    }
+    }*/
 
     private void showAllSummaryRows() {
         tvPlantBlockName.setVisibility(View.VISIBLE);
@@ -796,6 +1115,14 @@ public class MainActivity extends ComponentActivity {
         tvPlantBlockLocation.setVisibility(View.VISIBLE);
         tvPlantBlockStatus.setVisibility(View.VISIBLE);
         tvPlantBlockOwner.setVisibility(View.VISIBLE);
+    }
+
+    private void hideBatchDetailRows() {
+        tvPlantBlockName.setVisibility(View.GONE);
+        tvPlantBlockCode.setVisibility(View.GONE);
+        tvPlantBlockLocation.setVisibility(View.GONE);
+        tvPlantBlockStatus.setVisibility(View.GONE);
+        tvPlantBlockOwner.setVisibility(View.GONE);
     }
 
     private void addData() {
@@ -826,9 +1153,9 @@ public class MainActivity extends ComponentActivity {
         if (TEMP_DK.equals(template)) {
             return etF2.getText().toString();
         }
-        if (TEMP_CP.equals(template) || TEMP_CJG.equals(template)) {
-            return etModel.getText().toString() + " / " + etSpec.getText().toString();
-        }
+//        if (TEMP_CP.equals(template) || TEMP_CJG.equals(template)) {
+//            return etModel.getText().toString() + " / " + etSpec.getText().toString();
+//        }
         return etF2.getText().toString();
     }
 
@@ -836,9 +1163,9 @@ public class MainActivity extends ComponentActivity {
         if (TEMP_DK.equals(template)) {
             return etModel.getText().toString() + " × " + etSpec.getText().toString();
         }
-        if (TEMP_CP.equals(template) || TEMP_CJG.equals(template)) {
-            return etNum.getText().toString() + " / " + etWeight.getText().toString();
-        }
+//        if (TEMP_CP.equals(template) || TEMP_CJG.equals(template)) {
+//            return etNum.getText().toString() + " / " + etWeight.getText().toString();
+//        }
         return etF3.getText().toString();
     }
 
@@ -867,7 +1194,7 @@ public class MainActivity extends ComponentActivity {
     private void setupGreenhouseSelector() {
         List<String> names = new ArrayList<>();
         for (GreenhouseLabelData greenhouse : greenhouses) {
-            names.add(greenhouse.greenhouseName + " (" + greenhouse.selfCode + ")");
+            names.add(greenhouse.selfCode);
         }
         ArrayAdapter<String> greenhouseAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
         spinnerPlantBlock.setAdapter(greenhouseAdapter);
@@ -883,7 +1210,7 @@ public class MainActivity extends ComponentActivity {
         updateSeedbedSummaryPlaceholder();
     }
 
-    private void setupProcessTypeSelector() {
+/*    private void setupProcessTypeSelector() {
         List<String> types = new ArrayList<>();
         types.add("初加工 (material)");
         types.add("精加工 (semi_finished)");
@@ -901,12 +1228,12 @@ public class MainActivity extends ComponentActivity {
                 applyProcessFilters(true);
             }
         });
-    }
+    }*/
 
     private void setupPlantBlockSelector() {
         List<String> names = new ArrayList<>();
         for (PlantBlockData block : plantBlocks) {
-            names.add(block.name);
+            names.add(block.selfCode);
         }
         ArrayAdapter<String> blockAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
         spinnerPlantBlock.setAdapter(blockAdapter);
@@ -925,7 +1252,7 @@ public class MainActivity extends ComponentActivity {
     private void setupPlantationSelector() {
         List<String> names = new ArrayList<>();
         for (PlantationData plantation : plantations) {
-            names.add(plantation.name);
+            names.add(plantation.name + "（" + plantation.selfCode + "）");
         }
         ArrayAdapter<String> plantationAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, names);
         spinnerPlantBlock.setAdapter(plantationAdapter);
@@ -958,19 +1285,48 @@ public class MainActivity extends ComponentActivity {
         }
 
         bindPlantBlockSummary(selectedPlantBlock);
-        for (PlantData plant : selectedPlantBlock.plants) {
-            if (selectedPlantDate.isEmpty() || selectedPlantDate.equals(plant.plantedDate)) {
-                dataList.add(MockLabelRepository.toPlantLabel(plant));
-            }
+        if (selectedPlantDate.isEmpty()) {
+            updateDataUI();
+            tvDataCount.setText("请选择地块和定植日期后加载苗木标签");
+            if (showToast) toast("请选择定植日期");
+            return;
         }
-        updateDataUI();
+        if (selectedPlantBlock.id <= 0) {
+            updateDataUI();
+            toast("地块数据缺少接口ID，无法获取打印数据");
+            return;
+        }
 
-        if (showToast) {
-            String message = selectedPlantDate.isEmpty()
-                    ? "已载入“" + selectedPlantBlock.name + "”的示例苗木标签"
-                    : "已按定植日期筛选到 " + dataList.size() + " 棵苗木";
-            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
-        }
+        showLoading("正在加载苗木标签数据...");
+        printerApiService.getPlantPrintData(selectedPlantBlock.id, selectedPlantDate)
+                .enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>>() {
+                    @Override
+                    public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> call,
+                                           Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> response) {
+                        hideLoading();
+                        PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>> body = response.body();
+                        if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                            showPrintDataErrorDialog(body, response);
+                            updateDataUI();
+                            return;
+                        }
+                        dataList.clear();
+                        for (PrinterApiModels.PlantPrintData item : body.data) {
+                            dataList.add(item.toLabelData());
+                        }
+                        updateDataUI();
+                        if (showToast) {
+                            Toast.makeText(MainActivity.this, "已按定植日期筛选到 " + dataList.size() + " 棵苗木", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> call, Throwable t) {
+                        hideLoading();
+                        updateDataUI();
+                        toast("苗木标签数据加载失败：" + t.getMessage());
+                    }
+                });
     }
 
     private void bindPlantBlockSummary(PlantBlockData block) {
@@ -990,16 +1346,43 @@ public class MainActivity extends ComponentActivity {
             updateDataUI();
             return;
         }
+        if (selectedPlantation.id <= 0) {
+            updateDataUI();
+            toast("种植园数据缺少接口ID，无法获取打印数据");
+            return;
+        }
 
         bindPlantationSummary(selectedPlantation);
-        for (FieldLabelData field : selectedPlantation.fields) {
-            dataList.add(MockLabelRepository.toFieldLabel(selectedPlantation.name, field));
-        }
-        updateDataUI();
+        showLoading("正在加载地块标签数据...");
+        printerApiService.getFieldPrintData(selectedPlantation.id)
+                .enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>>>() {
+                    @Override
+                    public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>>> call,
+                                           Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>>> response) {
+                        hideLoading();
+                        PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>> body = response.body();
+                        if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                            showPrintDataErrorDialog(body, response);
+                            updateDataUI();
+                            return;
+                        }
+                        dataList.clear();
+                        for (PrinterApiModels.FieldPrintData item : body.data) {
+                            dataList.add(item.toLabelData());
+                        }
+                        updateDataUI();
+                        if (showToast) {
+                            Toast.makeText(MainActivity.this, "已载入“" + selectedPlantation.name + "”的地块标签", Toast.LENGTH_SHORT).show();
+                        }
+                    }
 
-        if (showToast) {
-            Toast.makeText(this, "已载入“" + selectedPlantation.name + "”的地块示例标签", Toast.LENGTH_SHORT).show();
-        }
+                    @Override
+                    public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>>> call, Throwable t) {
+                        hideLoading();
+                        updateDataUI();
+                        toast("地块标签数据加载失败：" + t.getMessage());
+                    }
+                });
     }
 
     private void bindPlantationSummary(PlantationData plantation) {
@@ -1029,17 +1412,43 @@ public class MainActivity extends ComponentActivity {
             updateDataUI();
             return;
         }
+        if (selectedPlantation.id <= 0) {
+            updateDataUI();
+            toast("种植园数据缺少接口ID，无法获取打印数据");
+            return;
+        }
 
         bindPlantationSummary(selectedPlantation);
-        List<GreenhouseLabelData> greenhouses = MockLabelRepository.getGreenhousesByPlantationName(selectedPlantation.name);
-        for (GreenhouseLabelData greenhouse : greenhouses) {
-            dataList.add(MockLabelRepository.toGreenhouseLabel(selectedPlantation.name, greenhouse));
-        }
-        updateDataUI();
+        showLoading("正在加载大棚标签数据...");
+        printerApiService.getGreenhousePrintData(selectedPlantation.id)
+                .enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>>>() {
+                    @Override
+                    public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>>> call,
+                                           Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>>> response) {
+                        hideLoading();
+                        PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>> body = response.body();
+                        if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                            showPrintDataErrorDialog(body, response);
+                            updateDataUI();
+                            return;
+                        }
+                        dataList.clear();
+                        for (PrinterApiModels.GreenhousePrintData item : body.data) {
+                            dataList.add(item.toLabelData());
+                        }
+                        updateDataUI();
+                        if (showToast) {
+                            Toast.makeText(MainActivity.this, "已载入“" + selectedPlantation.name + "”的大棚标签", Toast.LENGTH_SHORT).show();
+                        }
+                    }
 
-        if (showToast) {
-            Toast.makeText(this, "已载入“" + selectedPlantation.name + "”的大棚示例标签", Toast.LENGTH_SHORT).show();
-        }
+                    @Override
+                    public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>>> call, Throwable t) {
+                        hideLoading();
+                        updateDataUI();
+                        toast("大棚标签数据加载失败：" + t.getMessage());
+                    }
+                });
     }
 
     private void applySeedbedFilters(boolean showToast) {
@@ -1049,20 +1458,46 @@ public class MainActivity extends ComponentActivity {
             updateDataUI();
             return;
         }
+        if (selectedGreenhouse.id <= 0) {
+            updateDataUI();
+            toast("大棚数据缺少接口ID，无法获取打印数据");
+            return;
+        }
 
         bindGreenhouseSummary(selectedGreenhouse);
-        List<SeedbedLabelData> seedbeds = MockLabelRepository.getSeedbedsByGreenhouseSelfCode(selectedGreenhouse.selfCode);
-        for (SeedbedLabelData seedbed : seedbeds) {
-            dataList.add(MockLabelRepository.toSeedbedLabel(selectedGreenhouse, seedbed));
-        }
-        updateDataUI();
+        showLoading("正在加载苗床标签数据...");
+        printerApiService.getSeedbedPrintData(selectedGreenhouse.id)
+                .enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>>>() {
+                    @Override
+                    public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>>> call,
+                                           Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>>> response) {
+                        hideLoading();
+                        PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>> body = response.body();
+                        if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                            showPrintDataErrorDialog(body, response);
+                            updateDataUI();
+                            return;
+                        }
+                        dataList.clear();
+                        for (PrinterApiModels.SeedbedPrintData item : body.data) {
+                            dataList.add(item.toLabelData());
+                        }
+                        updateDataUI();
+                        if (showToast) {
+                            Toast.makeText(MainActivity.this, "已载入“" + selectedGreenhouse.selfCode + "”的苗床标签", Toast.LENGTH_SHORT).show();
+                        }
+                    }
 
-        if (showToast) {
-            Toast.makeText(this, "已载入“" + selectedGreenhouse.greenhouseName + "”的苗床示例标签", Toast.LENGTH_SHORT).show();
-        }
+                    @Override
+                    public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>>> call, Throwable t) {
+                        hideLoading();
+                        updateDataUI();
+                        toast("苗床标签数据加载失败：" + t.getMessage());
+                    }
+                });
     }
 
-    private void applyProductFilters(boolean showToast) {
+/*    private void applyProductFilters(boolean showToast) {
         dataList.clear();
         if (selectedProductDate.isEmpty()) {
             updateProductSummaryPlaceholder();
@@ -1090,7 +1525,7 @@ public class MainActivity extends ComponentActivity {
         if (showToast) {
             Toast.makeText(this, "已按类型和完工日期筛选到 " + dataList.size() + " 条加工标签", Toast.LENGTH_SHORT).show();
         }
-    }
+    }*/
 
     private void resetPlantFilters() {
         isPlantingEntryPrintMode = false;
@@ -1184,14 +1619,14 @@ public class MainActivity extends ComponentActivity {
         tvDataCount.setText("请选择大棚，批量打印该大棚下所有苗床标签");
     }
 
-    private void resetProductFilters() {
+/*    private void resetProductFilters() {
         selectedProductDate = "";
         dataList.clear();
         etPlantDate.setText("");
         updateProductSummaryPlaceholder();
         tvDataCount.setText("请选择完工日期，批量打印该日期下所有产成品标签");
         updateDataUI();
-    }
+    }*/
 
     private void resetProcessFilters() {
         selectedProcessTypeKey = "";
@@ -1206,6 +1641,7 @@ public class MainActivity extends ComponentActivity {
 
     private void updateDataUI() {
         btnPrint.setText("确认打印 (" + dataList.size() + ")");
+        updateQrPreviewList();
         if (TEMP_MM.equals(currentTemplate()) && isPlantingEntryPrintMode) {
             String recordTimeLine = plantingEntryRecordTime.isEmpty() ? "录入时间：未填写" : "录入时间：" + plantingEntryRecordTime;
             tvDataCount.setText("当前将打印本次录入的 " + dataList.size() + " 张苗木标签\n" + recordTimeLine);
@@ -1223,20 +1659,109 @@ public class MainActivity extends ComponentActivity {
         } else if (TEMP_MC.equals(currentTemplate()) && selectedGreenhouse != null) {
             tvDataCount.setText("当前将打印大棚“" + selectedGreenhouse.greenhouseName + "”中的 " + dataList.size() + " 张苗床标签");
             tvPlantCount.setText(String.valueOf(dataList.size()));
-        } else if (TEMP_CJG.equals(currentTemplate()) && !selectedProcessTypeKey.isEmpty() && !selectedProcessDate.isEmpty()) {
-            tvDataCount.setText("当前将打印" + getProcessTypeDisplayName(selectedProcessTypeKey) + "在 " + selectedProcessDate + " 完工的 " + dataList.size() + " 张加工标签");
-            tvPlantCount.setText(String.valueOf(dataList.size()));
-        } else if (TEMP_CP.equals(currentTemplate()) && !selectedProductDate.isEmpty()) {
-            tvDataCount.setText("当前将打印完工日期为 " + selectedProductDate + " 的 " + dataList.size() + " 张产成品标签");
-            tvPlantCount.setText(String.valueOf(dataList.size()));
-        } else if (!TEMP_MM.equals(currentTemplate()) && !TEMP_DK.equals(currentTemplate()) && !TEMP_DP.equals(currentTemplate()) && !TEMP_MC.equals(currentTemplate()) && !TEMP_CP.equals(currentTemplate()) && !TEMP_CJG.equals(currentTemplate())) {
+//        } else if (TEMP_CJG.equals(currentTemplate()) && !selectedProcessTypeKey.isEmpty() && !selectedProcessDate.isEmpty()) {
+//            tvDataCount.setText("当前将打印" + getProcessTypeDisplayName(selectedProcessTypeKey) + "在 " + selectedProcessDate + " 完工的 " + dataList.size() + " 张加工标签");
+//            tvPlantCount.setText(String.valueOf(dataList.size()));
+//        } else if (TEMP_CP.equals(currentTemplate()) && !selectedProductDate.isEmpty()) {
+//            tvDataCount.setText("当前将打印完工日期为 " + selectedProductDate + " 的 " + dataList.size() + " 张产成品标签");
+//            tvPlantCount.setText(String.valueOf(dataList.size()));
+        } else if (!TEMP_MM.equals(currentTemplate()) && !TEMP_DK.equals(currentTemplate()) && !TEMP_DP.equals(currentTemplate()) && !TEMP_MC.equals(currentTemplate())) {
             tvDataCount.setText(dataList.isEmpty() ? "" : "已准备 " + dataList.size() + " 张标签");
         }
     }
 
-    private void bindProductSummary() {
-        tvPlantBlockCode.setText("完工日期：" + selectedProductDate);
+    private void updateQrPreviewList() {
+        if (layoutQrPreviewList == null || tvQrPreviewMore == null) {
+            return;
+        }
+        layoutQrPreviewList.removeAllViews();
+        tvQrPreviewMore.setVisibility(View.GONE);
+        if (!isBatchPreviewTemplate()) {
+            layoutQrPreviewList.setVisibility(View.GONE);
+            return;
+        }
+
+        layoutQrPreviewList.setVisibility(View.VISIBLE);
+        if (dataList.isEmpty()) {
+            TextView emptyView = new TextView(this);
+            emptyView.setText("暂无待打印二维码");
+            emptyView.setTextColor(Color.parseColor("#888888"));
+            emptyView.setTextSize(13);
+            emptyView.setGravity(Gravity.CENTER);
+            emptyView.setPadding(dp(12), dp(12), dp(12), dp(12));
+            layoutQrPreviewList.addView(emptyView, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            ));
+            return;
+        }
+
+        int displayCount = Math.min(dataList.size(), 10);
+        for (int i = 0; i < displayCount; i++) {
+            layoutQrPreviewList.addView(createQrPreviewRow(i, dataList.get(i)));
+        }
+        if (dataList.size() > displayCount) {
+            tvQrPreviewMore.setText("仅显示前10个二维码，后续 " + (dataList.size() - displayCount) + " 个标签已省略显示");
+            tvQrPreviewMore.setVisibility(View.VISIBLE);
+        }
     }
+
+    private boolean isBatchPreviewTemplate() {
+        String template = currentTemplate();
+        return TEMP_MM.equals(template) || TEMP_DK.equals(template) || TEMP_DP.equals(template) || TEMP_MC.equals(template);
+    }
+
+    private View createQrPreviewRow(int index, LabelData item) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(10), dp(9), dp(10), dp(9));
+        row.setBackgroundColor(index % 2 == 0 ? Color.WHITE : Color.parseColor("#F3F8F4"));
+
+        TextView orderView = new TextView(this);
+        orderView.setText(String.format(Locale.getDefault(), "#%02d", index + 1));
+        orderView.setTextColor(Color.parseColor("#2E7D32"));
+        orderView.setTextSize(13);
+        orderView.setTypeface(null, Typeface.BOLD);
+
+        TextView codeView = new TextView(this);
+        codeView.setText(resolveQrPreviewCode(item));
+        codeView.setTextColor(Color.parseColor("#333333"));
+        codeView.setTextSize(13);
+        codeView.setSingleLine(true);
+        codeView.setEllipsize(TextUtils.TruncateAt.END);
+
+        LinearLayout.LayoutParams orderParams = new LinearLayout.LayoutParams(dp(48), LinearLayout.LayoutParams.WRAP_CONTENT);
+        row.addView(orderView, orderParams);
+        LinearLayout.LayoutParams codeParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        row.addView(codeView, codeParams);
+
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        rowParams.topMargin = index == 0 ? 0 : dp(1);
+        row.setLayoutParams(rowParams);
+        return row;
+    }
+
+    private String resolveQrPreviewCode(LabelData item) {
+        if (item == null) {
+            return "";
+        }
+        if (item.traceCode != null && !item.traceCode.trim().isEmpty()) {
+            return item.traceCode;
+        }
+        return item.f1 == null ? "" : item.f1;
+    }
+
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+/*    private void bindProductSummary() {
+        tvPlantBlockCode.setText("完工日期：" + selectedProductDate);
+    }*/
 
     private void updateProductSummaryPlaceholder() {
         tvPlantBlockCode.setText("完工日期：待选择");
@@ -1277,68 +1802,24 @@ public class MainActivity extends ComponentActivity {
         input.setSingleLine();
         container.addView(input);
 
-        TextView validationText = new TextView(this);
-        validationText.setPadding(0, padding, 0, 0);
-        validationText.setTextColor(Color.parseColor("#2E7D32"));
-        container.addView(validationText);
-
-        TextView infoText = new TextView(this);
-        infoText.setPadding(0, padding / 2, 0, 0);
-        infoText.setVisibility(View.GONE);
-        container.addView(infoText);
-
-        final LabelData[] validatedLabel = new LabelData[1];
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("补打单个苗木标签")
-                .setMessage("先校验苗木二维码，再确认苗木信息后打印。")
+                .setMessage("输入苗木二维码后，将校验并补打单个标签。")
                 .setView(container)
-                .setNeutralButton("校验二维码", null)
                 .setNegativeButton("取消", null)
-                .setPositiveButton("确认打印", null)
+                .setPositiveButton("确定", null)
                 .create();
 
         dialog.setOnShowListener(dialogInterface -> {
-            Button validateButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
-            Button printButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            printButton.setEnabled(false);
-
-            validateButton.setOnClickListener(v -> {
+            Button confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            confirmButton.setOnClickListener(v -> {
                 String manualCode = input.getText().toString().trim();
                 if (manualCode.isEmpty()) {
                     Toast.makeText(this, "请输入苗木二维码", Toast.LENGTH_SHORT).show();
                     return;
                 }
-
-                LabelData label = MockLabelRepository.findPlantLabelByTraceCode(plantBlocks, manualCode);
-                String status = selectedPlantBlock != null ? selectedPlantBlock.status : "正常养护";
-                if (label == null) {
-                    String blockName = selectedPlantBlock != null ? selectedPlantBlock.name : "一号示范地块";
-                    label = new LabelData(TEMP_MM, "", "", "金丝油", "2代", "嫁接", blockName, "MS-REPRINT-001", "2024-06-18", manualCode);
-                } else if (selectedPlantBlock == null) {
-                    PlantBlockData block = MockLabelRepository.findPlantBlockByName(plantBlocks, label.f4);
-                    status = block != null ? block.status : "正常养护";
-                }
-
-                validatedLabel[0] = label;
-                validationText.setText("二维码校验结果：正确");
-                infoText.setText("品种：" + label.f1 + "\n代数：" + label.f2 + "\n所属地块：" + label.f4 + "\n状态：" + status);
-                infoText.setTextColor(getStatusColor(status));
-                infoText.setVisibility(View.VISIBLE);
-                printButton.setEnabled(true);
-            });
-
-            printButton.setOnClickListener(v -> {
-                if (validatedLabel[0] == null) {
-                    Toast.makeText(this, "请先校验苗木二维码", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                dataList.clear();
-                dataList.add(validatedLabel[0]);
-                updateDataUI();
-                tvDataCount.setText("已准备补打 1 张苗木标签，二维码：" + validatedLabel[0].traceCode);
-                tvPlantCount.setText("1");
-                printCurrentData();
                 dialog.dismiss();
+                fetchManualPlantPrintData(manualCode);
             });
         });
 
@@ -1356,70 +1837,24 @@ public class MainActivity extends ComponentActivity {
         input.setSingleLine();
         container.addView(input);
 
-        TextView validationText = new TextView(this);
-        validationText.setPadding(0, padding, 0, 0);
-        validationText.setTextColor(Color.parseColor("#2E7D32"));
-        container.addView(validationText);
-
-        TextView infoText = new TextView(this);
-        infoText.setPadding(0, padding / 2, 0, 0);
-        infoText.setVisibility(View.GONE);
-        container.addView(infoText);
-
-        final LabelData[] validatedLabel = new LabelData[1];
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("补打单个地块标签")
-                .setMessage("先校验地块自编码，再确认地块信息后打印。")
+                .setMessage("输入地块自编码后，将校验并补打单个标签。")
                 .setView(container)
-                .setNeutralButton("校验自编码", null)
                 .setNegativeButton("取消", null)
-                .setPositiveButton("确认打印", null)
+                .setPositiveButton("确定", null)
                 .create();
 
         dialog.setOnShowListener(dialogInterface -> {
-            Button validateButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
-            Button printButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            printButton.setEnabled(false);
-
-            validateButton.setOnClickListener(v -> {
+            Button confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            confirmButton.setOnClickListener(v -> {
                 String selfCode = input.getText().toString().trim();
                 if (selfCode.isEmpty()) {
                     Toast.makeText(this, "请输入地块自编码", Toast.LENGTH_SHORT).show();
                     return;
                 }
-
-                LabelData label = MockLabelRepository.findFieldLabelBySelfCode(plantations, selfCode);
-                PlantationData plantation = selectedPlantation;
-                String status = plantation != null ? plantation.status : "正常运营";
-                if (label == null) {
-                    String plantationName = plantation != null ? plantation.name : "东山一号种植园";
-                    String owner = plantation != null ? plantation.owner : "陈大海";
-                    label = new LabelData(TEMP_DK, "", "", selfCode, plantationName, "100m × 40m", "4.0亩", owner, "", "DK-REPRINT-" + selfCode);
-                } else if (plantation == null) {
-                    plantation = MockLabelRepository.findPlantationByName(plantations, label.f2);
-                    status = plantation != null ? plantation.status : "正常运营";
-                }
-
-                validatedLabel[0] = label;
-                validationText.setText("自编码校验结果：正确");
-                infoText.setText("地块自编码：" + label.f1 + "\n所属种植园：" + label.f2 + "\n面积：" + label.f4 + "\n负责人：" + label.f5 + "\n状态：" + status);
-                infoText.setTextColor(getStatusColor(status));
-                infoText.setVisibility(View.VISIBLE);
-                printButton.setEnabled(true);
-            });
-
-            printButton.setOnClickListener(v -> {
-                if (validatedLabel[0] == null) {
-                    Toast.makeText(this, "请先校验地块自编码", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                dataList.clear();
-                dataList.add(validatedLabel[0]);
-                updateDataUI();
-                tvDataCount.setText("已准备补打 1 张地块标签，自编码：" + validatedLabel[0].f1);
-                tvPlantCount.setText("1");
-                printCurrentData();
                 dialog.dismiss();
+                fetchManualFieldPrintData(selfCode);
             });
         });
 
@@ -1437,70 +1872,24 @@ public class MainActivity extends ComponentActivity {
         input.setSingleLine();
         container.addView(input);
 
-        TextView validationText = new TextView(this);
-        validationText.setPadding(0, padding, 0, 0);
-        validationText.setTextColor(Color.parseColor("#2E7D32"));
-        container.addView(validationText);
-
-        TextView infoText = new TextView(this);
-        infoText.setPadding(0, padding / 2, 0, 0);
-        infoText.setVisibility(View.GONE);
-        container.addView(infoText);
-
-        final LabelData[] validatedLabel = new LabelData[1];
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("补打单个大棚标签")
-                .setMessage("先校验大棚自编码，再确认大棚信息后打印。")
+                .setMessage("输入大棚自编码后，将校验并补打单个标签。")
                 .setView(container)
-                .setNeutralButton("校验自编码", null)
                 .setNegativeButton("取消", null)
-                .setPositiveButton("确认打印", null)
+                .setPositiveButton("确定", null)
                 .create();
 
         dialog.setOnShowListener(dialogInterface -> {
-            Button validateButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
-            Button printButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            printButton.setEnabled(false);
-
-            validateButton.setOnClickListener(v -> {
+            Button confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            confirmButton.setOnClickListener(v -> {
                 String selfCode = input.getText().toString().trim();
                 if (selfCode.isEmpty()) {
                     Toast.makeText(this, "请输入大棚自编码", Toast.LENGTH_SHORT).show();
                     return;
                 }
-
-                LabelData label = MockLabelRepository.findGreenhouseLabelBySelfCode(plantations, selfCode);
-                PlantationData plantation = selectedPlantation;
-                String status = plantation != null ? plantation.status : "正常运营";
-                if (label == null) {
-                    String plantationName = plantation != null ? plantation.name : "东山一号种植园";
-                    String owner = plantation != null ? plantation.owner : "陈大海";
-                    label = new LabelData(TEMP_DP, "", "", selfCode, plantationName, "2.0亩", owner, "", "", "GH-REPRINT-" + selfCode);
-                } else if (plantation == null) {
-                    plantation = MockLabelRepository.findPlantationByName(plantations, label.f2);
-                    status = plantation != null ? plantation.status : "正常运营";
-                }
-
-                validatedLabel[0] = label;
-                validationText.setText("自编码校验结果：正确");
-                infoText.setText("大棚自编码：" + label.f1 + "\n所属种植园：" + label.f2 + "\n面积：" + label.f3 + "\n负责人：" + label.f4 + "\n状态：" + status);
-                infoText.setTextColor(getStatusColor(status));
-                infoText.setVisibility(View.VISIBLE);
-                printButton.setEnabled(true);
-            });
-
-            printButton.setOnClickListener(v -> {
-                if (validatedLabel[0] == null) {
-                    Toast.makeText(this, "请先校验大棚自编码", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                dataList.clear();
-                dataList.add(validatedLabel[0]);
-                updateDataUI();
-                tvDataCount.setText("已准备补打 1 张大棚标签，自编码：" + validatedLabel[0].f1);
-                tvPlantCount.setText("1");
-                printCurrentData();
                 dialog.dismiss();
+                fetchManualGreenhousePrintData(selfCode);
             });
         });
 
@@ -1518,83 +1907,241 @@ public class MainActivity extends ComponentActivity {
         input.setSingleLine();
         container.addView(input);
 
-        TextView validationText = new TextView(this);
-        validationText.setPadding(0, padding, 0, 0);
-        validationText.setTextColor(Color.parseColor("#2E7D32"));
-        container.addView(validationText);
-
-        TextView infoText = new TextView(this);
-        infoText.setPadding(0, padding / 2, 0, 0);
-        infoText.setVisibility(View.GONE);
-        container.addView(infoText);
-
-        final LabelData[] validatedLabel = new LabelData[1];
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("补打单个苗床标签")
-                .setMessage("先校验苗床自编码，再确认苗床信息后打印。")
+                .setMessage("输入苗床自编码后，将校验并补打单个标签。")
                 .setView(container)
-                .setNeutralButton("校验自编码", null)
                 .setNegativeButton("取消", null)
-                .setPositiveButton("确认打印", null)
+                .setPositiveButton("确定", null)
                 .create();
 
         dialog.setOnShowListener(dialogInterface -> {
-            Button validateButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
-            Button printButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-            printButton.setEnabled(false);
-
-            validateButton.setOnClickListener(v -> {
+            Button confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            confirmButton.setOnClickListener(v -> {
                 String selfCode = input.getText().toString().trim();
                 if (selfCode.isEmpty()) {
                     Toast.makeText(this, "请输入苗床自编码", Toast.LENGTH_SHORT).show();
                     return;
                 }
-
-                LabelData label = MockLabelRepository.findSeedbedLabelBySelfCode(greenhouses, selfCode);
-                GreenhouseLabelData greenhouse = selectedGreenhouse;
-                String status = greenhouse != null ? greenhouse.status : "正常运营";
-                if (label == null) {
-                    String greenhouseCode = greenhouse != null ? greenhouse.selfCode : "GH-201";
-                    String plantationName = greenhouse != null ? greenhouse.plantationName : "东山一号种植园";
-                    String owner = greenhouse != null ? greenhouse.owner : "陈大海";
-                    label = new LabelData(TEMP_MC, "", "", selfCode, greenhouseCode, plantationName, owner, "", "", "MC-REPRINT-" + selfCode);
-                } else if (greenhouse == null) {
-                    for (GreenhouseLabelData item : greenhouses) {
-                        if (item.selfCode.equals(label.f2)) {
-                            greenhouse = item;
-                            break;
-                        }
-                    }
-                    status = greenhouse != null ? greenhouse.status : "正常运营";
-                }
-
-                validatedLabel[0] = label;
-                validationText.setText("自编码校验结果：正确");
-                infoText.setText("苗床自编码：" + label.f1 + "\n所属大棚：" + label.f2 + "\n所属种植园：" + label.f3 + "\n负责人：" + label.f4 + "\n状态：" + status);
-                infoText.setTextColor(getStatusColor(status));
-                infoText.setVisibility(View.VISIBLE);
-                printButton.setEnabled(true);
-            });
-
-            printButton.setOnClickListener(v -> {
-                if (validatedLabel[0] == null) {
-                    Toast.makeText(this, "请先校验苗床自编码", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                dataList.clear();
-                dataList.add(validatedLabel[0]);
-                updateDataUI();
-                tvDataCount.setText("已准备补打 1 张苗床标签，自编码：" + validatedLabel[0].f1);
-                tvPlantCount.setText("1");
-                printCurrentData();
                 dialog.dismiss();
+                fetchManualSeedbedPrintData(selfCode);
             });
         });
 
         dialog.show();
     }
 
-    private void showManualProductDialog() {
+    private void fetchManualPlantPrintData(String plantQrcode) {
+        showLoading("正在获取苗木补打数据...");
+        printerApiService.getPlantPrintData(plantQrcode)
+                .enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>>() {
+                    @Override
+                    public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> call,
+                                           Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> response) {
+                        hideLoading();
+                        PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>> body = response.body();
+                        if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                            showPrintDataErrorDialog(body, response);
+                            return;
+                        }
+                        PrinterApiModels.PlantPrintData matchedItem = findPlantPrintDataByQrcode(body.data, plantQrcode);
+                        if (matchedItem == null) {
+                            toast("未找到该苗木二维码的打印数据");
+                            return;
+                        }
+                        LabelData label = matchedItem.toLabelData();
+                        showReprintConfirmDialog("苗木", label, buildPlantConfirmMessage(label));
+                    }
+
+                    @Override
+                    public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> call, Throwable t) {
+                        hideLoading();
+                        toast("苗木补打数据获取失败：" + t.getMessage());
+                    }
+                });
+    }
+
+    private void fetchManualFieldPrintData(String fieldCode) {
+        showLoading("正在获取地块补打数据...");
+        printerApiService.getFieldPrintData(fieldCode)
+                .enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>>>() {
+                    @Override
+                    public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>>> call,
+                                           Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>>> response) {
+                        hideLoading();
+                        PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>> body = response.body();
+                        if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                            showPrintDataErrorDialog(body, response);
+                            return;
+                        }
+                        PrinterApiModels.FieldPrintData matchedItem = findFieldPrintDataByCode(body.data, fieldCode);
+                        if (matchedItem == null) {
+                            toast("未找到该地块自编码的打印数据");
+                            return;
+                        }
+                        LabelData label = matchedItem.toLabelData();
+                        showReprintConfirmDialog("地块", label, buildFieldConfirmMessage(label));
+                    }
+
+                    @Override
+                    public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>>> call, Throwable t) {
+                        hideLoading();
+                        toast("地块补打数据获取失败：" + t.getMessage());
+                    }
+                });
+    }
+
+    private void fetchManualGreenhousePrintData(String greenhouseCode) {
+        showLoading("正在获取大棚补打数据...");
+        printerApiService.getGreenhousePrintData(greenhouseCode)
+                .enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>>>() {
+                    @Override
+                    public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>>> call,
+                                           Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>>> response) {
+                        hideLoading();
+                        PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>> body = response.body();
+                        if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                            showPrintDataErrorDialog(body, response);
+                            return;
+                        }
+                        PrinterApiModels.GreenhousePrintData matchedItem = findGreenhousePrintDataByCode(body.data, greenhouseCode);
+                        if (matchedItem == null) {
+                            toast("未找到该大棚自编码的打印数据");
+                            return;
+                        }
+                        LabelData label = matchedItem.toLabelData();
+                        showReprintConfirmDialog("大棚", label, buildGreenhouseConfirmMessage(label));
+                    }
+
+                    @Override
+                    public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>>> call, Throwable t) {
+                        hideLoading();
+                        toast("大棚补打数据获取失败：" + t.getMessage());
+                    }
+                });
+    }
+
+    private void fetchManualSeedbedPrintData(String seedbedCode) {
+        showLoading("正在获取苗床补打数据...");
+        printerApiService.getSeedbedPrintData(seedbedCode)
+                .enqueue(new Callback<PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>>>() {
+                    @Override
+                    public void onResponse(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>>> call,
+                                           Response<PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>>> response) {
+                        hideLoading();
+                        PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>> body = response.body();
+                        if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
+                            showPrintDataErrorDialog(body, response);
+                            return;
+                        }
+                        PrinterApiModels.SeedbedPrintData matchedItem = findSeedbedPrintDataByCode(body.data, seedbedCode);
+                        if (matchedItem == null) {
+                            toast("未找到该苗床自编码的打印数据");
+                            return;
+                        }
+                        LabelData label = matchedItem.toLabelData();
+                        showReprintConfirmDialog("苗床", label, buildSeedbedConfirmMessage(label));
+                    }
+
+                    @Override
+                    public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>>> call, Throwable t) {
+                        hideLoading();
+                        toast("苗床补打数据获取失败：" + t.getMessage());
+                    }
+                });
+    }
+
+    private void showReprintConfirmDialog(String labelType, LabelData label, String message) {
+        new AlertDialog.Builder(this)
+                .setTitle("确认补打" + labelType + "标签")
+                .setMessage(message)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确定", (dialog, which) -> {
+                    dataList.clear();
+                    dataList.add(label);
+                    updateDataUI();
+                    tvDataCount.setText("已准备补打 1 张" + labelType + "标签，二维码：" + resolveQrPreviewCode(label));
+                    tvPlantCount.setText("1");
+                    printCurrentData();
+                })
+                .show();
+    }
+
+    private PrinterApiModels.PlantPrintData findPlantPrintDataByQrcode(List<PrinterApiModels.PlantPrintData> items, String plantQrcode) {
+        String target = normalizeCode(plantQrcode);
+        for (PrinterApiModels.PlantPrintData item : items) {
+            if (target.equals(normalizeCode(item.plantQrcode))) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private PrinterApiModels.FieldPrintData findFieldPrintDataByCode(List<PrinterApiModels.FieldPrintData> items, String fieldCode) {
+        String target = normalizeCode(fieldCode);
+        for (PrinterApiModels.FieldPrintData item : items) {
+            if (target.equals(normalizeCode(item.fieldCode))) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private PrinterApiModels.GreenhousePrintData findGreenhousePrintDataByCode(List<PrinterApiModels.GreenhousePrintData> items, String greenhouseCode) {
+        String target = normalizeCode(greenhouseCode);
+        for (PrinterApiModels.GreenhousePrintData item : items) {
+            if (target.equals(normalizeCode(item.greenhouseCode))) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private PrinterApiModels.SeedbedPrintData findSeedbedPrintDataByCode(List<PrinterApiModels.SeedbedPrintData> items, String seedbedCode) {
+        String target = normalizeCode(seedbedCode);
+        for (PrinterApiModels.SeedbedPrintData item : items) {
+            if (target.equals(normalizeCode(item.seedbedCode))) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private String buildPlantConfirmMessage(LabelData label) {
+        return "品种：" + label.f1
+                + "\n代数：" + label.f2
+                + "\n育苗方法：" + label.f3
+                + "\n所属地块：" + label.f4
+                + "\n定植日期：" + label.f6
+                + "\n二维码：" + label.traceCode;
+    }
+
+    private String buildFieldConfirmMessage(LabelData label) {
+        return "地块自编码：" + label.f1
+                + "\n所属种植园：" + label.f2
+                + "\n长宽：" + label.f3
+                + "\n面积：" + label.f4
+                + "\n负责人：" + label.f5
+                + "\n二维码：" + label.traceCode;
+    }
+
+    private String buildGreenhouseConfirmMessage(LabelData label) {
+        return "大棚自编码：" + label.f1
+                + "\n所属种植园：" + label.f2
+                + "\n面积：" + label.f3
+                + "\n负责人：" + label.f4
+                + "\n二维码：" + label.traceCode;
+    }
+
+    private String buildSeedbedConfirmMessage(LabelData label) {
+        return "苗床自编码：" + label.f1
+                + "\n所属大棚：" + label.f2
+                + "\n所属种植园：" + label.f3
+                + "\n负责人：" + label.f4
+                + "\n二维码：" + label.traceCode;
+    }
+
+/*    private void showManualProductDialog() {
         int padding = (int) (16 * getResources().getDisplayMetrics().density);
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
@@ -1748,7 +2295,7 @@ public class MainActivity extends ComponentActivity {
         });
 
         dialog.show();
-    }
+    }*/
 
     private void showDatePicker(EditText target) {
         Calendar c = Calendar.getInstance();
@@ -1799,7 +2346,7 @@ public class MainActivity extends ComponentActivity {
         datePickerDialog.show();
     }
 
-    private void showProductDatePicker() {
+/*    private void showProductDatePicker() {
         Calendar c = Calendar.getInstance();
         DatePickerDialog datePickerDialog = new DatePickerDialog(this,
                 (view, year, monthOfYear, dayOfMonth) -> {
@@ -1812,9 +2359,9 @@ public class MainActivity extends ComponentActivity {
                 c.get(Calendar.DAY_OF_MONTH)
         );
         datePickerDialog.show();
-    }
+    }*/
 
-    private void showProcessDatePicker() {
+/*    private void showProcessDatePicker() {
         Calendar c = Calendar.getInstance();
         DatePickerDialog datePickerDialog = new DatePickerDialog(this,
                 (view, year, monthOfYear, dayOfMonth) -> {
@@ -1827,7 +2374,7 @@ public class MainActivity extends ComponentActivity {
                 c.get(Calendar.DAY_OF_MONTH)
         );
         datePickerDialog.show();
-    }
+    }*/
 
     private int getStatusColor(String status) {
         if (status == null) return Color.parseColor("#999999");

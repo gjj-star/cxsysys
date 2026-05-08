@@ -15,7 +15,8 @@ public final class LabelTemplates {
     public static final String TYPE_DEEP = "精加工";
 
     public static String[] allTemplates() {
-        return new String[]{TEMP_MM, TEMP_CJG, TEMP_CP, TEMP_DP, TEMP_MC, TEMP_DK};
+//        return new String[]{TEMP_MM, TEMP_CJG, TEMP_CP, TEMP_DP, TEMP_MC, TEMP_DK};
+        return new String[]{TEMP_MM, TEMP_DP, TEMP_MC, TEMP_DK};
     }
 
     public static String[] processingTypes() {

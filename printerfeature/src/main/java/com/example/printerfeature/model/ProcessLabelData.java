@@ -1,7 +1,7 @@
-//加工数据模型
+//加工数据模型（已废弃）
 package com.example.printerfeature.model;
 
-public class ProcessLabelData {
+/*public class ProcessLabelData {
     public final String processTypeKey;   // material / semi_finished
     public final String processingType;   // 初加工 / 精加工
     public final String processName;
@@ -31,4 +31,4 @@ public class ProcessLabelData {
         this.operatorId = operatorId;
         this.traceCode = traceCode;
     }
-}
+}*/

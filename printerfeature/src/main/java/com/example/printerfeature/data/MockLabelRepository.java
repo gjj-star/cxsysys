@@ -1,4 +1,5 @@
 //示例数据的数据仓库
+//2026.5.1 删除加工二维码和产成品二维码，注释化
 package com.example.printerfeature.data;
 
 import com.example.printerfeature.model.LabelData;
@@ -7,8 +8,8 @@ import com.example.printerfeature.model.GreenhouseLabelData;
 import com.example.printerfeature.model.PlantBlockData;
 import com.example.printerfeature.model.PlantData;
 import com.example.printerfeature.model.PlantationData;
-import com.example.printerfeature.model.ProcessLabelData;
-import com.example.printerfeature.model.ProductLabelData;
+//import com.example.printerfeature.model.ProcessLabelData;
+//import com.example.printerfeature.model.ProductLabelData;
 import com.example.printerfeature.model.SeedbedLabelData;
 import com.example.printerfeature.model.TemplateExampleData;
 
@@ -69,18 +70,18 @@ public final class MockLabelRepository {
     }
 
     public static TemplateExampleData getTemplateExample(String template) {
-        if (LabelTemplates.TEMP_CJG.equals(template)) {
-            return new TemplateExampleData(
-                    LabelTemplates.TYPE_INITIAL, "初步清理", "沉香片", "", "", "一级", "2024-05-21 14:00:00", "OP-08",
-                    "CX-1234", "5×2", "10", "5g", "DDDDDDEEEEEEEEE-AAA-BCCCCCCCC-YYMMDD-BB-GG-SS"
-            );
-        }
-        if (LabelTemplates.TEMP_CP.equals(template)) {
-            return new TemplateExampleData(
-                    "", "", "极品沉香线香", "", "", "特级", "2024-05-22 10:30:00", "OP-12",
-                    "CX-20", "20支", "50", "1.5kg", "DDDDDDEEEEEEEEE-AAA-PCCCCCCCC-YYMMDD-BB-GG-FFF"
-            );
-        }
+//        if (LabelTemplates.TEMP_CJG.equals(template)) {
+//            return new TemplateExampleData(
+//                    LabelTemplates.TYPE_INITIAL, "初步清理", "沉香片", "", "", "一级", "2024-05-21 14:00:00", "OP-08",
+//                    "CX-1234", "5×2", "10", "5g", "DDDDDDEEEEEEEEE-AAA-BCCCCCCCC-YYMMDD-BB-GG-SS"
+//            );
+//        }
+//        if (LabelTemplates.TEMP_CP.equals(template)) {
+//            return new TemplateExampleData(
+//                    "", "", "极品沉香线香", "", "", "特级", "2024-05-22 10:30:00", "OP-12",
+//                    "CX-20", "20支", "50", "1.5kg", "DDDDDDEEEEEEEEE-AAA-PCCCCCCCC-YYMMDD-BB-GG-FFF"
+//            );
+//        }
         if (LabelTemplates.TEMP_DP.equals(template)) {
             return new TemplateExampleData(
                     "", "", "DP-12345", "ZZY-123", "500亩", "张三", "", "",
@@ -102,7 +103,7 @@ public final class MockLabelRepository {
         return null;
     }
 
-    public static List<ProcessLabelData> getProcessLabels() {
+/*    public static List<ProcessLabelData> getProcessLabels() {
         List<ProcessLabelData> list = new ArrayList<>();
         list.add(new ProcessLabelData(PROCESS_TYPE_MATERIAL, LabelTemplates.TYPE_INITIAL, "初步清理",
                 "沉香片", "CX-1234", "5×2", "10", "5g", "一级", "2024-05-21 14:00:00", "OP-08", "CJG-M-2101"));
@@ -238,7 +239,7 @@ public final class MockLabelRepository {
             }
         }
         return null;
-    }
+    }*/
 
     public static LabelData toPlantLabel(PlantData plant) {
         return new LabelData(

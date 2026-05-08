@@ -95,8 +95,8 @@ public class LabelPrintManager {
 
     private String resolveTitle(LabelData data) {
         if (LabelTemplates.TEMP_MM.equals(data.template)) return "沉香溯源标签【苗木】";
-        if (LabelTemplates.TEMP_CJG.equals(data.template)) return "沉香溯源标签【" + data.processingType + "-(" + data.processName + ")】";
-        if (LabelTemplates.TEMP_CP.equals(data.template)) return "沉香溯源标签【产成品】";
+//        if (LabelTemplates.TEMP_CJG.equals(data.template)) return "沉香溯源标签【" + data.processingType + "-(" + data.processName + ")】";
+//        if (LabelTemplates.TEMP_CP.equals(data.template)) return "沉香溯源标签【产成品】";
         if (LabelTemplates.TEMP_DP.equals(data.template)) return "沉香溯源标签【大棚】";
         if (LabelTemplates.TEMP_MC.equals(data.template)) return "沉香溯源标签【苗床】";
         return "沉香溯源标签【地块】";
@@ -141,8 +141,8 @@ public class LabelPrintManager {
         String[] labels;
         if (LabelTemplates.TEMP_MM.equals(data.template)) {
             labels = new String[]{"品种", "代数", "育苗方法", "地块", "母树", "定植日期"};
-        } else if (LabelTemplates.TEMP_CJG.equals(data.template)) {
-            labels = new String[]{"名称", "型号/规格", "数量/重量", "等级", "完工时间", "操作员ID"};
+//        } else if (LabelTemplates.TEMP_CJG.equals(data.template)) {
+//            labels = new String[]{"名称", "型号/规格", "数量/重量", "等级", "完工时间", "操作员ID"};
         } else {
             labels = new String[]{"分类名称", "型号/规格", "数量/重量", "等级", "完工时间", "操作员ID"};
         }

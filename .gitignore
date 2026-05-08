@@ -48,3 +48,6 @@ $RECYCLE.BIN/
 # --- Personal Workbuddy & Notes (Do not push to team repo) ---
 .workbuddy/
 WORKFLOW_RESUME_NOTES.md
+
+#codex
+.codex/

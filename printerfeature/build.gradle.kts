@@ -12,6 +12,18 @@ android {
     defaultConfig {
         minSdk = 21
 
+        val printerApiBaseUrl = providers
+            .gradleProperty("printerApiBaseUrl")
+            .orElse("https://dbcx.org.cn/plantingApi")
+            .get()
+        val printerUserEnterpriseId = providers
+            .gradleProperty("printerUserEnterpriseId")
+            .orElse("1")
+            .get()
+
+        buildConfigField("String", "PRINTER_API_BASE_URL", "\"$printerApiBaseUrl\"")
+        buildConfigField("String", "PRINTER_USER_ENTERPRISE_ID", "\"$printerUserEnterpriseId\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -35,6 +47,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }
@@ -53,6 +66,10 @@ dependencies {
 
     // Removed appcompat
     implementation(libs.material)
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

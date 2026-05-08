@@ -1,7 +1,7 @@
-//产成品数据模型
+//产成品数据模型（已废弃）
 package com.example.printerfeature.model;
 
-public class ProductLabelData {
+/*public class ProductLabelData {
     public final String productName;
     public final String model;
     public final String spec;
@@ -24,4 +24,4 @@ public class ProductLabelData {
         this.operatorId = operatorId;
         this.traceCode = traceCode;
     }
-}
+}*/

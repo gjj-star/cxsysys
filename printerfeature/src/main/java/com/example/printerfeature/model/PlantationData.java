@@ -4,6 +4,7 @@ package com.example.printerfeature.model;
 import java.util.List;
 
 public class PlantationData {
+    public final int id;
     public final String name;
     public final String selfCode;
     public final String totalArea;
@@ -12,6 +13,11 @@ public class PlantationData {
     public final List<FieldLabelData> fields;
 
     public PlantationData(String name, String selfCode, String totalArea, String status, String owner, List<FieldLabelData> fields) {
+        this(0, name, selfCode, totalArea, status, owner, fields);
+    }
+
+    public PlantationData(int id, String name, String selfCode, String totalArea, String status, String owner, List<FieldLabelData> fields) {
+        this.id = id;
         this.name = name;
         this.selfCode = selfCode;
         this.totalArea = totalArea;
