@@ -44,11 +44,15 @@ class SaplingViewModel : ViewModel() {
                 val ghResponse = api.getGreenhouseList()
                 if (ghResponse.code == 0 || ghResponse.code == 200) {
                     _greenhouseList.value = ghResponse.data ?: emptyList()
+                } else {
+                    _errorMsg.value = ghResponse.message
                 }
 
                 val subResponse = api.getSubspeciesList()
                 if (subResponse.code == 0 || subResponse.code == 200) {
                     _subspeciesList.value = subResponse.data ?: emptyList()
+                } else {
+                    _errorMsg.value = subResponse.message
                 }
             } catch (e: Exception) {
                 _errorMsg.value = "加载初始数据失败: ${e.message}"

@@ -37,6 +37,10 @@ class PlantingViewModel : ViewModel() {
     private val _punchDetail = MutableStateFlow<PunchDetailRecord?>(null)
     val punchDetail: StateFlow<PunchDetailRecord?> = _punchDetail.asStateFlow()
 
+    // 生长记录详情（按最新一条列表记录获取详情）
+    private val _growthDetail = MutableStateFlow<GrowthDetailRecord?>(null)
+    val growthDetail: StateFlow<GrowthDetailRecord?> = _growthDetail.asStateFlow()
+
     // 采收香木详情
     private val _harvestDetail = MutableStateFlow<HarvestDetailRecord?>(null)
     val harvestDetail: StateFlow<HarvestDetailRecord?> = _harvestDetail.asStateFlow()
@@ -88,11 +92,15 @@ class PlantingViewModel : ViewModel() {
                 val subResponse = api.getSubspeciesList()
                 if (subResponse.code == 0 || subResponse.code == 200) {
                     _subspeciesList.value = subResponse.data ?: emptyList()
+                } else {
+                    _errorMsg.value = subResponse.message
                 }
-                
+
                 val fieldResponse = api.getFieldList()
                 if (fieldResponse.code == 0 || fieldResponse.code == 200) {
                     _fieldList.value = fieldResponse.data ?: emptyList()
+                } else {
+                    _errorMsg.value = fieldResponse.message
                 }
 
                 fetchPlantList()
@@ -162,6 +170,8 @@ class PlantingViewModel : ViewModel() {
                 val detailResponse = api.getPlantDetail(plantId)
                 if (detailResponse.code == 0 || detailResponse.code == 200) {
                     _plantDetail.value = detailResponse.data
+                } else {
+                    _errorMsg.value = detailResponse.message
                 }
 
                 val farmingResponse = api.getPlantFarmingList(plantId)
@@ -174,6 +184,17 @@ class PlantingViewModel : ViewModel() {
                     _growthList.value = growthResponse.data ?: emptyList()
                 }
 
+                // 获取最新一条生长记录详情
+                try {
+                    val latestGrowthId = growthResponse.data?.firstOrNull()?.recordId?.toString()
+                    if (!latestGrowthId.isNullOrBlank()) {
+                        val growthDetailResp = api.getPlantGrowthDetail(plantId, latestGrowthId)
+                        if (growthDetailResp.code == 0 || growthDetailResp.code == 200) {
+                            _growthDetail.value = growthDetailResp.data?.firstOrNull()
+                        }
+                    }
+                } catch (e: Exception) { }
+
                 val punchResponse = api.getPlantPunchList(plantId)
                 if (punchResponse.code == 0 || punchResponse.code == 200) {
                     _punchList.value = punchResponse.data ?: emptyList()
@@ -183,47 +204,47 @@ class PlantingViewModel : ViewModel() {
                 try {
                     val punchDetailResp = api.getPlantPunchDetail(plantId)
                     if (punchDetailResp.code == 0 || punchDetailResp.code == 200) {
-                        _punchDetail.value = punchDetailResp.data?.firstOrNull()?.punch
+                        _punchDetail.value = punchDetailResp.data?.firstOrNull()
                     }
-                } catch (e: Exception) { /* 打孔详情可选 */ }
+                } catch (e: Exception) { }
 
                 // 获取采收香木详情
                 try {
                     val harvestDetailResp = api.getPlantHarvestDetail(plantId)
                     if (harvestDetailResp.code == 0 || harvestDetailResp.code == 200) {
-                        _harvestDetail.value = harvestDetailResp.data?.firstOrNull()?.harvest
+                        _harvestDetail.value = harvestDetailResp.data?.firstOrNull()
                     }
-                } catch (e: Exception) { /* 采收详情可选 */ }
+                } catch (e: Exception) { }
 
-                // 获取6个农事详情
+                // 获取6个农事详情（接口均直接返回详情对象数组）
                 try {
                     val r1 = api.getPlantFertDetail(plantId)
-                    if (r1.code == 0 || r1.code == 200) _fertDetail.value = r1.data?.firstOrNull()?.fert
+                    if (r1.code == 0 || r1.code == 200) _fertDetail.value = r1.data?.firstOrNull()
                 } catch (e: Exception) { }
 
                 try {
                     val r2 = api.getPlantDiseaseDetail(plantId)
-                    if (r2.code == 0 || r2.code == 200) _diseaseDetail.value = r2.data?.firstOrNull()?.disease
+                    if (r2.code == 0 || r2.code == 200) _diseaseDetail.value = r2.data?.firstOrNull()
                 } catch (e: Exception) { }
 
                 try {
                     val r3 = api.getPlantPestDetail(plantId)
-                    if (r3.code == 0 || r3.code == 200) _pestDetail.value = r3.data?.firstOrNull()?.pest
+                    if (r3.code == 0 || r3.code == 200) _pestDetail.value = r3.data?.firstOrNull()
                 } catch (e: Exception) { }
 
                 try {
                     val r4 = api.getPlantIrriDetail(plantId)
-                    if (r4.code == 0 || r4.code == 200) _irriDetail.value = r4.data?.firstOrNull()?.irri
+                    if (r4.code == 0 || r4.code == 200) _irriDetail.value = r4.data?.firstOrNull()
                 } catch (e: Exception) { }
 
                 try {
                     val r5 = api.getPlantPrunDetail(plantId)
-                    if (r5.code == 0 || r5.code == 200) _prunDetail.value = r5.data?.firstOrNull()?.prun
+                    if (r5.code == 0 || r5.code == 200) _prunDetail.value = r5.data?.firstOrNull()
                 } catch (e: Exception) { }
 
                 try {
                     val r6 = api.getPlantPlantingDetail(plantId)
-                    if (r6.code == 0 || r6.code == 200) _plantingDetail.value = r6.data?.firstOrNull()?.plant
+                    if (r6.code == 0 || r6.code == 200) _plantingDetail.value = r6.data?.firstOrNull()
                 } catch (e: Exception) { }
             } catch (e: Exception) {
                 _errorMsg.value = "获取详情数据失败: ${e.message}"

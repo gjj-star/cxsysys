@@ -101,6 +101,20 @@ data class GrowthRecordItem(
     @SerializedName("ground_diameter") val groundDiameter: Double
 )
 
+// 生长记录详情（来自 /growth/{growthRecordId} 接口）
+data class GrowthDetailRecord(
+    @SerializedName("record_id") val recordId: Int,
+    @SerializedName("record_date") val recordDate: String,
+    @SerializedName("tree_height") val treeHeight: Double,
+    @SerializedName("crown_width") val crownWidth: Double,
+    @SerializedName("ground_diameter") val groundDiameter: Double,
+    @SerializedName("breast_height_diameter") val breastHeightDiameter: Double,
+    val straightness: String,
+    @SerializedName("plant_quantity") val plantQuantity: Int,
+    @SerializedName("photo_urls") val photoUrls: List<String>,
+    @SerializedName("operator_name") val operatorName: String
+)
+
 data class PunchHarvestRecord(
     val punch: PunchRecordItem,
     val harvest: HarvestRecordItem
@@ -108,7 +122,12 @@ data class PunchHarvestRecord(
 
 data class PunchRecordItem(
     val hasRecord: Boolean,
-    @SerializedName("？") val unknownField: String?
+    val date: String?,
+    val period: String?,
+    val depth: Double?,
+    val diameter: Double?,
+    val pitch: Double?,
+    val remark: String?
 )
 
 data class HarvestRecordItem(
@@ -119,30 +138,25 @@ data class HarvestRecordItem(
 
 // 打孔结香详情记录（来自 /punch/punching 接口）
 data class PunchDetailRecord(
-    val hasRecord: Boolean,
+    val id: Int?,
     val date: String?,
     val period: String?,
     val depth: Double?,
     val diameter: Double?,
     val pitch: Double?,
+    @SerializedName("operator_name") val operatorName: String?,
+    @SerializedName("heal_days") val healDays: Int?,
     val remark: String?
-)
-
-// 打孔结香详情响应包装
-data class PunchDetailWrapper(
-    val punch: PunchDetailRecord
 )
 
 // 采收香木详情记录（来自 /punch/harvest 接口）
 data class HarvestDetailRecord(
-    val hasRecord: Boolean,
+    val id: Int?,
+    @SerializedName("plant_id") val plantId: Int?,
+    @SerializedName("field_id") val fieldId: Int?,
+    val weight: Double?,
     val date: String?,
-    val weight: Double?
-)
-
-// 采收香木详情响应包装
-data class HarvestDetailWrapper(
-    val harvest: HarvestDetailRecord
+    @SerializedName("operator_name") val operatorName: String?
 )
 
 // ========== 农事详情模型（来自各/farming/xxx接口） ==========
@@ -150,61 +164,67 @@ data class HarvestDetailWrapper(
 // 施肥详情（来自 /farming/fertilize）
 data class FertDetailRecord(
     val hasRecord: Boolean,
+    val id: Int?,
     val name: String?,
     val date: String?,
+    val period: String?,
     val dosage: String?,
     val method: String?,
     val water: String?,
+    @SerializedName("operator_name") val operatorName: String?,
     val remark: String?
 )
-data class FertDetailWrapper(val fert: FertDetailRecord)
 
 // 病虫害详情（来自 /farming/disease）
 data class DiseaseDetailRecord(
-    val hasRecord: Boolean,
+    val id: Int?,
     val date: String?,
     val type: String?,
     val description: String?,
-    @SerializedName("photo_url") val photoUrl: List<String>?
+    @SerializedName("photo_url") val photoUrl: List<String>?,
+    @SerializedName("operator_name") val operatorName: String?
 )
-data class DiseaseDetailWrapper(val disease: DiseaseDetailRecord)
 
 // 施药详情（来自 /farming/pesticide）
 data class PestDetailRecord(
-    val hasRecord: Boolean,
+    val id: Int?,
     val date: String?,
     val period: String?,
     val name: String?,
     val ppm: String?,
     val dosage: String?,
-    val method: String?
+    val method: String?,
+    @SerializedName("operator_name") val operatorName: String?,
+    val remark: String?
 )
-data class PestDetailWrapper(val pest: PestDetailRecord)
 
 // 灌溉详情（来自 /farming/irrigation）
 data class IrriDetailRecord(
-    val hasRecord: Boolean,
+    val id: Int?,
     val date: String?,
     val period: String?,
-    val method: String?
+    val method: String?,
+    @SerializedName("operator_name") val operatorName: String?
 )
-data class IrriDetailWrapper(val irri: IrriDetailRecord)
 
 // 剪枝详情（来自 /farming/pruning）
 data class PrunDetailRecord(
-    val hasRecord: Boolean,
+    val id: Int?,
     val date: String?,
     val period: String?,
     val type: String?,
     val tool: String?,
     val disinfect: String?,
-    val remark: String?
+    @SerializedName("heal_days") val healDays: Int?,
+    val remark: String?,
+    @SerializedName("operator_name") val operatorName: String?
 )
-data class PrunDetailWrapper(val prun: PrunDetailRecord)
 
 // 苗木定植详情（来自 /farming/plant）
 data class PlantingDetailRecord(
-    val hasRecord: Boolean,
+    val id: Int?,
+    @SerializedName("qr_code") val qrCode: String?,
+    @SerializedName("mother_tree_qr_code") val motherTreeQrCode: String?,
     val date: String?,
     @SerializedName("sapling_qrcode") val saplingQrcode: String?,
     val method: String?,
@@ -213,9 +233,11 @@ data class PlantingDetailRecord(
     val depth: String?,
     val width: String?,
     val distance: String?,
-    @SerializedName("field_code") val fieldCode: String?
+    @SerializedName("cut_date") val cutDate: String?,
+    @SerializedName("field_code") val fieldCode: String?,
+    @SerializedName("operator_name") val operatorName: String?,
+    val status: Int?
 )
-data class PlantingDetailWrapper(val plant: PlantingDetailRecord)
 
 data class PlantRecordSearchItem(
     @SerializedName("plant_qrcode") val plantQrcode: String,

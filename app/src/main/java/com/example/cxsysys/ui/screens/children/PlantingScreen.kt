@@ -73,9 +73,18 @@ fun PlantingScreen(
     val plantList by viewModel.plantList.collectAsState()
     val fieldList by viewModel.fieldList.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val errorMsg by viewModel.errorMsg.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.fetchInitialData()
+    }
+
+    // 监听后端错误消息并以 Toast 展示
+    LaunchedEffect(errorMsg) {
+        errorMsg?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearError()
+        }
     }
 
     // 地块选项转换

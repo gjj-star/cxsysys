@@ -82,6 +82,14 @@ interface PlantingApiService {
         @Query("limit") limit: Int? = null
     ): BaseResponse<List<GrowthRecordItem>>
 
+    @GET("plants/{plant_id}/growth/{growthRecordId}")
+    suspend fun getPlantGrowthDetail(
+        @retrofit2.http.Path("plant_id") plantId: String,
+        @retrofit2.http.Path("growthRecordId") growthRecordId: String,
+        @Query("lastid") lastid: Int? = null,
+        @Query("limit") limit: Int? = null
+    ): BaseResponse<List<GrowthDetailRecord>>
+
     @GET("plants/{plant_id}/punchList")
     suspend fun getPlantPunchList(
         @retrofit2.http.Path("plant_id") plantId: String
@@ -90,42 +98,42 @@ interface PlantingApiService {
     @GET("plants/{plant_id}/punch/punching")
     suspend fun getPlantPunchDetail(
         @retrofit2.http.Path("plant_id") plantId: String
-    ): BaseResponse<List<PunchDetailWrapper>>
+    ): BaseResponse<List<PunchDetailRecord>>
 
     @GET("plants/{plant_id}/punch/harvest")
     suspend fun getPlantHarvestDetail(
         @retrofit2.http.Path("plant_id") plantId: String
-    ): BaseResponse<List<HarvestDetailWrapper>>
+    ): BaseResponse<List<HarvestDetailRecord>>
 
     @GET("plants/{plant_id}/farming/fertilize")
     suspend fun getPlantFertDetail(
         @retrofit2.http.Path("plant_id") plantId: String
-    ): BaseResponse<List<FertDetailWrapper>>
+    ): BaseResponse<List<FertDetailRecord>>
 
     @GET("plants/{plant_id}/farming/disease")
     suspend fun getPlantDiseaseDetail(
         @retrofit2.http.Path("plant_id") plantId: String
-    ): BaseResponse<List<DiseaseDetailWrapper>>
+    ): BaseResponse<List<DiseaseDetailRecord>>
 
     @GET("plants/{plant_id}/farming/pesticide")
     suspend fun getPlantPestDetail(
         @retrofit2.http.Path("plant_id") plantId: String
-    ): BaseResponse<List<PestDetailWrapper>>
+    ): BaseResponse<List<PestDetailRecord>>
 
     @GET("plants/{plant_id}/farming/irrigation")
     suspend fun getPlantIrriDetail(
         @retrofit2.http.Path("plant_id") plantId: String
-    ): BaseResponse<List<IrriDetailWrapper>>
+    ): BaseResponse<List<IrriDetailRecord>>
 
     @GET("plants/{plant_id}/farming/pruning")
     suspend fun getPlantPrunDetail(
         @retrofit2.http.Path("plant_id") plantId: String
-    ): BaseResponse<List<PrunDetailWrapper>>
+    ): BaseResponse<List<PrunDetailRecord>>
 
     @GET("plants/{plant_id}/farming/plant")
     suspend fun getPlantPlantingDetail(
         @retrofit2.http.Path("plant_id") plantId: String
-    ): BaseResponse<List<PlantingDetailWrapper>>
+    ): BaseResponse<List<PlantingDetailRecord>>
 
     @GET("plantRecordSearch")
     suspend fun getPlantRecordSearch(

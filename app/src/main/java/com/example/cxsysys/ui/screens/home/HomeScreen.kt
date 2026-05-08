@@ -444,15 +444,7 @@ fun WeatherCard(
     val weatherIcon: ImageVector = when {
         weatherData == null && isLoading -> Icons.Default.Refresh
         errorMessage != null -> Icons.Default.CloudOff
-        else -> when (weatherData?.weather) {
-            "晴", "晴间多云" -> Icons.Default.WbSunny
-            "多云", "阴" -> Icons.Default.Cloud
-            "小雨", "阵雨", "雷阵雨", "雷阵雨伴有冰雹" -> Icons.Default.Grain
-            "中雨", "大雨", "暴雨", "大暴雨", "特大暴雨" -> Icons.Default.WaterDrop
-            "小雪", "中雪", "大雪", "暴雪" -> Icons.Default.AcUnit
-            "雾", "霾" -> Icons.Default.VisibilityOff
-            else -> Icons.Default.WbSunny
-        }
+        else -> resolveWeatherIcon(weatherData?.weatherIcon, weatherData?.weather)
     }
 
     val title = when {
@@ -503,6 +495,58 @@ fun WeatherCard(
 
             Icon(imageVector = weatherIcon, contentDescription = "Weather", tint = Color.White, modifier = Modifier.size(56.dp))
         }
+    }
+}
+
+/**
+ * 根据后端 weather_icon 代码解析天气图标，优先用数字代码，fallback 到文字模糊匹配。
+ *
+ * weather_icon 编码（中国气象局标准）：
+ *   晴：100 | 多云：101 | 阴：102
+ *   小雨/阵雨：300-304 | 中雨/大雨/暴雨：305-312 | 雷阵雨：302/303
+ *   小雪/中雪/大雪/暴雪：400-408 | 雨夹雪：404
+ *   雾/霾：500-510
+ */
+private fun resolveWeatherIcon(iconCode: String?, weatherText: String?): ImageVector {
+    // 优先按 weather_icon 数字代码匹配
+    iconCode?.let { code ->
+        val prefix = code.take(3)
+        val icon = when {
+            prefix == "100" -> Icons.Default.WbSunny            // 晴
+            prefix == "101" -> Icons.Default.Cloud              // 多云
+            prefix == "102" -> Icons.Default.Cloud              // 阴
+            prefix.startsWith("3") -> {                         // 雨 (300-319)
+                val num = prefix.toIntOrNull() ?: 300
+                if (num in 305..312) Icons.Default.WaterDrop    // 中雨及以上
+                else Icons.Default.Grain                        // 小雨/阵雨/雷阵雨
+            }
+            prefix.startsWith("4") -> {                         // 雪 (400-409)
+                val num = prefix.toIntOrNull() ?: 400
+                if (num in 404..408) Icons.Default.AcUnit       // 大雪/暴雪/雨夹雪
+                else Icons.Default.AcUnit                       // 小雪/中雪
+            }
+            prefix.startsWith("5") -> Icons.Default.VisibilityOff // 雾/霾
+            else -> null
+        }
+        if (icon != null) return icon
+    }
+
+    // fallback：按 weather 文字模糊匹配（覆盖组合天气如"阴转小雨"）
+    val text = weatherText ?: return Icons.Default.WbSunny
+    return when {
+        "暴雨" in text -> Icons.Default.WaterDrop
+        "大雨" in text -> Icons.Default.WaterDrop
+        "中雨" in text -> Icons.Default.WaterDrop
+        "雷" in text -> Icons.Default.Grain
+        "雨" in text -> Icons.Default.Grain
+        "暴雪" in text -> Icons.Default.AcUnit
+        "大雪" in text -> Icons.Default.AcUnit
+        "雪" in text -> Icons.Default.AcUnit
+        "雾" in text || "霾" in text -> Icons.Default.VisibilityOff
+        "阴" in text -> Icons.Default.Cloud
+        "多云" in text -> Icons.Default.Cloud
+        "晴" in text -> Icons.Default.WbSunny
+        else -> Icons.Default.WbSunny
     }
 }
 

@@ -46,6 +46,7 @@ fun PlantDetailScreen(
     val farmingList by viewModel.farmingList.collectAsState()
     val growthList by viewModel.growthList.collectAsState()
     val punchList by viewModel.punchList.collectAsState()
+    val growthDetail by viewModel.growthDetail.collectAsState()
     val punchDetail by viewModel.punchDetail.collectAsState()
     val harvestDetail by viewModel.harvestDetail.collectAsState()
     val fertDetail by viewModel.fertDetail.collectAsState()
@@ -55,9 +56,18 @@ fun PlantDetailScreen(
     val prunDetail by viewModel.prunDetail.collectAsState()
     val plantingDetail by viewModel.plantingDetail.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val errorMsg by viewModel.errorMsg.collectAsState()
 
     LaunchedEffect(plantId) {
         viewModel.fetchPlantDetailAll(plantId)
+    }
+
+    // 监听后端错误消息并以 Toast 展示
+    LaunchedEffect(errorMsg) {
+        errorMsg?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearError()
+        }
     }
 
     // 修改弹窗状态
@@ -162,15 +172,24 @@ fun PlantDetailScreen(
                         } else {
                             items(growthList.size) { i ->
                                 val record = growthList[i]
+                                // 第一条记录优先使用详情接口展示更多字段
+                                val detail = if (i == 0) growthDetail else null
                                 RecordItemCard(
                                     title = "生长监测记录 #${record.recordId}",
                                     date = record.recordDate,
                                     summary = "树高: ${record.treeHeight}m | 地径: ${record.groundDiameter}cm",
-                                    details = mapOf(
-                                        "记录日期" to record.recordDate,
-                                        "树高" to "${record.treeHeight} 米",
-                                        "地径" to "${record.groundDiameter} 厘米"
-                                    ),
+                                    details = if (detail != null) buildMap {
+                                        put("树高", "${detail.treeHeight} 米")
+                                        put("幅冠", "${detail.crownWidth} 米")
+                                        put("地径", "${detail.groundDiameter} 厘米")
+                                        put("胸径", "${detail.breastHeightDiameter} 厘米")
+                                        put("主干通直度", detail.straightness)
+                                        put("分枝数", "${detail.plantQuantity} 枝")
+                                        if (detail.photoUrls.isNotEmpty()) put("照片数量", "${detail.photoUrls.size} 张")
+                                    } else buildMap {
+                                        put("树高", "${record.treeHeight} 米")
+                                        put("地径", "${record.groundDiameter} 厘米")
+                                    },
                                     icon = Icons.Default.Timeline,
                                     color = Color(0xFFE3F2FD),
                                     onEditClick = { editItemTitle = "生长记录"; showEditDialog = true }
@@ -199,7 +218,7 @@ fun PlantDetailScreen(
                                         summary = "${fert.name ?: "未知肥料"} | ${fert.method ?: "未知方式"}",
                                         details = buildMap {
                                             fert.name?.let { put("肥料名称", it) }
-                                            fert.date?.let { put("日期", it) }
+                                            fert.period?.let { put("施肥时段", it) }
                                             fert.dosage?.let { put("单株用量", it) }
                                             fert.method?.let { put("施用方法", it) }
                                             fert.water?.let { put("水肥配比", it) }
@@ -230,17 +249,16 @@ fun PlantDetailScreen(
 
                             // 2. 病虫害 —— 优先详情接口
                             val disease = diseaseDetail
-                            if (disease != null && disease.hasRecord) {
+                            if (disease != null) {
                                 item {
                                     RecordItemCard(
                                         title = "病虫害记录",
                                         date = disease.date ?: "未知",
                                         summary = disease.type ?: "未知病害",
                                         details = buildMap {
-                                            disease.date?.let { put("记录日期", it) }
-                                            disease.type?.let { put("病虫害类型", it) }
-                                            disease.description?.let { put("描述", it) }
-                                            disease.photoUrl?.takeIf { it.isNotEmpty() }?.let { put("照片数量", "${it.size}张") }
+                                            disease.type?.let { put("防治虫害", it) }
+                                            disease.description?.let { put("病虫害描述", it) }
+                                            disease.photoUrl?.takeIf { it.isNotEmpty() }?.let { put("病虫害照片地址", "${it.size} 张") }
                                         },
                                         icon = Icons.Default.BugReport,
                                         color = Color(0xFFFFEBEE),
@@ -266,19 +284,19 @@ fun PlantDetailScreen(
 
                             // 3. 施药 —— 优先详情接口
                             val pest = pestDetail
-                            if (pest != null && pest.hasRecord) {
+                            if (pest != null) {
                                 item {
                                     RecordItemCard(
                                         title = "施药作业",
                                         date = pest.date ?: "未知",
                                         summary = "${pest.name ?: "未知农药"} | ${pest.method ?: "未知方式"}",
                                         details = buildMap {
-                                            pest.date?.let { put("日期", it) }
-                                            pest.period?.let { put("时段", it) }
+                                            pest.period?.let { put("施药时段", it) }
                                             pest.name?.let { put("农药名称", it) }
                                             pest.ppm?.let { put("稀释浓度", it) }
                                             pest.dosage?.let { put("单株用量", it) }
                                             pest.method?.let { put("施药方式", it) }
+                                            pest.remark?.takeIf { it.isNotBlank() }?.let { put("备注", it) }
                                         },
                                         icon = Icons.Default.Science,
                                         color = Color(0xFFFFF3E0),
@@ -304,16 +322,15 @@ fun PlantDetailScreen(
 
                             // 4. 灌溉 —— 优先详情接口
                             val irri = irriDetail
-                            if (irri != null && irri.hasRecord) {
+                            if (irri != null) {
                                 item {
                                     RecordItemCard(
                                         title = "灌溉记录",
                                         date = irri.date ?: "未知",
                                         summary = "${irri.method ?: "未知方式"} | ${irri.period ?: "未知时段"}",
                                         details = buildMap {
-                                            irri.date?.let { put("日期", it) }
-                                            irri.period?.let { put("时段", it) }
-                                            irri.method?.let { put("方式", it) }
+                                            irri.period?.let { put("灌溉时段", it) }
+                                            irri.method?.let { put("灌溉方式", it) }
                                         },
                                         icon = Icons.Default.WaterDrop,
                                         color = Color(0xFFE0F7FA),
@@ -339,18 +356,18 @@ fun PlantDetailScreen(
 
                             // 5. 剪枝 —— 优先详情接口
                             val prun = prunDetail
-                            if (prun != null && prun.hasRecord) {
+                            if (prun != null) {
                                 item {
                                     RecordItemCard(
                                         title = "剪枝修整",
                                         date = prun.date ?: "未知",
                                         summary = "${prun.type ?: "未知类型"} | ${prun.tool ?: "未知工具"}",
                                         details = buildMap {
-                                            prun.date?.let { put("日期", it) }
-                                            prun.period?.let { put("时段", it) }
+                                            prun.period?.let { put("剪枝时段", it) }
                                             prun.type?.let { put("剪枝类型", it) }
-                                            prun.tool?.let { put("工具", it) }
+                                            prun.tool?.let { put("工具类型", it) }
                                             prun.disinfect?.let { put("消毒方式", it) }
+                                            prun.healDays?.let { put("愈合天数", "$it 天") }
                                             prun.remark?.takeIf { it.isNotBlank() }?.let { put("备注", it) }
                                         },
                                         icon = Icons.Default.ContentCut,
@@ -376,22 +393,25 @@ fun PlantDetailScreen(
 
                             // 6. 定植 —— 优先详情接口
                             val planting = plantingDetail
-                            if (planting != null && planting.hasRecord) {
+                            if (planting != null) {
                                 item {
                                     RecordItemCard(
                                         title = "苗木定植",
                                         date = planting.date ?: "未知",
                                         summary = "${planting.fieldCode ?: "未知地块"} | 深度 ${planting.depth ?: "-"}",
                                         details = buildMap {
-                                            planting.date?.let { put("日期", it) }
-                                            planting.saplingQrcode?.let { put("母树二维码", it) }
-                                            planting.method?.let { put("育苗方式", it) }
-                                            planting.subspecies?.let { put("品种", it) }
-                                            planting.generation?.let { put("代数", it) }
-                                            planting.depth?.let { put("深度", it) }
-                                            planting.width?.let { put("宽度", it) }
-                                            planting.distance?.let { put("间距", it) }
-                                            planting.fieldCode?.let { put("关联地块", it) }
+                                            planting.qrCode?.let { put("苗木二维码", it) }
+                                            planting.motherTreeQrCode?.let { put("母树二维码", it) }
+                                            planting.saplingQrcode?.let { put("幼苗二维码", it) }
+                                            planting.method?.let { put("育苗方法", it) }
+                                            planting.subspecies?.let { put("沉香品种细分", it) }
+                                            planting.generation?.let { put("苗木代数", it) }
+                                            planting.depth?.let { put("穴深", it) }
+                                            planting.width?.let { put("穴宽", it) }
+                                            planting.distance?.let { put("种植间距", it) }
+                                            planting.cutDate?.let { put("砍伐日期", it) }
+                                            planting.fieldCode?.let { put("地块自编码", it) }
+                                            planting.status?.let { put("状态", "$it") }
                                         },
                                         icon = Icons.Default.Forest,
                                         color = Color(0xFFE8F5E9),
@@ -423,18 +443,18 @@ fun PlantDetailScreen(
                         } else {
                             // 打孔结香 —— 优先使用详情接口数据，回退到列表数据
                             val punch = punchDetail
-                            if (punch != null && punch.hasRecord) {
+                            if (punch != null) {
                                 item {
                                     RecordItemCard(
                                         title = "打孔结香",
-                                        date = punch.date ?: "未知",
+                                        date = punch.date ?: "未知日期",
                                         summary = "孔深 ${punch.depth ?: "-"} | 孔径 ${punch.diameter ?: "-"} | 孔距 ${punch.pitch ?: "-"}",
                                         details = buildMap {
-                                            punch.date?.let { put("日期", it) }
-                                            punch.period?.let { put("时段", it) }
+                                            punch.period?.let { put("打孔时段", it) }
                                             punch.depth?.let { put("孔深", "$it") }
                                             punch.diameter?.let { put("孔径", "$it") }
                                             punch.pitch?.let { put("孔距", "$it") }
+                                            punch.healDays?.let { put("愈合天数", "$it 天") }
                                             punch.remark?.takeIf { it.isNotBlank() }?.let { put("备注", it) }
                                         },
                                         icon = Icons.Default.Hardware,
@@ -444,11 +464,20 @@ fun PlantDetailScreen(
                                 }
                             } else if (punchList.isNotEmpty() && punchList.first().punch.hasRecord) {
                                 item {
+                                    val record = punchList.first()
+                                    val detailsMap = mutableMapOf<String, String>().apply {
+                                        record.punch.period?.let { put("打孔时段", it) }
+                                        record.punch.depth?.let { put("平均孔深", "$it cm") }
+                                        record.punch.diameter?.let { put("孔径", "$it mm") }
+                                        record.punch.pitch?.let { put("平均孔距", "$it cm") }
+                                        record.punch.remark?.takeIf { it.isNotBlank() }?.let { put("备注", it) }
+                                    }
+                                    
                                     RecordItemCard(
                                         title = "打孔结香",
-                                        date = "有记录",
-                                        summary = "已打孔",
-                                        details = mapOf("打孔状态" to "已完成"),
+                                        date = record.punch.date ?: "未知日期",
+                                        summary = "深度: ${record.punch.depth?.toString() ?: "--"}cm | 孔径: ${record.punch.diameter?.toString() ?: "--"}mm",
+                                        details = if (detailsMap.isNotEmpty()) detailsMap else mapOf("打孔状态" to "已完成"),
                                         icon = Icons.Default.Hardware,
                                         color = Color(0xFFFFF8E1),
                                         onEditClick = { editItemTitle = "打孔记录"; showEditDialog = true }
@@ -458,14 +487,13 @@ fun PlantDetailScreen(
 
                             // 采收香木 —— 优先使用详情接口数据，回退到列表数据
                             val harvest = harvestDetail
-                            if (harvest != null && harvest.hasRecord) {
+                            if (harvest != null) {
                                 item {
                                     RecordItemCard(
                                         title = "采收香木",
                                         date = harvest.date ?: "未知",
                                         summary = "采香重量: ${harvest.weight ?: "-"}",
                                         details = buildMap {
-                                            harvest.date?.let { put("采香日期", it) }
                                             harvest.weight?.let { put("采香重量", "$it") }
                                         },
                                         icon = Icons.Default.Inventory,
@@ -477,7 +505,7 @@ fun PlantDetailScreen(
                                 item {
                                     RecordItemCard(
                                         title = "采收香木",
-                                        date = punchList.first().harvest.date,
+                                        date = punchList.first().harvest.date ?: "未知日期",
                                         summary = "重量: ${punchList.first().harvest.weight}",
                                         details = mapOf("采香重量" to "${punchList.first().harvest.weight}"),
                                         icon = Icons.Default.Inventory,
