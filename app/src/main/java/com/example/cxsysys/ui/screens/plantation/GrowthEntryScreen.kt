@@ -50,6 +50,10 @@ import java.util.Locale
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
 import com.example.cxsysys.ui.components.rememberCameraPhotoLauncher
+import com.example.cxsysys.ui.components.ValidatedDropdownField
+import com.example.cxsysys.ui.components.ValidatedDateField
+import com.example.cxsysys.ui.components.ValidatedOutlinedTextField
+import com.example.cxsysys.ui.components.rememberFormValidationState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +69,9 @@ fun GrowthEntryScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val submitSuccess by viewModel.submitSuccess.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+
+    // 表单验证状态
+    val validationState = rememberFormValidationState()
 
     // --- 表单状态 ---
     var inputMode by remember { mutableIntStateOf(0) } // 0-个别录入(苗木), 1-批量录入(地块)
@@ -90,7 +97,6 @@ fun GrowthEntryScreen(
     var plantQuantity by remember { mutableStateOf("") }
 
     var straightness by remember { mutableStateOf("") }
-    var straightnessExpanded by remember { mutableStateOf(false) }
     val straightnessOptions = listOf("1 级：通直", "2 级：轻度弯曲", "3 级：严重弯曲")
 
     var remark by remember { mutableStateOf("") }
@@ -176,43 +182,44 @@ fun GrowthEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        val targetValid = if (inputMode == 0) {
-                            plantQrCode.isNotEmpty()
+                        // 使用表单验证状态进行验证
+                        val identifierValue = if (inputMode == 0) {
+                            if (plantQrCode.isEmpty()) null else "valid"
                         } else {
-                            fieldQrCode.isNotEmpty() || fieldSelfCode.isNotEmpty()
+                            if (fieldQrCode.isEmpty() && fieldSelfCode.isEmpty()) null else "valid"
                         }
-
-                        if (!targetValid) {
-                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请提供地块标识信息"
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        if (treeHeight.isBlank() || groundDiameter.isBlank() || brestHeightDiameter.isBlank() ||
-                            crownWidth.isBlank() || plantQuantity.isBlank() || straightness.isBlank()) {
-                            Toast.makeText(context, "请填写完整的生长指标", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        if (selectedImageUris.isEmpty()) {
-                            Toast.makeText(context, "请至少上传一张照片", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        viewModel.submitGrowth(
-                            context = context,
-                            plantQrcode = if (inputMode == 0) plantQrCode else null,
-                            fieldQrcode = if (inputMode == 1) fieldQrCode else null,
-                            fieldCode = if (inputMode == 1) fieldSelfCode else null,
-                            recordDate = recordDate,
-                            height = treeHeight.toDoubleOrNull() ?: 0.0,
-                            crownWidth = crownWidth.toDoubleOrNull() ?: 0.0,
-                            diameter = groundDiameter.toDoubleOrNull() ?: 0.0,
-                            chestDiameter = brestHeightDiameter.toDoubleOrNull() ?: 0.0,
-                            straightness = straightness,
-                            plantQuantity = plantQuantity.toIntOrNull() ?: 0,
-                            imageUris = selectedImageUris
+                        
+                        val isValid = validationState.validateOnSubmit(
+                            mapOf(
+                                "identifier" to identifierValue,
+                                "recordDate" to recordDate,
+                                "treeHeight" to treeHeight,
+                                "groundDiameter" to groundDiameter,
+                                "brestHeightDiameter" to brestHeightDiameter,
+                                "crownWidth" to crownWidth,
+                                "plantQuantity" to plantQuantity,
+                                "straightness" to straightness
+                            )
                         )
+
+                        if (isValid) {
+                            viewModel.submitGrowth(
+                                context = context,
+                                plantQrcode = if (inputMode == 0) plantQrCode else null,
+                                fieldQrcode = if (inputMode == 1) fieldQrCode else null,
+                                fieldCode = if (inputMode == 1) fieldSelfCode else null,
+                                recordDate = recordDate,
+                                height = treeHeight.toDoubleOrNull() ?: 0.0,
+                                crownWidth = crownWidth.toDoubleOrNull() ?: 0.0,
+                                diameter = groundDiameter.toDoubleOrNull() ?: 0.0,
+                                chestDiameter = brestHeightDiameter.toDoubleOrNull() ?: 0.0,
+                                straightness = straightness,
+                                plantQuantity = plantQuantity.toIntOrNull() ?: 0,
+                                imageUris = selectedImageUris
+                            )
+                        } else {
+                            Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
+                        }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
@@ -289,7 +296,10 @@ fun GrowthEntryScreen(
                             isSelfCodeMode = false,
                             onModeChange = { },
                             onScanClick = { showScanner = true },
-                            showModeToggle = false
+                            showModeToggle = false,
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     } else {
                         DualModeIdentifierField(
@@ -300,20 +310,23 @@ fun GrowthEntryScreen(
                             onSelfCodeChange = { fieldSelfCode = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { showScanner = true }
+                            onScanClick = { showScanner = true },
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    OutlinedTextField(
+                    ValidatedDateField(
                         value = recordDate,
-                        onValueChange = { recordDate = it },
-                        readOnly = true,
-                        label = { Text("记录日期") },
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = { IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary) } },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        label = "记录日期",
+                        fieldKey = "recordDate",
+                        validationState = validationState,
+                        isRequired = true,
+                        onDateClick = { showDatePicker = true },
+                        trailingIcon = { IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary) } }
                     )
                 }
             }
@@ -323,25 +336,77 @@ fun GrowthEntryScreen(
             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(12.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(value = treeHeight, onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) treeHeight = it }, label = { Text("树高") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary))
-                        OutlinedTextField(value = groundDiameter, onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) groundDiameter = it }, label = { Text("地径") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary))
+                        ValidatedOutlinedTextField(
+                            value = treeHeight,
+                            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) treeHeight = it },
+                            label = "树高",
+                            fieldKey = "treeHeight",
+                            validationState = validationState,
+                            isRequired = true,
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
+                        )
+                        ValidatedOutlinedTextField(
+                            value = groundDiameter,
+                            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) groundDiameter = it },
+                            label = "地径",
+                            fieldKey = "groundDiameter",
+                            validationState = validationState,
+                            isRequired = true,
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
+                        )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(value = brestHeightDiameter, onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) brestHeightDiameter = it }, label = { Text("胸径") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary))
-                        OutlinedTextField(value = crownWidth, onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) crownWidth = it }, label = { Text("幅冠") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), trailingIcon = { Text("m", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary))
+                        ValidatedOutlinedTextField(
+                            value = brestHeightDiameter,
+                            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) brestHeightDiameter = it },
+                            label = "胸径",
+                            fieldKey = "brestHeightDiameter",
+                            validationState = validationState,
+                            isRequired = true,
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
+                        )
+                        ValidatedOutlinedTextField(
+                            value = crownWidth,
+                            onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) crownWidth = it },
+                            label = "幅冠",
+                            fieldKey = "crownWidth",
+                            validationState = validationState,
+                            isRequired = true,
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            trailingIcon = { Text("m", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
+                        )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedTextField(value = plantQuantity, onValueChange = { if (it.all { c -> c.isDigit() }) plantQuantity = it }, label = { Text("植株主干分枝数") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), trailingIcon = { Text("个", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary))
+                    ValidatedOutlinedTextField(
+                        value = plantQuantity,
+                        onValueChange = { if (it.all { c -> c.isDigit() }) plantQuantity = it },
+                        label = "植株主干分枝数",
+                        fieldKey = "plantQuantity",
+                        validationState = validationState,
+                        isRequired = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        trailingIcon = { Text("个", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
+                    )
                     Spacer(modifier = Modifier.height(16.dp))
-                    ExposedDropdownMenuBox(expanded = straightnessExpanded, onExpandedChange = { straightnessExpanded = !straightnessExpanded }, modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(value = straightness, onValueChange = {}, readOnly = true, label = { Text("主干通直度") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = straightnessExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary))
-                        ExposedDropdownMenu(expanded = straightnessExpanded, onDismissRequest = { straightnessExpanded = false }, modifier = Modifier.background(Color.White)) {
-                            straightnessOptions.forEach { selectionOption ->
-                                DropdownMenuItem(text = { Text(selectionOption) }, onClick = { straightness = selectionOption; straightnessExpanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
-                            }
-                        }
-                    }
+                    ValidatedDropdownField(
+                        label = "主干通直度",
+                        value = straightness,
+                        placeholder = "请选择通直度等级",
+                        options = straightnessOptions,
+                        onValueChange = { straightness = it },
+                        fieldKey = "straightness",
+                        validationState = validationState,
+                        isRequired = true
+                    )
                 }
             }
 

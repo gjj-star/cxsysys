@@ -43,6 +43,10 @@ import com.example.cxsysys.viewmodel.SubmitState
 // 引入公共组件
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.ValidatedDropdownField
+import com.example.cxsysys.ui.components.ValidatedDateField
+import com.example.cxsysys.ui.components.ValidatedOutlinedTextField
+import com.example.cxsysys.ui.components.rememberFormValidationState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +66,9 @@ fun IrrigationEntryScreen(
     LaunchedEffect(Unit) {
         viewModel.fetchPlantationList()
     }
+
+    // 表单验证状态
+    val validationState = rememberFormValidationState()
 
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量记录。默认为1
@@ -208,15 +215,36 @@ fun IrrigationEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        val isRegionValid = regionQrCode.isNotEmpty() || regionSelfCode.isNotEmpty()
-
-                        if (inputMode == 0 && plantQrCode.isEmpty()) {
-                            Toast.makeText(context, "请扫码提供苗木编码", Toast.LENGTH_SHORT).show()
-                        } else if (inputMode == 1 && (plantation_name.isEmpty() || region_type.isEmpty() || !isRegionValid)) {
-                            Toast.makeText(context, "请完整填写灌溉区域信息", Toast.LENGTH_SHORT).show()
-                        } else if (inputMode == 1 && region_type == "大棚" && selectedSeedbeds.isEmpty()) {
-                            Toast.makeText(context, "请至少选择一个苗床", Toast.LENGTH_SHORT).show()
+                        // 使用表单验证状态进行验证
+                        val identifierValue = if (inputMode == 0) {
+                            if (plantQrCode.isEmpty()) null else "valid"
                         } else {
+                            if (plantation_name.isEmpty() || region_type.isEmpty()) null else "valid"
+                        }
+                        
+                        val regionValid = if (inputMode == 1) {
+                            if (region_type == "大棚") {
+                                if (selectedSeedbeds.isEmpty()) null else "valid"
+                            } else {
+                                if (regionQrCode.isEmpty() && regionSelfCode.isEmpty()) null else "valid"
+                            }
+                        } else {
+                            "valid" // 个别模式不需要区域验证
+                        }
+                        
+                        val isValid = validationState.validateOnSubmit(
+                            mapOf(
+                                "identifier" to identifierValue,
+                                "recordDate" to irrigation_date,
+                                "plantation" to if (inputMode == 1) plantation_name else "valid",
+                                "regionType" to if (inputMode == 1) region_type else "valid",
+                                "region" to regionValid,
+                                "timeSlot" to time_slot,
+                                "method" to irrigation_method
+                            )
+                        )
+
+                        if (isValid) {
                             val seedbedIds = if (region_type == "大棚" && selectedSeedbeds.isNotEmpty()) selectedSeedbeds.joinToString(",") else null
                             viewModel.submitIrrigation(
                                 plantQrcode = if (inputMode == 0) plantQrCode else null,
@@ -229,6 +257,8 @@ fun IrrigationEntryScreen(
                                 irriPeriod = time_slot,
                                 irriMethod = irrigation_method
                             )
+                        } else {
+                            Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
@@ -313,14 +343,18 @@ fun IrrigationEntryScreen(
                             isSelfCodeMode = false, // 永远为 false，保持扫码模式
                             onModeChange = { },
                             onScanClick = { showScanner = true },
-                            showModeToggle = false  // 隐藏右上角切换按钮
+                            showModeToggle = false, // 隐藏右上角切换按钮
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                     } else {
                         // 第一级：种植园
-                        IrrigationSelectDropdown(
+                        ValidatedDropdownField(
                             label = "种植园",
-                            selectedValue = plantation_name,
+                            value = plantation_name,
+                            placeholder = "请选择种植园",
                             options = plantationOptions,
                             onValueChange = {
                                 plantation_name = it
@@ -330,27 +364,34 @@ fun IrrigationEntryScreen(
                                 regionSelfCode = ""
                                 selectedSeedbeds.clear()
                                 isRegionSelfCodeMode = false
-                            }
+                            },
+                            fieldKey = "plantation",
+                            validationState = validationState,
+                            isRequired = true
                         )
 
-                        // 第二级：选择地块或大棚
-                        AnimatedVisibility(visible = plantation_name.isNotEmpty()) {
-                            Column {
-                                Spacer(modifier = Modifier.height(16.dp))
-                                IrrigationSelectDropdown(
-                                    label = "区域类型",
-                                    selectedValue = region_type,
-                                    options = regionTypeOptions,
-                                    onValueChange = {
-                                        region_type = it
-                                        regionQrCode = ""
-                                        regionSelfCode = ""
-                                        selectedSeedbeds.clear()
-                                        isRegionSelfCodeMode = false
+                                // 第二级：选择地块或大棚
+                                AnimatedVisibility(visible = plantation_name.isNotEmpty()) {
+                                    Column {
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        ValidatedDropdownField(
+                                            label = "区域类型",
+                                            value = region_type,
+                                            placeholder = "请选择区域类型",
+                                            options = regionTypeOptions,
+                                            onValueChange = {
+                                                region_type = it
+                                                regionQrCode = ""
+                                                regionSelfCode = ""
+                                                selectedSeedbeds.clear()
+                                                isRegionSelfCodeMode = false
+                                            },
+                                            fieldKey = "regionType",
+                                            validationState = validationState,
+                                            isRequired = true
+                                        )
                                     }
-                                )
-                            }
-                        }
+                                }
 
                         // 第三级：具体地块或大棚编号
                         AnimatedVisibility(visible = region_type.isNotEmpty()) {
@@ -368,7 +409,10 @@ fun IrrigationEntryScreen(
                                     },
                                     isSelfCodeMode = isRegionSelfCodeMode,
                                     onModeChange = { isRegionSelfCodeMode = it },
-                                    onScanClick = { showScanner = true }
+                                    onScanClick = { showScanner = true },
+                                    validationState = validationState,
+                                    fieldKey = "identifier",
+                                    isRequired = true
                                 )
                             }
                         }
@@ -410,28 +454,32 @@ fun IrrigationEntryScreen(
                     }
 
                     // 灌溉日期
-                    OutlinedTextField(
+                    ValidatedDateField(
                         value = irrigation_date,
-                        onValueChange = { irrigation_date = it },
-                        readOnly = true, // 防止键盘弹起
-                        label = { Text("灌溉日期") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = "灌溉日期",
+                        fieldKey = "recordDate",
+                        validationState = validationState,
+                        isRequired = true,
+                        onDateClick = { showDatePicker = true },
                         trailingIcon = {
                             IconButton(onClick = { showDatePicker = true }) {
                                 Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary)
                             }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 灌溉时段
-                    IrrigationSelectDropdown(
+                    ValidatedDropdownField(
                         label = "灌溉时段",
-                        selectedValue = time_slot,
+                        value = time_slot,
+                        placeholder = "请选择灌溉时段",
                         options = timeSlotOptions,
-                        onValueChange = { time_slot = it }
+                        onValueChange = { time_slot = it },
+                        fieldKey = "timeSlot",
+                        validationState = validationState,
+                        isRequired = true
                     )
                 }
             }
@@ -444,11 +492,15 @@ fun IrrigationEntryScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     // 灌溉方式
-                    IrrigationSelectDropdown(
+                    ValidatedDropdownField(
                         label = "灌溉方式",
-                        selectedValue = irrigation_method,
+                        value = irrigation_method,
+                        placeholder = "请选择灌溉方式",
                         options = methodOptions,
-                        onValueChange = { irrigation_method = it }
+                        onValueChange = { irrigation_method = it },
+                        fieldKey = "method",
+                        validationState = validationState,
+                        isRequired = true
                     )
                 }
             }

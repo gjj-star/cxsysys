@@ -44,6 +44,10 @@ import com.example.cxsysys.viewmodel.SubmitState
 // 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.ValidatedDropdownField
+import com.example.cxsysys.ui.components.ValidatedDateField
+import com.example.cxsysys.ui.components.ValidatedOutlinedTextField
+import com.example.cxsysys.ui.components.rememberFormValidationState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +60,9 @@ fun PruningEntryScreen(
     val scope = rememberCoroutineScope()
     
     val submitState by viewModel.submitState.collectAsState()
+
+    // 表单验证状态
+    val validationState = rememberFormValidationState()
 
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1 (大部分情境为批量)
@@ -157,17 +164,25 @@ fun PruningEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 【修改点】：根据拆分后的状态进行校验，苗木只看二维码
-                        val targetValid = if (inputMode == 0) {
-                            plantQrCode.isNotEmpty()
+                        // 使用验证状态进行验证
+                        val identifierValue = if (inputMode == 0) {
+                            plantQrCode
                         } else {
-                            fieldQrCode.isNotEmpty() || fieldSelfCode.isNotEmpty()
+                            if (isSelfCodeMode) fieldSelfCode else fieldQrCode
                         }
+                        
+                        val isValid = validationState.validateOnSubmit(
+                            mapOf(
+                                "identifier" to identifierValue,
+                                "recordDate" to pruning_date,
+                                "timeSlot" to time_slot,
+                                "pruningType" to pruning_type,
+                                "toolType" to tool_type,
+                                "disinfectMethod" to disinfect_method
+                            )
+                        )
 
-                        if (!targetValid) {
-                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请扫码或输入地块编码"
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        } else {
+                        if (isValid) {
                             viewModel.submitPruning(
                                 plantQrcode = if (inputMode == 0) plantQrCode else null,
                                 fieldQrcode = if (inputMode == 1 && !isSelfCodeMode) fieldQrCode else null,
@@ -179,6 +194,8 @@ fun PruningEntryScreen(
                                 prunDisinfection = disinfect_method,
                                 remark = remark.takeIf { it.isNotBlank() }
                             )
+                        } else {
+                            Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
@@ -284,7 +301,10 @@ fun PruningEntryScreen(
                             isSelfCodeMode = false, // 永远为 false，保持扫码模式
                             onModeChange = { },     // 不响应切换
                             onScanClick = { showScanner = true },
-                            showModeToggle = false  // 隐藏右上角的切换按钮
+                            showModeToggle = false, // 隐藏右上角的切换按钮
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     } else {
                         // 地块保持双模式可切换
@@ -296,35 +316,42 @@ fun PruningEntryScreen(
                             onSelfCodeChange = { fieldSelfCode = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { showScanner = true }
+                            onScanClick = { showScanner = true },
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 剪枝日期
-                    OutlinedTextField(
+                    ValidatedDateField(
                         value = pruning_date,
-                        onValueChange = { pruning_date = it },
-                        readOnly = true, // 防止点开弹出键盘
-                        label = { Text("剪枝日期") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = "剪枝日期",
+                        fieldKey = "recordDate",
+                        validationState = validationState,
+                        isRequired = true,
+                        onDateClick = { showDatePicker = true },
                         trailingIcon = {
                             IconButton(onClick = { showDatePicker = true }) {
                                 Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary)
                             }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 剪枝时段
-                    PruningSelectDropdown(
+                    ValidatedDropdownField(
                         label = "剪枝时段",
-                        selectedValue = time_slot,
+                        value = time_slot,
+                        placeholder = "请选择剪枝时段",
                         options = timeSlotOptions,
-                        onValueChange = { time_slot = it }
+                        onValueChange = { time_slot = it },
+                        fieldKey = "timeSlot",
+                        validationState = validationState,
+                        isRequired = true
                     )
                 }
             }
@@ -337,31 +364,43 @@ fun PruningEntryScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     // 剪枝类型
-                    PruningSelectDropdown(
+                    ValidatedDropdownField(
                         label = "剪枝类型",
-                        selectedValue = pruning_type,
+                        value = pruning_type,
+                        placeholder = "请选择剪枝类型",
                         options = typeOptions,
-                        onValueChange = { pruning_type = it }
+                        onValueChange = { pruning_type = it },
+                        fieldKey = "pruningType",
+                        validationState = validationState,
+                        isRequired = true
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 工具类型
-                    PruningSelectDropdown(
+                    ValidatedDropdownField(
                         label = "工具类型",
-                        selectedValue = tool_type,
+                        value = tool_type,
+                        placeholder = "请选择工具类型",
                         options = toolOptions,
-                        onValueChange = { tool_type = it }
+                        onValueChange = { tool_type = it },
+                        fieldKey = "toolType",
+                        validationState = validationState,
+                        isRequired = true
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 消毒方式
-                    PruningSelectDropdown(
+                    ValidatedDropdownField(
                         label = "消毒方式",
-                        selectedValue = disinfect_method,
+                        value = disinfect_method,
+                        placeholder = "请选择消毒方式",
                         options = disinfectOptions,
-                        onValueChange = { disinfect_method = it }
+                        onValueChange = { disinfect_method = it },
+                        fieldKey = "disinfectMethod",
+                        validationState = validationState,
+                        isRequired = true
                     )
                 }
             }
@@ -389,25 +428,3 @@ fun PruningEntryScreen(
     }
 }
 
-// =================================================================
-// ⬇️ 内部组件 (前缀 Pruning)
-// =================================================================
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PruningSelectDropdown(label: String, selectedValue: String, options: List<String>, onValueChange: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = selectedValue, onValueChange = {}, readOnly = true, label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
-            options.forEach { option ->
-                DropdownMenuItem(text = { Text(option) }, onClick = { onValueChange(option); expanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
-            }
-        }
-    }
-}

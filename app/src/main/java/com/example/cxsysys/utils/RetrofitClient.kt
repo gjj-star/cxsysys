@@ -1,5 +1,6 @@
 package com.example.cxsysys.utils
 
+import com.example.cxsysys.api.AuthApiService
 import com.example.cxsysys.api.WeatherApiService
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -65,6 +66,11 @@ object RetrofitClient {
             .client(businessOkHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
+    }
+
+    // 认证 API 实例
+    val authApi: AuthApiService by lazy {
+        businessRetrofit.create(AuthApiService::class.java)
     }
 }
 

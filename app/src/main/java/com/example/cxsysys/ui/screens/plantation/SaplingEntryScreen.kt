@@ -27,6 +27,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cxsysys.model.SaplingRequest
 import com.example.cxsysys.ui.components.DualModeIdentifierField
 import com.example.cxsysys.ui.components.TopScanCard
+import com.example.cxsysys.ui.components.ValidatedDropdownField
+import com.example.cxsysys.ui.components.ValidatedDateField
+import com.example.cxsysys.ui.components.ValidatedOutlinedTextField
+import com.example.cxsysys.ui.components.rememberFormValidationState
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
 import com.example.cxsysys.viewmodel.SaplingViewModel
@@ -45,6 +49,9 @@ fun SaplingEntryScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+
+    // 表单验证状态
+    val validationState = rememberFormValidationState()
 
     // 观察 ViewModel 状态
     val greenhouseList by viewModel.greenhouseList.collectAsState()
@@ -173,7 +180,20 @@ fun SaplingEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        if (seedbed_id != null && subspecies_id != null && initial_quantity.isNotEmpty() && generation.isNotEmpty() && generation_way.isNotEmpty()) {
+                        // 使用表单验证状态进行验证
+                        val isValid = validationState.validateOnSubmit(
+                            mapOf(
+                                "seedbed" to seedbed_code,
+                                "subspecies" to subspecies,
+                                "generation" to generation,
+                                "generation_way" to generation_way,
+                                "saplingDate" to sapling_date,
+                                "entryDate" to entry_date,
+                                "initial_quantity" to initial_quantity
+                            )
+                        )
+
+                        if (isValid && seedbed_id != null && subspecies_id != null) {
                             val request = SaplingRequest(
                                 seedbedId = seedbed_id!!,
                                 mothertreeQrcode = mother_tree_qr.ifEmpty { null },
@@ -228,7 +248,7 @@ fun SaplingEntryScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    SaplingDropdownField(
+                    ValidatedDropdownField(
                         label = "选择种植大棚",
                         value = greenhouse_name,
                         placeholder = "请选择大棚",
@@ -242,12 +262,15 @@ fun SaplingEntryScreen(
                                 seedbed_id = null
                                 viewModel.fetchSeedbedsByGreenhouse(selectedGh.greenhouseId)
                             }
-                        }
+                        },
+                        fieldKey = "greenhouse",
+                        validationState = validationState,
+                        isRequired = true
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    SaplingDropdownField(
+                    ValidatedDropdownField(
                         label = "选择空闲苗床",
                         value = seedbed_code,
                         placeholder = if (greenhouse_name.isEmpty()) "请先选择大棚" else "请选择空闲苗床",
@@ -259,6 +282,9 @@ fun SaplingEntryScreen(
                                 seedbed_id = seedbedList.find { it.seedbedCode == code }?.seedbedId
                             }
                         },
+                        fieldKey = "seedbed",
+                        validationState = validationState,
+                        isRequired = true,
                         enabled = greenhouse_name.isNotEmpty()
                     )
                 }
@@ -286,7 +312,7 @@ fun SaplingEntryScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    SaplingDropdownField(
+                    ValidatedDropdownField(
                         label = "沉香品种细分",
                         value = subspecies,
                         placeholder = "请选择品种",
@@ -294,31 +320,37 @@ fun SaplingEntryScreen(
                         onValueChange = { selectedName ->
                             subspecies = selectedName
                             subspecies_id = subspeciesList.find { it.subspeciesName == selectedName }?.enterpriseSubspeciesId
-                        }
+                        },
+                        fieldKey = "subspecies",
+                        validationState = validationState,
+                        isRequired = true
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
+                        ValidatedOutlinedTextField(
                             value = generation,
                             onValueChange = { if (it.length <= 2) generation = it },
-                            label = { Text("代数", maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp) },
-                            placeholder = { Text("如: 1", maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp) },
+                            label = "代数",
+                            fieldKey = "generation",
+                            validationState = validationState,
+                            isRequired = true,
+                            placeholder = "如: 1",
                             modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
 
                         Box(modifier = Modifier.weight(1f)) {
-                            SaplingDropdownField(
+                            ValidatedDropdownField(
                                 label = "育苗方法",
                                 value = generation_way,
                                 placeholder = "选择方法",
                                 options = generationWayOptions,
-                                onValueChange = { generation_way = it }
+                                onValueChange = { generation_way = it },
+                                fieldKey = "generation_way",
+                                validationState = validationState,
+                                isRequired = true
                             )
                         }
                     }
@@ -332,106 +364,44 @@ fun SaplingEntryScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = sapling_date,
-                            onValueChange = {},
-                            label = { Text("嫁接/扦插/播种日期") },
-                            readOnly = true,
-                            trailingIcon = { Icon(Icons.Default.CalendarToday, null, tint = AgGreenPrimary) },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
-                        )
-                        Box(modifier = Modifier.matchParentSize().clickable { showSaplingDatePicker = true })
-                    }
+                    ValidatedDateField(
+                        value = sapling_date,
+                        label = "嫁接/扦插/播种日期",
+                        fieldKey = "saplingDate",
+                        validationState = validationState,
+                        isRequired = true,
+                        onDateClick = { showSaplingDatePicker = true },
+                        trailingIcon = { Icon(Icons.Default.CalendarToday, null, tint = AgGreenPrimary) }
+                    )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = entry_date,
-                            onValueChange = {},
-                            label = { Text("入棚日期") },
-                            readOnly = true,
-                            trailingIcon = { Icon(Icons.Default.CalendarToday, null, tint = AgGreenPrimary) },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
-                        )
-                        Box(modifier = Modifier.matchParentSize().clickable { showEntryDatePicker = true })
-                    }
+                    ValidatedDateField(
+                        value = entry_date,
+                        label = "入棚日期",
+                        fieldKey = "entryDate",
+                        validationState = validationState,
+                        isRequired = true,
+                        onDateClick = { showEntryDatePicker = true },
+                        trailingIcon = { Icon(Icons.Default.CalendarToday, null, tint = AgGreenPrimary) }
+                    )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = initial_quantity,
                         onValueChange = { if (it.all { char -> char.isDigit() }) initial_quantity = it },
-                        label = { Text("本苗床幼苗初始数量") },
-                        placeholder = { Text("请输入数量") },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        label = "本苗床幼苗初始数量",
+                        fieldKey = "initial_quantity",
+                        validationState = validationState,
+                        isRequired = true,
+                        placeholder = "请输入数量",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(40.dp))
-        }
-    }
-}
-
-
-// === 内部组件 ===
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SaplingDropdownField(
-    label: String,
-    value: String,
-    placeholder: String,
-    options: List<String>,
-    onValueChange: (String) -> Unit,
-    enabled: Boolean = true
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded && enabled,
-        onExpandedChange = { if (enabled) expanded = !expanded },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = {},
-            label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp) },
-            placeholder = { Text(placeholder, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp) },
-            readOnly = true,
-            singleLine = true,
-            enabled = enabled,
-            textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = AgGreenPrimary,
-                focusedLabelColor = AgGreenPrimary,
-                disabledContainerColor = BgGray.copy(alpha = 0.5f),
-                disabledBorderColor = Color.LightGray
-            )
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(Color.White)
-        ) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option) },
-                    onClick = {
-                        onValueChange(option)
-                        expanded = false
-                    },
-                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                )
-            }
         }
     }
 }

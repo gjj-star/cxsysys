@@ -39,6 +39,9 @@ import com.example.cxsysys.ui.components.DualModeIdentifierField
 import com.example.cxsysys.ui.components.PhotoSourcePickerDialog
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.rememberCameraPhotoLauncher
+import com.example.cxsysys.ui.components.ValidatedDropdownField
+import com.example.cxsysys.ui.components.ValidatedOutlinedTextField
+import com.example.cxsysys.ui.components.rememberFormValidationState
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
 import com.example.cxsysys.viewmodel.DiseaseViewModel
@@ -63,6 +66,9 @@ fun DiseasePestEntryScreen(
     val submitSuccess by viewModel.submitSuccess.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
+    // 表单验证状态
+    val validationState = rememberFormValidationState()
+
     // --- 表单状态 ---
     // 0: 按苗木个别录入 (默认), 1: 按地块批量录入
     var inputMode by remember { mutableStateOf(0) }
@@ -82,6 +88,7 @@ fun DiseasePestEntryScreen(
     // 虫害复选框状态
     val diseasePestTypes = listOf("蚜虫", "白粉虱", "螨虫", "叶斑病", "屌丝虫", "炭疽病", "卷叶虫", "黄野螟", "枯萎病", "天牛", "根结线虫", "根腐病", "其他")
     val selectedPests = remember { mutableStateListOf<String>() }
+    var hasPestError by remember { mutableStateOf(false) }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     var record_date by remember { mutableStateOf(dateFormat.format(Date())) }
@@ -175,33 +182,36 @@ fun DiseasePestEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        val isValid = if (inputMode == 0) {
-                            plant_qr_code.isNotEmpty()
+                        // 使用表单验证状态进行验证
+                        val identifierValue = if (inputMode == 0) {
+                            if (plant_qr_code.isEmpty()) null else "valid"
                         } else {
-                            field_qr_code.isNotEmpty() || field_self_code.isNotEmpty()
+                            if (field_qr_code.isEmpty() && field_self_code.isEmpty()) null else "valid"
                         }
-
-                        if (!isValid) {
-                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请填写或扫码地块编码"
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        if (selectedPests.isEmpty()) {
-                            Toast.makeText(context, "请至少选择一种病虫害类型", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        viewModel.submitDisease(
-                            context = context,
-                            plantQrcode = if (inputMode == 0) plant_qr_code else null,
-                            fieldQrcode = if (inputMode == 1) field_qr_code else null,
-                            fieldCode = if (inputMode == 1) field_self_code else null,
-                            recordDate = record_date,
-                            diseaseType = selectedPests.joinToString(","),
-                            diseaseDescription = description,
-                            imageUris = selectedImageUris
+                        
+                        val isValid = validationState.validateOnSubmit(
+                            mapOf(
+                                "identifier" to identifierValue,
+                                "recordDate" to record_date,
+                                "pestTypes" to if (selectedPests.isEmpty()) null else "valid"
+                            )
                         )
+                        hasPestError = selectedPests.isEmpty()
+
+                        if (isValid && !hasPestError) {
+                            viewModel.submitDisease(
+                                context = context,
+                                plantQrcode = if (inputMode == 0) plant_qr_code else null,
+                                fieldQrcode = if (inputMode == 1) field_qr_code else null,
+                                fieldCode = if (inputMode == 1) field_self_code else null,
+                                recordDate = record_date,
+                                diseaseType = selectedPests.joinToString(","),
+                                diseaseDescription = description,
+                                imageUris = selectedImageUris
+                            )
+                        } else {
+                            Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
+                        }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
                     shape = RoundedCornerShape(8.dp),
@@ -303,7 +313,10 @@ fun DiseasePestEntryScreen(
                             isSelfCodeMode = false,
                             onModeChange = { },
                             onScanClick = { showScanner = true },
-                            showModeToggle = false
+                            showModeToggle = false,
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     }
                 }
@@ -324,7 +337,10 @@ fun DiseasePestEntryScreen(
                             onSelfCodeChange = { field_self_code = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { showScanner = true }
+                            onScanClick = { showScanner = true },
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -347,27 +363,46 @@ fun DiseasePestEntryScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     // 记录日期
+                    val hasDateError = validationState.hasError("recordDate")
+                    Row {
+                        Text(text = "* ", color = Color(0xFFE53935), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text(text = "记录日期", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (hasDateError) Color(0xFFE53935) else Color(0xFF666666))
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
                         value = record_date,
                         onValueChange = { record_date = it },
                         readOnly = true,
-                        label = { Text("记录日期") },
                         modifier = Modifier.fillMaxWidth(),
+                        isError = hasDateError,
                         trailingIcon = {
                             IconButton(onClick = { showDatePicker = true }) {
                                 Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary)
                             }
                         },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = if (hasDateError) Color(0xFFE53935) else AgGreenPrimary,
+                            unfocusedBorderColor = if (hasDateError) Color(0xFFE53935) else Color.LightGray,
+                            focusedLabelColor = if (hasDateError) Color(0xFFE53935) else AgGreenPrimary
+                        )
                     )
+                    if (hasDateError) {
+                        Text("此项为必填", color = Color(0xFFE53935), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 虫害复选框区域
-                    Text("主要病虫害（可多选）", fontWeight = FontWeight.Medium, color = Color.Gray)
+                    Row {
+                        Text(text = "* ", color = Color(0xFFE53935), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text(text = "主要病虫害（可多选）", fontWeight = FontWeight.Medium, color = if (hasPestError) Color(0xFFE53935) else Color(0xFF666666))
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = if (hasPestError) Modifier
+                            .border(1.dp, Color(0xFFE53935), RoundedCornerShape(8.dp))
+                            .padding(8.dp) else Modifier
                     ) {
                         diseasePestTypes.forEach { pest ->
                             val isSelected = selectedPests.contains(pest)
@@ -375,6 +410,7 @@ fun DiseasePestEntryScreen(
                                 selected = isSelected,
                                 onClick = {
                                     if (isSelected) selectedPests.remove(pest) else selectedPests.add(pest)
+                                    if (hasPestError && selectedPests.isNotEmpty()) hasPestError = false
                                 },
                                 label = { Text(pest) },
                                 leadingIcon = if (isSelected) {
@@ -386,6 +422,9 @@ fun DiseasePestEntryScreen(
                                 )
                             )
                         }
+                    }
+                    if (hasPestError) {
+                        Text("此项为必填", color = Color(0xFFE53935), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                     }
                     Spacer(modifier = Modifier.height(16.dp))
 

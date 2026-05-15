@@ -44,6 +44,10 @@ import java.util.Locale
 // 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.ValidatedDropdownField
+import com.example.cxsysys.ui.components.ValidatedDateField
+import com.example.cxsysys.ui.components.ValidatedOutlinedTextField
+import com.example.cxsysys.ui.components.rememberFormValidationState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,6 +83,9 @@ fun PesticideEntryScreen(
         }
     }
 
+    // 表单验证状态
+    val validationState = rememberFormValidationState()
+
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1 (大部分情境为批量)
     var inputMode by remember { mutableIntStateOf(1) }
@@ -94,6 +101,7 @@ fun PesticideEntryScreen(
     var fieldSelfCode by remember { mutableStateOf("") }
 
     var selectedPesticide by remember { mutableStateOf<Pesticide?>(null) }
+    var hasPesticideError by remember { mutableStateOf(false) }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     var apply_date by remember { mutableStateOf(dateFormat.format(Date())) }
@@ -160,6 +168,7 @@ fun PesticideEntryScreen(
             onDismiss = { showSelectPesticideDialog = false },
             onConfirm = { pesticide ->
                 selectedPesticide = pesticide
+                if (hasPesticideError) hasPesticideError = false
                 showSelectPesticideDialog = false
             },
             onAddClick = {
@@ -183,27 +192,27 @@ fun PesticideEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 【修改】校验逻辑更新：苗木只看二维码，地块看双码
-                        val targetValid = if (inputMode == 0) {
-                            plantQrCode.isNotEmpty()
+                        // 使用验证状态进行验证
+                        val identifierValue = if (inputMode == 0) {
+                            plantQrCode
                         } else {
-                            fieldQrCode.isNotEmpty() || fieldSelfCode.isNotEmpty()
+                            if (isSelfCodeMode) fieldSelfCode else fieldQrCode
                         }
+                        
+                        val isValid = validationState.validateOnSubmit(
+                            mapOf(
+                                "identifier" to identifierValue,
+                                "recordDate" to apply_date,
+                                "pesticideTime" to pesticide_time,
+                                "selectedPesticide" to (selectedPesticide?.pestId?.toString() ?: ""),
+                                "dosage" to dosage_ml_per_plant,
+                                "method" to method,
+                                "concentration" to concentration_ppm
+                            )
+                        )
+                        hasPesticideError = selectedPesticide == null
 
-                        if (!targetValid) {
-                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请填写或扫码地块编码"
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        } else if (pesticide_time.isEmpty()) {
-                            Toast.makeText(context, "请选择施药时段", Toast.LENGTH_SHORT).show()
-                        } else if (selectedPesticide == null) {
-                            Toast.makeText(context, "请选择农药", Toast.LENGTH_SHORT).show()
-                        } else if (dosage_ml_per_plant.isEmpty()) {
-                            Toast.makeText(context, "请填写单株用量", Toast.LENGTH_SHORT).show()
-                        } else if (method.isEmpty()) {
-                            Toast.makeText(context, "请选择施药方式", Toast.LENGTH_SHORT).show()
-                        } else if (concentration_ppm.isEmpty()) {
-                            Toast.makeText(context, "请填写稀释浓度", Toast.LENGTH_SHORT).show()
-                        } else {
+                        if (isValid && !hasPesticideError) {
                             viewModel.submitPesticideWork(
                                 plantQrcode = if (inputMode == 0) plantQrCode else null,
                                 fieldQrcode = if (inputMode == 1) fieldQrCode else null,
@@ -216,6 +225,8 @@ fun PesticideEntryScreen(
                                 pestWater = concentration_ppm.toDoubleOrNull() ?: 0.0,
                                 record = remark
                             )
+                        } else {
+                            Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
@@ -319,7 +330,10 @@ fun PesticideEntryScreen(
                             isSelfCodeMode = false, // 永远为 false，保持扫码模式
                             onModeChange = { },     // 不响应切换
                             onScanClick = { showScanner = true },
-                            showModeToggle = false  // 隐藏右上角的切换按钮
+                            showModeToggle = false, // 隐藏右上角的切换按钮
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     } else {
                         // 地块保持双模式可切换
@@ -331,35 +345,42 @@ fun PesticideEntryScreen(
                             onSelfCodeChange = { fieldSelfCode = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { showScanner = true }
+                            onScanClick = { showScanner = true },
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 施药日期
-                    OutlinedTextField(
+                    ValidatedDateField(
                         value = apply_date,
-                        onValueChange = { apply_date = it },
-                        readOnly = true, // 防止点开弹出键盘
-                        label = { Text("施药日期") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = "施药日期",
+                        fieldKey = "recordDate",
+                        validationState = validationState,
+                        isRequired = true,
+                        onDateClick = { showDatePicker = true },
                         trailingIcon = {
                             IconButton(onClick = { showDatePicker = true }) {
                                 Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary)
                             }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 施药时段
-                    PesticideDropdownField(
+                    ValidatedDropdownField(
                         label = "施药时段",
-                        selectedValue = pesticide_time,
+                        value = pesticide_time,
+                        placeholder = "请选择施药时段",
                         options = timeSlotOptions,
-                        onValueChange = { pesticide_time = it }
+                        onValueChange = { pesticide_time = it },
+                        fieldKey = "pesticideTime",
+                        validationState = validationState,
+                        isRequired = true
                     )
                 }
             }
@@ -377,7 +398,10 @@ fun PesticideEntryScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("所选农药", fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "* ", color = Color(0xFFE53935), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("所选农药", fontWeight = FontWeight.Bold, color = if (hasPesticideError) Color(0xFFE53935) else Color.Unspecified)
+                        }
                         TextButton(onClick = { showSelectPesticideDialog = true }) {
                             Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
                             Text("选择药剂", color = AgGreenPrimary)
@@ -385,8 +409,8 @@ fun PesticideEntryScreen(
                     }
 
                     if (selectedPesticide == null) {
-                        Box(modifier = Modifier.fillMaxWidth().height(50.dp).background(BgGray, RoundedCornerShape(4.dp)), contentAlignment = Alignment.Center) {
-                            Text("暂未选择农药药剂", color = Color.Gray, fontSize = 12.sp)
+                        Box(modifier = Modifier.fillMaxWidth().height(50.dp).background(BgGray, RoundedCornerShape(4.dp)).then(if (hasPesticideError) Modifier.border(1.dp, Color(0xFFE53935), RoundedCornerShape(4.dp)) else Modifier), contentAlignment = Alignment.Center) {
+                            Text("暂未选择农药药剂", color = if (hasPesticideError) Color(0xFFE53935) else Color.Gray, fontSize = 12.sp)
                         }
                     } else {
                         Row(modifier = Modifier.fillMaxWidth().border(1.dp, AgGreenPrimary.copy(alpha = 0.5f), RoundedCornerShape(8.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -397,42 +421,52 @@ fun PesticideEntryScreen(
                             IconButton(onClick = { selectedPesticide = null }, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Close, null, tint = Color.Gray) }
                         }
                     }
+                    if (hasPesticideError && selectedPesticide == null) {
+                        Text(text = "此项为必填", color = Color(0xFFE53935), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 单株用量
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = dosage_ml_per_plant,
                         onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) dosage_ml_per_plant = it },
-                        label = { Text("单株用量") },
+                        label = "单株用量",
+                        fieldKey = "dosage",
+                        validationState = validationState,
+                        isRequired = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        trailingIcon = { Text("ml", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        trailingIcon = { Text("ml", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 施药方式
-                    PesticideDropdownField(
+                    ValidatedDropdownField(
                         label = "施药方式",
-                        selectedValue = method,
+                        value = method,
+                        placeholder = "请选择施药方式",
                         options = methodOptions,
-                        onValueChange = { method = it }
+                        onValueChange = { method = it },
+                        fieldKey = "method",
+                        validationState = validationState,
+                        isRequired = true
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 稀释浓度
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = concentration_ppm,
                         onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) concentration_ppm = it },
-                        label = { Text("稀释浓度") },
-                        placeholder = { Text("如 1000", color = Color.Gray) },
+                        label = "稀释浓度",
+                        fieldKey = "concentration",
+                        validationState = validationState,
+                        isRequired = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        trailingIcon = { Text("ppm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        trailingIcon = { Text("ppm", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
                     )
                 }
             }
@@ -556,21 +590,3 @@ fun PesticideSelectDialog(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PesticideDropdownField(label: String, selectedValue: String, options: List<String>, onValueChange: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = selectedValue, onValueChange = {}, readOnly = true, label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
-            options.forEach { option ->
-                DropdownMenuItem(text = { Text(option) }, onClick = { onValueChange(option); expanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
-            }
-        }
-    }
-}

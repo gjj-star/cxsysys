@@ -44,6 +44,10 @@ import com.example.cxsysys.viewmodel.SubmitState
 // 引入双模式扫码组件与大卡片组件
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.ValidatedDropdownField
+import com.example.cxsysys.ui.components.ValidatedDateField
+import com.example.cxsysys.ui.components.ValidatedOutlinedTextField
+import com.example.cxsysys.ui.components.rememberFormValidationState
 
 /**
  * 打孔结香录入页面
@@ -59,6 +63,9 @@ fun PunchEntryScreen(
     val scope = rememberCoroutineScope()
     
     val submitState by viewModel.submitState.collectAsState()
+
+    // 表单验证状态
+    val validationState = rememberFormValidationState()
 
     // --- 表单状态 (对应 V10 数据库字段) ---
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1
@@ -159,19 +166,25 @@ fun PunchEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 【修改点】：校验逻辑更新，苗木只看二维码
-                        val targetValid = if (inputMode == 0) {
-                            plant_qr_code.isNotEmpty()
+                        // 使用验证状态进行验证
+                        val identifierValue = if (inputMode == 0) {
+                            plant_qr_code
                         } else {
-                            field_qr_code.isNotEmpty() || field_self_code.isNotEmpty()
+                            if (isSelfCodeMode) field_self_code else field_qr_code
                         }
+                        
+                        val isValid = validationState.validateOnSubmit(
+                            mapOf(
+                                "identifier" to identifierValue,
+                                "recordDate" to punch_date,
+                                "timeSlot" to time_slot,
+                                "holeDepth" to hole_depth,
+                                "holeDiameter" to hole_diameter,
+                                "holePitch" to hole_pitch
+                            )
+                        )
 
-                        if (!targetValid) {
-                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请扫码或输入地块编码"
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        } else if (hole_depth.isEmpty() || hole_diameter.isEmpty() || hole_pitch.isEmpty()) {
-                            Toast.makeText(context, "请完整填写结香规格", Toast.LENGTH_SHORT).show()
-                        } else {
+                        if (isValid) {
                             viewModel.submitPunch(
                                 plantQrcode = if (inputMode == 0) plant_qr_code else null,
                                 fieldQrcode = if (inputMode == 1 && !isSelfCodeMode) field_qr_code else null,
@@ -183,6 +196,8 @@ fun PunchEntryScreen(
                                 punchPitch = hole_pitch.toDoubleOrNull() ?: 0.0,
                                 remark = remark.takeIf { it.isNotBlank() }
                             )
+                        } else {
+                            Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
@@ -269,7 +284,10 @@ fun PunchEntryScreen(
                             isSelfCodeMode = false, // 永远为 false，保持扫码模式
                             onModeChange = { },     // 不响应切换
                             onScanClick = { showScanner = true },
-                            showModeToggle = false  // 隐藏右上角的切换按钮
+                            showModeToggle = false, // 隐藏右上角的切换按钮
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     } else {
                         // 地块保持双模式可切换
@@ -281,35 +299,42 @@ fun PunchEntryScreen(
                             onSelfCodeChange = { field_self_code = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { showScanner = true }
+                            onScanClick = { showScanner = true },
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // punch_date
-                    OutlinedTextField(
+                    ValidatedDateField(
                         value = punch_date,
-                        onValueChange = { punch_date = it },
-                        readOnly = true, // 防止键盘弹起
-                        label = { Text("打孔日期") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = "打孔日期",
+                        fieldKey = "recordDate",
+                        validationState = validationState,
+                        isRequired = true,
+                        onDateClick = { showDatePicker = true },
                         trailingIcon = {
                             IconButton(onClick = { showDatePicker = true }) {
                                 Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary)
                             }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // time_slot
-                    PunchingSelectDropdown(
+                    ValidatedDropdownField(
                         label = "打孔时段",
-                        selectedValue = time_slot,
+                        value = time_slot,
+                        placeholder = "请选择打孔时段",
                         options = timeSlotOptions,
-                        onValueChange = { time_slot = it }
+                        onValueChange = { time_slot = it },
+                        fieldKey = "timeSlot",
+                        validationState = validationState,
+                        isRequired = true
                     )
                 }
             }
@@ -322,43 +347,46 @@ fun PunchEntryScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     // hole_depth
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = hole_depth,
                         onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) hole_depth = it },
-                        label = { Text("平均孔深") },
-                        placeholder = { Text("cm/厘米") },
+                        label = "平均孔深",
+                        fieldKey = "holeDepth",
+                        validationState = validationState,
+                        isRequired = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 8.dp)) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 8.dp)) }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // hole_diameter
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = hole_diameter,
                         onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) hole_diameter = it },
-                        label = { Text("孔径") },
-                        placeholder = { Text("mm/毫米") },
+                        label = "孔径",
+                        fieldKey = "holeDiameter",
+                        validationState = validationState,
+                        isRequired = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        trailingIcon = { Text("mm", color = Color.Gray, modifier = Modifier.padding(end = 8.dp)) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        trailingIcon = { Text("mm", color = Color.Gray, modifier = Modifier.padding(end = 8.dp)) }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // hole_pitch
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = hole_pitch,
                         onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) hole_pitch = it },
-                        label = { Text("平均孔距") },
-                        placeholder = { Text("cm/厘米") },
+                        label = "平均孔距",
+                        fieldKey = "holePitch",
+                        validationState = validationState,
+                        isRequired = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 8.dp)) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        trailingIcon = { Text("cm", color = Color.Gray, modifier = Modifier.padding(end = 8.dp)) }
                     )
                 }
             }
@@ -393,21 +421,3 @@ fun PunchEntryScreen(
 
 // 【注】：原先的 PunchingScanSection 已经被删除，复用了统一样式的 TopScanCard 和 DualModeIdentifierField
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PunchingSelectDropdown(label: String, selectedValue: String, options: List<String>, onValueChange: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = selectedValue, onValueChange = {}, readOnly = true, label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
-            modifier = Modifier.fillMaxWidth().menuAnchor()
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
-            options.forEach { option ->
-                DropdownMenuItem(text = { Text(option) }, onClick = { onValueChange(option); expanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
-            }
-        }
-    }
-}

@@ -1,5 +1,7 @@
 package com.example.cxsysys.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -11,6 +13,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,7 +22,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cxsysys.ui.theme.AgGreenPrimary
@@ -28,19 +34,38 @@ import com.example.cxsysys.ui.theme.AgGreenPrimary
  */
 @Composable
 fun DualModeIdentifierField(
-    targetName: String, // 目标名称，如 "苗木" 或 "地块"
+    targetName: String,
     qrCodeValue: String,
     onQrCodeChange: (String) -> Unit,
     selfCodeValue: String,
     onSelfCodeChange: (String) -> Unit,
     isSelfCodeMode: Boolean,
     onModeChange: (Boolean) -> Unit,
-    onScanClick: () -> Unit = {}, // 预设扫码回调
-    showModeToggle: Boolean = true, // 【新增】：是否允许切换模式，设为 false 时固定在当前模式并隐藏切换按钮
+    onScanClick: () -> Unit = {},
+    showModeToggle: Boolean = true,
+    validationState: FormValidationState? = null,
+    fieldKey: String? = null,
+    isRequired: Boolean = false,
     modifier: Modifier = Modifier.fillMaxWidth()
 ) {
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    val currentValue = if (isSelfCodeMode) selfCodeValue else qrCodeValue
+    val hasError = validationState != null && fieldKey != null && validationState.hasError(fieldKey)
+
+    val borderColor by animateColorAsState(
+        targetValue = if (hasError) Color(0xFFE53935) else if (isSelfCodeMode) AgGreenPrimary else Color(0xFFE0E0E0),
+        animationSpec = tween(durationMillis = 200),
+        label = "borderColor"
+    )
+
+    // 自动清除错误：当值非空时
+    LaunchedEffect(currentValue) {
+        if (validationState != null && fieldKey != null && currentValue.isNotBlank() && hasError) {
+            validationState.clearError(fieldKey)
+        }
+    }
 
     val handleToggle = {
         if (showModeToggle) {
@@ -51,7 +76,27 @@ fun DualModeIdentifierField(
     }
 
     Column(modifier = modifier) {
-        // 【修改】：根据参数决定是否渲染右上角的切换文字
+        // 必填标签行
+        if (isRequired) {
+            Row {
+                Text(
+                    text = "* ",
+                    color = Color(0xFFE53935),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = if (isSelfCodeMode) "${targetName}自编码" else "${targetName}二维码",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF666666),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
         if (showModeToggle) {
             Box(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -70,14 +115,14 @@ fun DualModeIdentifierField(
         }
 
         OutlinedTextField(
-            value = if (isSelfCodeMode) selfCodeValue else qrCodeValue,
+            value = currentValue,
             onValueChange = {
                 if (isSelfCodeMode) onSelfCodeChange(it)
             },
             readOnly = !isSelfCodeMode,
-            label = {
-                Text(text = if (isSelfCodeMode) "${targetName}自编码" else "${targetName}二维码")
-            },
+            label = if (!isRequired) {
+                { Text(text = if (isSelfCodeMode) "${targetName}自编码" else "${targetName}二维码") }
+            } else null,
             placeholder = {
                 Text(
                     text = if (isSelfCodeMode) "请输入${targetName}自编码 (如: A-01)" else "请通过上方卡片扫描${targetName}二维码",
@@ -86,6 +131,7 @@ fun DualModeIdentifierField(
                 )
             },
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+            isError = hasError,
             trailingIcon = {
                 if (isSelfCodeMode) {
                     IconButton(onClick = {
@@ -101,11 +147,28 @@ fun DualModeIdentifierField(
                 }
             },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = if (isSelfCodeMode) AgGreenPrimary else Color(0xFFE0E0E0),
-                focusedLabelColor = AgGreenPrimary,
-                unfocusedBorderColor = if (isSelfCodeMode) Color.Black else Color(0xFFE0E0E0)
+                focusedBorderColor = borderColor,
+                focusedLabelColor = if (hasError) Color(0xFFE53935) else AgGreenPrimary,
+                unfocusedBorderColor = if (hasError) Color(0xFFE53935).copy(alpha = 0.7f) else if (isSelfCodeMode) Color.Black else Color(0xFFE0E0E0),
+                errorBorderColor = Color(0xFFE53935),
+                errorLabelColor = Color(0xFFE53935),
+                errorCursorColor = Color(0xFFE53935),
+                focusedTextColor = Color(0xFF333333),
+                unfocusedTextColor = Color(0xFF333333),
+                cursorColor = AgGreenPrimary
             ),
-            singleLine = true
+            singleLine = true,
+            textStyle = TextStyle(fontSize = 14.sp)
         )
+
+        // 错误提示文字
+        if (hasError) {
+            Text(
+                text = "此项为必填",
+                color = Color(0xFFE53935),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 0.dp, top = 4.dp)
+            )
+        }
     }
 }

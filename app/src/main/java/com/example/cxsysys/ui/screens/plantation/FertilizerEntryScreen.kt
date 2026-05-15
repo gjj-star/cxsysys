@@ -44,6 +44,10 @@ import java.util.Locale
 // 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.ValidatedDropdownField
+import com.example.cxsysys.ui.components.ValidatedDateField
+import com.example.cxsysys.ui.components.ValidatedOutlinedTextField
+import com.example.cxsysys.ui.components.rememberFormValidationState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +59,9 @@ fun FertilizerEntryScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+
+    // 表单验证状态
+    val validationState = rememberFormValidationState()
 
     // 观察 ViewModel 状态
     val fertilizers by viewModel.fertilizers.collectAsState()
@@ -88,6 +95,7 @@ fun FertilizerEntryScreen(
     var fieldSelfCode by remember { mutableStateOf("") }
 
     val selectedFertilizers = remember { mutableStateListOf<Fertilizer>() }
+    var hasFertilizerError by remember { mutableStateOf(false) }
 
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     var fertilizer_date by remember { mutableStateOf(dateFormat.format(Date())) }
@@ -149,6 +157,7 @@ fun FertilizerEntryScreen(
             onDismiss = { showSelectFertilizerDialog = false },
             onConfirm = { fertilizer ->
                 if (!selectedFertilizers.any { it.fertId == fertilizer.fertId }) selectedFertilizers.add(fertilizer)
+                if (hasFertilizerError && selectedFertilizers.isNotEmpty()) hasFertilizerError = false
                 showSelectFertilizerDialog = false
             },
             onAddClick = {
@@ -172,18 +181,21 @@ fun FertilizerEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 【修改点】：校验逻辑更新
-                        if (fieldQrCode.isEmpty() && fieldSelfCode.isEmpty()) {
-                            Toast.makeText(context, "请扫码或输入地块编码", Toast.LENGTH_SHORT).show()
-                        } else if (time_slot.isEmpty()) {
-                            Toast.makeText(context, "请选择施肥时段", Toast.LENGTH_SHORT).show()
-                        } else if (selectedFertilizers.isEmpty()) {
-                            Toast.makeText(context, "请至少选择一种肥料", Toast.LENGTH_SHORT).show()
-                        } else if (dosage_gram_per_plant.isEmpty()) {
-                            Toast.makeText(context, "请填写单株用量", Toast.LENGTH_SHORT).show()
-                        } else if (fertilizer_method.isEmpty()) {
-                            Toast.makeText(context, "请选择施用方法", Toast.LENGTH_SHORT).show()
-                        } else {
+                        // 使用表单验证状态进行验证
+                        val isValid = validationState.validateOnSubmit(
+                            mapOf(
+                                "identifier" to if (fieldQrCode.isEmpty() && fieldSelfCode.isEmpty()) null else "valid",
+                                "recordDate" to fertilizer_date,
+                                "timeSlot" to time_slot,
+                                "fertilizers" to if (selectedFertilizers.isEmpty()) null else "valid",
+                                "dosage" to dosage_gram_per_plant,
+                                "method" to fertilizer_method,
+                                "waterFertilizer" to water_fertilizer
+                            )
+                        )
+                        hasFertilizerError = selectedFertilizers.isEmpty()
+
+                        if (isValid && !hasFertilizerError) {
                             viewModel.submitFertilizeWork(
                                 fieldQrcode = fieldQrCode,
                                 fieldCode = fieldSelfCode,
@@ -195,6 +207,8 @@ fun FertilizerEntryScreen(
                                 fertiWater = water_fertilizer,
                                 remark = remark
                             )
+                        } else {
+                            Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
@@ -262,32 +276,39 @@ fun FertilizerEntryScreen(
                         onSelfCodeChange = { fieldSelfCode = it },
                         isSelfCodeMode = isSelfCodeMode,
                         onModeChange = { isSelfCodeMode = it },
-                        onScanClick = { showScanner = true }
+                        onScanClick = { showScanner = true },
+                        validationState = validationState,
+                        fieldKey = "identifier",
+                        isRequired = true
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    OutlinedTextField(
+                    ValidatedDateField(
                         value = fertilizer_date,
-                        onValueChange = { fertilizer_date = it },
-                        readOnly = true, // 防止点开弹出键盘
-                        label = { Text("施肥日期") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = "施肥日期",
+                        fieldKey = "recordDate",
+                        validationState = validationState,
+                        isRequired = true,
+                        onDateClick = { showDatePicker = true },
                         trailingIcon = {
                             IconButton(onClick = { showDatePicker = true }) {
                                 Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary)
                             }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    FertilizerDropdownField(
+                    ValidatedDropdownField(
                         label = "施肥时段",
-                        selectedValue = time_slot,
+                        value = time_slot,
+                        placeholder = "请选择施肥时段",
                         options = timeSlotOptions,
-                        onValueChange = { time_slot = it }
+                        onValueChange = { time_slot = it },
+                        fieldKey = "timeSlot",
+                        validationState = validationState,
+                        isRequired = true
                     )
                 }
             }
@@ -304,7 +325,10 @@ fun FertilizerEntryScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("肥料列表", fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "* ", color = Color(0xFFE53935), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("肥料列表", fontWeight = FontWeight.Bold, color = if (hasFertilizerError) Color(0xFFE53935) else Color.Unspecified)
+                        }
                         TextButton(onClick = { showSelectFertilizerDialog = true }) {
                             Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
                             Text("选择肥料", color = AgGreenPrimary)
@@ -312,8 +336,8 @@ fun FertilizerEntryScreen(
                     }
 
                     if (selectedFertilizers.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxWidth().height(50.dp).background(BgGray, RoundedCornerShape(4.dp)), contentAlignment = Alignment.Center) {
-                            Text("暂未选择肥料", color = Color.Gray, fontSize = 12.sp)
+                        Box(modifier = Modifier.fillMaxWidth().height(50.dp).background(BgGray, RoundedCornerShape(4.dp)).then(if (hasFertilizerError) Modifier.border(1.dp, Color(0xFFE53935), RoundedCornerShape(4.dp)) else Modifier), contentAlignment = Alignment.Center) {
+                            Text("暂未选择肥料", color = if (hasFertilizerError) Color(0xFFE53935) else Color.Gray, fontSize = 12.sp)
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -329,37 +353,47 @@ fun FertilizerEntryScreen(
                             }
                         }
                     }
+                    if (hasFertilizerError && selectedFertilizers.isEmpty()) {
+                        Text(text = "此项为必填", color = Color(0xFFE53935), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = dosage_gram_per_plant,
                         onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) dosage_gram_per_plant = it },
-                        label = { Text("单株用量") },
+                        label = "单株用量",
+                        fieldKey = "dosage",
+                        validationState = validationState,
+                        isRequired = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        trailingIcon = { Text("g/ml", modifier = Modifier.padding(end = 12.dp), color = Color.Gray) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        trailingIcon = { Text("g/ml", modifier = Modifier.padding(end = 12.dp), color = Color.Gray) }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    FertilizerDropdownField(
+                    ValidatedDropdownField(
                         label = "施用方法",
-                        selectedValue = fertilizer_method,
+                        value = fertilizer_method,
+                        placeholder = "请选择施用方法",
                         options = methodOptions,
-                        onValueChange = { fertilizer_method = it }
+                        onValueChange = { fertilizer_method = it },
+                        fieldKey = "method",
+                        validationState = validationState,
+                        isRequired = true
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = water_fertilizer,
                         onValueChange = { water_fertilizer = it },
-                        label = { Text("水肥配比") },
-                        placeholder = { Text("如 5:1", color = Color.Gray) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        label = "水肥配比",
+                        fieldKey = "waterFertilizer",
+                        validationState = validationState,
+                        isRequired = true,
+                        placeholder = "如 5:1"
                     )
                 }
             }

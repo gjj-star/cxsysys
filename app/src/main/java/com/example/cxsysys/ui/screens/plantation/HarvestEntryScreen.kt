@@ -44,6 +44,10 @@ import com.example.cxsysys.viewmodel.SubmitState
 // 引入提取的公共组件
 import com.example.cxsysys.ui.components.TopScanCard
 import com.example.cxsysys.ui.components.DualModeIdentifierField
+import com.example.cxsysys.ui.components.ValidatedDropdownField
+import com.example.cxsysys.ui.components.ValidatedDateField
+import com.example.cxsysys.ui.components.ValidatedOutlinedTextField
+import com.example.cxsysys.ui.components.rememberFormValidationState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +60,9 @@ fun HarvestEntryScreen(
     val scope = rememberCoroutineScope()
     
     val submitState by viewModel.submitState.collectAsState()
+
+    // 表单验证状态
+    val validationState = rememberFormValidationState()
 
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1
@@ -148,19 +155,22 @@ fun HarvestEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 【修改点】：校验逻辑更新，移除了枝干的判断
-                        val isTargetValid = if (inputMode == 0) {
-                            plantQrCode.isNotEmpty()
+                        // 使用表单验证状态进行验证
+                        val identifierValue = if (inputMode == 0) {
+                            if (plantQrCode.isEmpty()) null else "valid"
                         } else {
-                            fieldQrCode.isNotEmpty() || fieldSelfCode.isNotEmpty()
+                            if (fieldQrCode.isEmpty() && fieldSelfCode.isEmpty()) null else "valid"
                         }
+                        
+                        val isValid = validationState.validateOnSubmit(
+                            mapOf(
+                                "identifier" to identifierValue,
+                                "recordDate" to harvest_date,
+                                "weight" to weight
+                            )
+                        )
 
-                        if (!isTargetValid) {
-                            val msg = if (inputMode == 0) "请扫码提供苗木标识信息" else "请扫码或输入地块编码"
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        } else if (weight.isEmpty()) {
-                            Toast.makeText(context, "请输入采收重量", Toast.LENGTH_SHORT).show()
-                        } else {
+                        if (isValid) {
                             viewModel.submitHarvest(
                                 fieldCode = if (inputMode == 1 && isSelfCodeMode) fieldSelfCode else null,
                                 fieldQrcode = if (inputMode == 1 && !isSelfCodeMode) fieldQrCode else null,
@@ -168,6 +178,8 @@ fun HarvestEntryScreen(
                                 harvestDate = harvest_date,
                                 harvestWeight = weight.toDoubleOrNull() ?: 0.0
                             )
+                        } else {
+                            Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
@@ -279,7 +291,10 @@ fun HarvestEntryScreen(
                             isSelfCodeMode = false, // 永远为 false，保持扫码模式
                             onModeChange = { },     // 不响应切换
                             onScanClick = { showScanner = true },
-                            showModeToggle = false  // 隐藏右上角的切换按钮
+                            showModeToggle = false,  // 隐藏右上角的切换按钮
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     } else {
                         // 批量模式：地块保持双模式
@@ -291,25 +306,28 @@ fun HarvestEntryScreen(
                             onSelfCodeChange = { fieldSelfCode = it },
                             isSelfCodeMode = isSelfCodeMode,
                             onModeChange = { isSelfCodeMode = it },
-                            onScanClick = { showScanner = true }
+                            onScanClick = { showScanner = true },
+                            validationState = validationState,
+                            fieldKey = "identifier",
+                            isRequired = true
                         )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 采收日期
-                    OutlinedTextField(
+                    ValidatedDateField(
                         value = harvest_date,
-                        onValueChange = { harvest_date = it },
-                        readOnly = true, // 防止键盘弹起
-                        label = { Text("采收日期") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = "采收日期",
+                        fieldKey = "recordDate",
+                        validationState = validationState,
+                        isRequired = true,
+                        onDateClick = { showDatePicker = true },
                         trailingIcon = {
                             IconButton(onClick = { showDatePicker = true }) {
                                 Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary)
                             }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        }
                     )
                 }
             }
@@ -322,14 +340,16 @@ fun HarvestEntryScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     // 采收重量
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = weight,
                         onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) weight = it },
-                        label = { Text("采收重量") },
+                        label = "采收重量",
+                        fieldKey = "weight",
+                        validationState = validationState,
+                        isRequired = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        trailingIcon = { Text("g/克", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        trailingIcon = { Text("g/克", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
                     )
                 }
             }

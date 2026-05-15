@@ -32,6 +32,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cxsysys.model.PlantingRequest
 import com.example.cxsysys.ui.components.DualModeIdentifierField
 import com.example.cxsysys.ui.components.TopScanCard
+import com.example.cxsysys.ui.components.ValidatedDropdownField
+import com.example.cxsysys.ui.components.ValidatedDateField
+import com.example.cxsysys.ui.components.ValidatedOutlinedTextField
+import com.example.cxsysys.ui.components.rememberFormValidationState
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
 import com.example.cxsysys.viewmodel.PlantingViewModel
@@ -50,6 +54,9 @@ fun PlantingEntryScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+
+    // 表单验证状态
+    val validationState = rememberFormValidationState()
 
     val subspeciesList by viewModel.subspeciesList.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -210,31 +217,43 @@ fun PlantingEntryScreen(
             Surface(shadowElevation = 8.dp) {
                 Button(
                     onClick = {
-                        // 校验：二维码或自编码必填其一
-                        if (fieldQrCode.isEmpty() && fieldSelfCode.isEmpty()) {
-                            Toast.makeText(context, "请扫码或输入地块编码", Toast.LENGTH_SHORT).show()
-                        } else if (subspeciesId == null) {
-                            Toast.makeText(context, "请选择品种细分", Toast.LENGTH_SHORT).show()
-                        } else if (plantCount.isEmpty() || caveDepth.isEmpty() || caveWidth.isEmpty() || plantSpacing.isEmpty()) {
-                            Toast.makeText(context, "请补全种植规格信息", Toast.LENGTH_SHORT).show()
-                        } else if ((plantCount.toIntOrNull() ?: 0) > 999) {
-                            Toast.makeText(context, "定植株数超过上限(999)", Toast.LENGTH_SHORT).show()
-                        } else {
-                            entryDateTime = dateTimeFormat.format(Date())
-                            val request = PlantingRequest(
-                                fieldQrcode = fieldQrCode.ifEmpty { null },
-                                fieldCode = fieldSelfCode.ifEmpty { null },
-                                mothertreeQrcode = motherTreeQrCode.ifEmpty { null },
-                                enterpriseSubspeciesId = subspeciesId!!,
-                                generationWay = generationWay,
-                                generation = generation,
-                                saplingDate = plantingDate,
-                                holeDepth = caveDepth.toDoubleOrNull() ?: 0.0,
-                                holeWidth = caveWidth.toDoubleOrNull() ?: 0.0,
-                                plantSpacing = plantSpacing.toDoubleOrNull() ?: 0.0,
-                                quantity = plantCount.toIntOrNull() ?: 0
+                        // 使用表单验证状态进行验证
+                        val isValid = validationState.validateOnSubmit(
+                            mapOf(
+                                "identifier" to if (fieldQrCode.isEmpty() && fieldSelfCode.isEmpty()) null else "valid",
+                                "subspecies" to subspeciesIdLabel,
+                                "generationWay" to generationWay,
+                                "recordDate" to plantingDate,
+                                "caveDepth" to caveDepth,
+                                "caveWidth" to caveWidth,
+                                "plantSpacing" to plantSpacing,
+                                "plantCount" to plantCount
                             )
-                            viewModel.submitPlanting(request)
+                        )
+
+                        if (isValid) {
+                            // 额外验证：定植数量上限
+                            if ((plantCount.toIntOrNull() ?: 0) > 999) {
+                                Toast.makeText(context, "定植株数超过上限(999)", Toast.LENGTH_SHORT).show()
+                            } else {
+                                entryDateTime = dateTimeFormat.format(Date())
+                                val request = PlantingRequest(
+                                    fieldQrcode = fieldQrCode.ifEmpty { null },
+                                    fieldCode = fieldSelfCode.ifEmpty { null },
+                                    mothertreeQrcode = motherTreeQrCode.ifEmpty { null },
+                                    enterpriseSubspeciesId = subspeciesId!!,
+                                    generationWay = generationWay,
+                                    generation = generation,
+                                    saplingDate = plantingDate,
+                                    holeDepth = caveDepth.toDoubleOrNull() ?: 0.0,
+                                    holeWidth = caveWidth.toDoubleOrNull() ?: 0.0,
+                                    plantSpacing = plantSpacing.toDoubleOrNull() ?: 0.0,
+                                    quantity = plantCount.toIntOrNull() ?: 0
+                                )
+                                viewModel.submitPlanting(request)
+                            }
+                        } else {
+                            Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp),
@@ -299,7 +318,10 @@ fun PlantingEntryScreen(
                         onScanClick = {
                             scanTarget = "field"
                             showScanner = true
-                        }
+                        },
+                        validationState = validationState,
+                        fieldKey = "identifier",
+                        isRequired = true
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -329,23 +351,31 @@ fun PlantingEntryScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 品种细分
-                    PlantingSelectDropdown(
+                    ValidatedDropdownField(
                         label = "品种细分",
-                        selectedValue = subspeciesIdLabel,
+                        value = subspeciesIdLabel,
+                        placeholder = "请选择品种",
                         options = subspeciesOptions,
                         onValueChange = { selectedLabel -> 
                             subspeciesIdLabel = selectedLabel
                             subspeciesId = subspeciesList.find { it.subspeciesName == selectedLabel }?.enterpriseSubspeciesId
-                        }
+                        },
+                        fieldKey = "subspecies",
+                        validationState = validationState,
+                        isRequired = true
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 育苗方法
-                    PlantingSelectDropdown(
+                    ValidatedDropdownField(
                         label = "育苗方法",
-                        selectedValue = generationWay,
+                        value = generationWay,
+                        placeholder = "请选择育苗方法",
                         options = generationWayOptions,
-                        onValueChange = { generationWay = it }
+                        onValueChange = { generationWay = it },
+                        fieldKey = "generationWay",
+                        validationState = validationState,
+                        isRequired = true
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -361,13 +391,13 @@ fun PlantingEntryScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 定植日期
-                    OutlinedTextField(
+                    ValidatedDateField(
                         value = plantingDate,
-                        onValueChange = { plantingDate = it },
-                        readOnly = true, // 防止点开弹出键盘
-                        label = { Text("定植日期") },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary),
+                        label = "定植日期",
+                        fieldKey = "recordDate",
+                        validationState = validationState,
+                        isRequired = true,
+                        onDateClick = { showDatePicker = true },
                         trailingIcon = {
                             IconButton(onClick = { showDatePicker = true }) {
                                 Icon(Icons.Default.CalendarToday, "选择日期", tint = AgGreenPrimary)
@@ -386,50 +416,58 @@ fun PlantingEntryScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         // 穴深
-                        OutlinedTextField(
+                        ValidatedOutlinedTextField(
                             value = caveDepth,
                             onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) caveDepth = it },
-                            label = { Text("穴深") },
+                            label = "穴深",
+                            fieldKey = "caveDepth",
+                            validationState = validationState,
+                            isRequired = true,
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            trailingIcon = { Text("cm", color = Color.Gray) },
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                            trailingIcon = { Text("cm", color = Color.Gray) }
                         )
                         // 穴宽
-                        OutlinedTextField(
+                        ValidatedOutlinedTextField(
                             value = caveWidth,
                             onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) caveWidth = it },
-                            label = { Text("穴宽") },
+                            label = "穴宽",
+                            fieldKey = "caveWidth",
+                            validationState = validationState,
+                            isRequired = true,
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            trailingIcon = { Text("cm", color = Color.Gray) },
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                            trailingIcon = { Text("cm", color = Color.Gray) }
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 种植间距
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = plantSpacing,
                         onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) plantSpacing = it },
-                        label = { Text("种植间距") },
+                        label = "种植间距",
+                        fieldKey = "plantSpacing",
+                        validationState = validationState,
+                        isRequired = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        trailingIcon = { Text("m (米)", color = Color.Gray) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        trailingIcon = { Text("m (米)", color = Color.Gray) }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 定植数量
-                    OutlinedTextField(
+                    ValidatedOutlinedTextField(
                         value = plantCount,
                         onValueChange = { if (it.all { c -> c.isDigit() }) plantCount = it },
-                        label = { Text("定植数量") },
+                        label = "定植数量",
+                        fieldKey = "plantCount",
+                        validationState = validationState,
+                        isRequired = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        trailingIcon = { Text("株", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) },
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AgGreenPrimary, focusedLabelColor = AgGreenPrimary)
+                        trailingIcon = { Text("株", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
                     )
                 }
             }
