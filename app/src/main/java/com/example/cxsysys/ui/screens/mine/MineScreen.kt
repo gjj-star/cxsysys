@@ -512,14 +512,14 @@ private fun UserProfileScreen(
 
                 // 用户名
                 Text(
-                    text = authState.realName ?: authState.username ?: "用户",
+                    text = authState.realName ?: authState.userName ?: "用户",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
 
                 // 手机号
-                authState.phone?.let { phone ->
+                authState.phoneNumber?.let { phone ->
                     Text(
                         text = phone,
                         fontSize = 14.sp,
@@ -528,10 +528,10 @@ private fun UserProfileScreen(
                     )
                 }
 
-                // 企业名称
-                authState.enterpriseName?.let { name ->
+                // 超级管理员标识
+                if (authState.superAdmin) {
                     Text(
-                        text = name,
+                        text = "超级管理员",
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.6f),
                         modifier = Modifier.padding(top = 4.dp)
@@ -556,13 +556,13 @@ private fun UserProfileScreen(
                     title = "个人信息",
                     subtitle = "查看和编辑个人资料"
                 )
-                Divider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
                 MenuItemRow(
                     icon = Icons.Default.Business,
                     title = "企业管理",
-                    subtitle = authState.enterpriseName ?: "暂无企业信息"
+                    subtitle = "企业ID: ${authState.enterpriseId}"
                 )
-                Divider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
                 MenuItemRow(
                     icon = Icons.Default.Lock,
                     title = "修改密码",
@@ -586,13 +586,13 @@ private fun UserProfileScreen(
                     title = "设置",
                     subtitle = "应用设置与偏好"
                 )
-                Divider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
                 MenuItemRow(
                     icon = Icons.Default.Help,
                     title = "帮助与反馈",
                     subtitle = "常见问题与意见反馈"
                 )
-                Divider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
                 MenuItemRow(
                     icon = Icons.Default.Info,
                     title = "关于",

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cxsysys.model.*
 import com.example.cxsysys.utils.RetrofitClient
+import com.example.cxsysys.utils.TokenManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,11 +32,13 @@ sealed class AuthState {
     /** 已登录 */
     data class LoggedIn(
         val userId: Int,
-        val username: String?,
-        val phone: String?,
+        val userName: String?,
         val realName: String?,
+        val phoneNumber: String?,
         val avatarUrl: String?,
-        val enterpriseName: String?
+        val enterpriseId: Int,
+        val deptId: Int?,
+        val superAdmin: Boolean
     ) : AuthState()
 
     /** 登录失败 */
@@ -65,10 +68,8 @@ data class LoginFormState(
  * - 手机号 + 验证码登录
  * - 手机号/用户名 + 密码登录
  * - 验证码发送倒计时
- * - 登录状态管理
- *
- * 注意：后端正在同步开发此功能，此处先实现前端框架。
- * 实际 API 调用可能会根据后端接口调整。
+ * - JWT Token 管理
+ * - 自动登录（从本地恢复登录状态）
  */
 class AuthViewModel : ViewModel() {
 
@@ -84,6 +85,67 @@ class AuthViewModel : ViewModel() {
 
     companion object {
         private const val SMS_COUNTDOWN_SECONDS = 60
+    }
+
+    init {
+        // 启动时尝试从本地恢复登录状态
+        restoreLoginState()
+    }
+
+    /**
+     * 从 TokenManager 恢复登录状态（自动登录）
+     */
+    private fun restoreLoginState() {
+        if (TokenManager.isLoggedIn()) {
+            _authState.value = AuthState.LoggedIn(
+                userId = TokenManager.getUserId(),
+                userName = TokenManager.getUserName(),
+                realName = TokenManager.getRealName(),
+                phoneNumber = TokenManager.getPhoneNumber(),
+                avatarUrl = TokenManager.getAvatarUrl(),
+                enterpriseId = TokenManager.getEnterpriseId(),
+                deptId = TokenManager.getDeptId(),
+                superAdmin = TokenManager.isSuperAdmin()
+            )
+        }
+    }
+
+    /**
+     * 处理登录成功：保存 token 和用户信息到本地
+     */
+    private fun handleLoginSuccess(loginResponse: LoginResponse) {
+        val token = loginResponse.token ?: return
+        val userInfo = loginResponse.userInfo ?: return
+
+        // 保存 token
+        TokenManager.saveToken(token)
+
+        // 保存用户信息
+        TokenManager.saveUserInfo(
+            userId = userInfo.userId ?: 0,
+            userName = userInfo.userName,
+            realName = userInfo.realName,
+            phoneNumber = userInfo.phoneNumber,
+            avatarUrl = userInfo.avatarUrl,
+            enterpriseId = userInfo.enterpriseId,
+            deptId = userInfo.deptId,
+            superAdmin = userInfo.superAdmin
+        )
+
+        // 更新 UI 状态
+        _authState.value = AuthState.LoggedIn(
+            userId = userInfo.userId ?: 0,
+            userName = userInfo.userName,
+            realName = userInfo.realName,
+            phoneNumber = userInfo.phoneNumber,
+            avatarUrl = userInfo.avatarUrl,
+            enterpriseId = userInfo.enterpriseId ?: 0,
+            deptId = userInfo.deptId,
+            superAdmin = userInfo.superAdmin
+        )
+
+        // 重置表单
+        _formState.value = LoginFormState()
     }
 
     /**
@@ -126,9 +188,6 @@ class AuthViewModel : ViewModel() {
 
     /**
      * 发送短信验证码
-     *
-     * 注意：此功能需要后端支持，当前为框架代码。
-     * 实际使用时需要后端提供发送验证码的 API。
      */
     fun sendSmsCode() {
         val phone = _formState.value.phone
@@ -143,7 +202,9 @@ class AuthViewModel : ViewModel() {
             _formState.value = _formState.value.copy(isSendingSms = true, errorMessage = null)
 
             try {
-                val response = authApi.sendSmsCode(SendSmsCodeRequest(phone = phone))
+                val response = authApi.sendSmsCode(
+                    SendSmsCodeRequest(phoneNumber = phone, scene = "login")
+                )
 
                 if (response.code == 0 || response.code == 200) {
                     _formState.value = _formState.value.copy(
@@ -206,20 +267,12 @@ class AuthViewModel : ViewModel() {
 
             try {
                 val response = authApi.loginBySms(
-                    SmsLoginRequest(phone = phone, smsCode = smsCode)
+                    SmsLoginRequest(phoneNumber = phone, smsCode = smsCode)
                 )
 
                 if (response.code == 0 || response.code == 200) {
                     response.data?.let { loginResponse ->
-                        _authState.value = AuthState.LoggedIn(
-                            userId = loginResponse.userId ?: 0,
-                            username = loginResponse.username,
-                            phone = loginResponse.phone ?: phone,
-                            realName = loginResponse.realName,
-                            avatarUrl = loginResponse.avatarUrl,
-                            enterpriseName = loginResponse.enterpriseName
-                        )
-                        _formState.value = LoginFormState() // 重置表单
+                        handleLoginSuccess(loginResponse)
                     }
                 } else {
                     _formState.value = state.copy(
@@ -264,15 +317,7 @@ class AuthViewModel : ViewModel() {
 
                 if (response.code == 0 || response.code == 200) {
                     response.data?.let { loginResponse ->
-                        _authState.value = AuthState.LoggedIn(
-                            userId = loginResponse.userId ?: 0,
-                            username = loginResponse.username ?: account,
-                            phone = loginResponse.phone,
-                            realName = loginResponse.realName,
-                            avatarUrl = loginResponse.avatarUrl,
-                            enterpriseName = loginResponse.enterpriseName
-                        )
-                        _formState.value = LoginFormState() // 重置表单
+                        handleLoginSuccess(loginResponse)
                     }
                 } else {
                     _formState.value = state.copy(
@@ -293,15 +338,9 @@ class AuthViewModel : ViewModel() {
      * 退出登录
      */
     fun logout() {
-        viewModelScope.launch {
-            try {
-                authApi.logout()
-            } catch (_: Exception) {
-                // 忽略退出登录的网络错误
-            }
-            _authState.value = AuthState.NotLoggedIn
-            _formState.value = LoginFormState()
-        }
+        TokenManager.clearAll()
+        _authState.value = AuthState.NotLoggedIn
+        _formState.value = LoginFormState()
     }
 
     /**

@@ -21,12 +21,24 @@ object RetrofitClient {
         }
     }
 
-    // 业务接口统一拦截器，注入 user-enterprise-id
-    private val businessInterceptor = Interceptor { chain ->
+    /**
+     * JWT 认证拦截器
+     *
+     * 自动从 TokenManager 读取 token 并注入自定义 "token" header。
+     * 后端使用自定义 header 名 "token"（非标准 Authorization: Bearer）。
+     */
+    private val authInterceptor = Interceptor { chain ->
         val originalRequest = chain.request()
-        val newRequest = originalRequest.newBuilder()
-            .header("user-enterprise-id", "1") // 暂时写死为 1 供测试
-            .build()
+        val token = TokenManager.getToken()
+
+        val newRequest = if (!token.isNullOrEmpty()) {
+            originalRequest.newBuilder()
+                .header("token", token)
+                .build()
+        } else {
+            originalRequest
+        }
+
         chain.proceed(newRequest)
     }
 
@@ -42,7 +54,7 @@ object RetrofitClient {
     private val businessOkHttpClient by lazy {
         OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
-            .addInterceptor(businessInterceptor)
+            .addInterceptor(authInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -73,4 +85,3 @@ object RetrofitClient {
         businessRetrofit.create(AuthApiService::class.java)
     }
 }
-
