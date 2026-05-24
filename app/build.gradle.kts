@@ -28,6 +28,14 @@ android {
         versionName = version["versionName"]!!
         buildConfigField("boolean", "ENABLE_PRINTER_MODULE", enablePrinterModule.toString())
 
+        // 超级管理员 token 调试开关
+        val enableSuperToken = providers
+            .gradleProperty("enableSuperToken")
+            .map { it.toBoolean() }
+            .orElse(false)
+            .get()
+        buildConfigField("boolean", "ENABLE_SUPER_TOKEN", enableSuperToken.toString())
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
