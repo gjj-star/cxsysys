@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
         TokenManager.init(applicationContext)
 
         // 超级管理员 token 调试模式（由 gradle.properties 的 enableSuperToken 控制）
-        // 开启后启动时自动注入 token，免登录即可测试 API
+        // 开启后启动时注入永不过期的超级管理员 token，免登录测试 API
         if (BuildConfig.ENABLE_SUPER_TOKEN && !TokenManager.isLoggedIn()) {
             TokenManager.saveToken("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMiIsInVzZXJJZCI6MTIsInVzZXJuYW1lIjoic3VwZXJwbGFudGluZyIsImVudGVycHpc2VJZCI6MSwiaWF0IjoxNzc4ODUwMDAwLCJleHAiOjI1MzQwMjI3MTk5OX0.TKSoJJNqlGrAKbFM3GCsmN29MQMz12iL55hTOkl7dMc")
             TokenManager.saveUserInfo(
