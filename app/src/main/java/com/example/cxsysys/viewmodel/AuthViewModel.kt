@@ -119,6 +119,7 @@ class AuthViewModel : ViewModel() {
 
         // 保存 token
         TokenManager.saveToken(token)
+        TokenManager.setDebugSuperToken(false)
 
         // 保存用户信息
         TokenManager.saveUserInfo(

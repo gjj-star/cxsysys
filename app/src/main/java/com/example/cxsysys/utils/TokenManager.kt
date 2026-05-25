@@ -22,6 +22,7 @@ object TokenManager {
     private const val KEY_ENTERPRISE_ID = "enterprise_id"
     private const val KEY_DEPT_ID = "dept_id"
     private const val KEY_SUPER_ADMIN = "super_admin"
+    private const val KEY_DEBUG_SUPER_TOKEN = "debug_super_token"
 
     private lateinit var prefs: SharedPreferences
 
@@ -45,6 +46,31 @@ object TokenManager {
     }
 
     fun isLoggedIn(): Boolean = getToken() != null
+
+    fun applyDebugSuperToken(enabled: Boolean, token: String) {
+        if (enabled) {
+            saveToken(token)
+            saveUserInfo(
+                userId = 12,
+                userName = "superplanting",
+                realName = "超级管理员",
+                phoneNumber = null,
+                avatarUrl = null,
+                enterpriseId = 1,
+                deptId = null,
+                superAdmin = true
+            )
+            setDebugSuperToken(true)
+        } else if (isDebugSuperToken()) {
+            clearAll()
+        }
+    }
+
+    fun setDebugSuperToken(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DEBUG_SUPER_TOKEN, enabled).apply()
+    }
+
+    private fun isDebugSuperToken(): Boolean = prefs.getBoolean(KEY_DEBUG_SUPER_TOKEN, false)
 
     // ========== 用户信息操作 ==========
 

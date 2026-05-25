@@ -134,7 +134,7 @@ public class MainActivity extends ComponentActivity {
 
     private ProgressDialog loadingDialog;
     private final LabelPrintManager printManager = new LabelPrintManager();
-    private final PrinterApiService printerApiService = PrinterApiClient.service();
+    private PrinterApiService printerApiService;
 
     private final List<LabelData> dataList = new ArrayList<>();
     private List<PlantBlockData> plantBlocks = new ArrayList<>();
@@ -163,6 +163,7 @@ public class MainActivity extends ComponentActivity {
         super.onCreate(savedInstanceState);
         setupStatusBar();
         setContentView(R.layout.activity_main);
+        printerApiService = PrinterApiClient.service(getApplicationContext());
 
         bindViews();
         setupStaticInputs();

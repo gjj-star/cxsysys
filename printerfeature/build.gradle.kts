@@ -16,13 +16,8 @@ android {
             .gradleProperty("printerApiBaseUrl")
             .orElse("https://dbcx.org.cn/plantingApi")
             .get()
-        val printerUserEnterpriseId = providers
-            .gradleProperty("printerUserEnterpriseId")
-            .orElse("1")
-            .get()
 
         buildConfigField("String", "PRINTER_API_BASE_URL", "\"$printerApiBaseUrl\"")
-        buildConfigField("String", "PRINTER_USER_ENTERPRISE_ID", "\"$printerUserEnterpriseId\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
