@@ -468,3 +468,55 @@ data class HarvestRequest(
     @SerializedName("harvest_date") val harvestDate: String,
     @SerializedName("harvest_weight") val harvestWeight: Double
 )
+
+// ========== 母树管理模型 ==========
+
+// 母树列表项（来自 GET /mothertreeList）
+data class MotherTreeItem(
+    @SerializedName("mothertree_id") val mothertreeId: Int,
+    @SerializedName("mothertree_qrcode") val mothertreeQrcode: String,
+    @SerializedName("subspecies_name") val subspeciesName: String,
+    @SerializedName("tree_age") val treeAge: String,
+    @SerializedName("longitude") val longitude: String,
+    @SerializedName("latitude") val latitude: String,
+    val status: Int,
+    @SerializedName("dna_Verified") val dnaVerified: Boolean
+)
+
+// 母树列表响应（包含分页信息）
+data class MotherTreeListResponse(
+    val hasMore: Boolean,
+    val list: List<MotherTreeItem>
+)
+
+// 母树详情（来自 GET /mothertrees/{id}）
+data class MotherTreeDetail(
+    @SerializedName("mothertree_id") val mothertreeId: Int,
+    @SerializedName("mothertree_qrcode") val mothertreeQrcode: String,
+    val status: Int,
+    @SerializedName("dna_barcode") val dnaBarcode: String? = null,
+    @SerializedName("subspecies_name") val subspeciesName: String,
+    @SerializedName("tree_age") val treeAge: String,
+    @SerializedName("longitude") val longitude: String,
+    @SerializedName("latitude") val latitude: String,
+    @SerializedName("photo_url") val photoUrl: List<String> = emptyList()
+)
+
+// 新增母树请求体（POST /mothertree）
+data class MotherTreeCreateRequest(
+    @SerializedName("subspecies_id") val subspeciesId: Int,
+    @SerializedName("tree_age") val treeAge: String,
+    @SerializedName("longitude") val longitude: String,
+    @SerializedName("latitude") val latitude: String,
+    @SerializedName("photo_url") val photoUrl: List<String>
+)
+
+// 修改母树信息请求体（PUT /mothertrees/{id}）
+data class MotherTreeUpdateRequest(
+    val status: String? = null,
+    @SerializedName("subspecies_id") val subspeciesId: Int? = null,
+    @SerializedName("tree_age") val treeAge: Int? = null,
+    val longitude: Double? = null,
+    val latitude: Double? = null,
+    @SerializedName("photo_url") val photoUrl: List<String>? = null
+)

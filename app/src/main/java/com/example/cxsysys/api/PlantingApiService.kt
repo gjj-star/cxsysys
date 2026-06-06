@@ -4,6 +4,8 @@ import com.example.cxsysys.model.*
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface PlantingApiService {
@@ -182,4 +184,27 @@ interface PlantingApiService {
 
     @POST("harvest")
     suspend fun submitHarvest(@Body request: HarvestRequest): BaseResponse<Any>
+
+    // ========== 母树管理接口 ==========
+
+    @GET("mothertreeList")
+    suspend fun getMotherTreeList(
+        @Query("keyword") keyword: String? = null,
+        @Query("lastid") lastid: Int? = null,
+        @Query("limit") limit: Int? = null
+    ): BaseResponse<MotherTreeListResponse>
+
+    @GET("mothertrees/{id}")
+    suspend fun getMotherTreeDetail(
+        @Path("id") id: Int
+    ): BaseResponse<List<MotherTreeDetail>>
+
+    @POST("mothertree")
+    suspend fun createMotherTree(@Body request: MotherTreeCreateRequest): BaseResponse<Any>
+
+    @PUT("mothertrees/{id}")
+    suspend fun updateMotherTree(
+        @Path("id") id: Int,
+        @Body request: MotherTreeUpdateRequest
+    ): BaseResponse<Any>
 }

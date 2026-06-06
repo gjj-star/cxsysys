@@ -1,15 +1,19 @@
 package com.example.cxsysys.ui.screens.mother
 
+import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState // [新增] 导入滚动状态
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll // [新增] 导入滚动修饰符
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -17,55 +21,95 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.model.MotherTreeCreateRequest
+import com.example.cxsysys.model.MotherTreeItem
+import com.example.cxsysys.model.Subspecies
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.utils.QrCodeGenerator
+import com.example.cxsysys.viewmodel.MotherTreeViewModel
 
-// 母树数据模型
-data class MotherTree(
-    val id: Int,
-    val code: String,
-    val species: String,
-    val age: String,
-    val location: String,
-    val hasDna: Boolean,
-    val status: String // 正常, 冻结, 死亡
-)
+// 母树状态码映射
+private val STATUS_MAP = mapOf(0 to "正常", 1 to "冻结", 2 to "注销/死亡")
+private val STATUS_COLORS = mapOf(0 to AgGreenPrimary, 1 to Color(0xFFFFA000), 2 to Color.Red)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MotherScreen(onNavigateToDetail: (String) -> Unit) { // [修改] 增加回调参数
+fun MotherScreen(onNavigateToDetail: (Int) -> Unit) {
     val context = LocalContext.current
+    val viewModel: MotherTreeViewModel = viewModel()
+    val treeList by viewModel.treeList.collectAsState()
+    val hasMore by viewModel.hasMore.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
+    val errorMsg by viewModel.errorMsg.collectAsState()
+    val submitSuccess by viewModel.submitSuccess.collectAsState()
+    val subspeciesList by viewModel.subspeciesList.collectAsState()
+
     var searchText by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
+    var qrCodeContent by remember { mutableStateOf<String?>(null) }
 
-    // 模拟数据前缀改为 "母树-"
-    val trees = listOf(
-        MotherTree(1, "母树-2012-A001", "金丝油 (203)", "12年", "A区-核心育种基地", true, "正常"),
-        MotherTree(2, "母树-2015-B088", "奇楠1号 (201)", "9年", "B区-种质资源库", true, "正常"),
-        MotherTree(3, "母树-2018-C012", "虎斑 (205)", "6年", "C区-示范林", false, "冻结"),
-        MotherTree(4, "母树-2010-A005", "糖结 (202)", "14年", "A区-核心育种基地", true, "正常"),
-        MotherTree(5, "母树-2020-D099", "黑油 (208)", "4年", "D区-新培植区", false, "正常")
-    )
+    // 首次加载
+    LaunchedEffect(Unit) {
+        viewModel.fetchTreeList()
+        viewModel.fetchSubspeciesList()
+    }
+
+    // 错误提示
+    LaunchedEffect(errorMsg) {
+        errorMsg?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearError()
+        }
+    }
+
+    // 新增成功提示
+    LaunchedEffect(submitSuccess) {
+        if (submitSuccess) {
+            Toast.makeText(context, "新增母树成功", Toast.LENGTH_SHORT).show()
+            showAddDialog = false
+            viewModel.clearSubmitSuccess()
+        }
+    }
 
     // 新增母树弹窗
     if (showAddDialog) {
-        AddMotherTreeDialog(onDismiss = { showAddDialog = false })
+        AddMotherTreeDialog(
+            subspeciesList = subspeciesList,
+            onDismiss = { showAddDialog = false },
+            onSubmit = { request ->
+                viewModel.createMotherTree(request)
+            }
+        )
+    }
+
+    // 二维码弹窗
+    qrCodeContent?.let { content ->
+        QrCodeDialog(
+            content = content,
+            onDismiss = { qrCodeContent = null }
+        )
     }
 
     Scaffold(
         topBar = {
-            // [修改] 使用 CenterAlignedTopAppBar 使标题居中，保持与苗木、幼苗页一致
             CenterAlignedTopAppBar(
                 title = { Text("母树资源库", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.White),
                 actions = {
-                    IconButton(onClick = { /* 筛选逻辑 */ }) {
+                    IconButton(onClick = { viewModel.fetchTreeList(keyword = searchText.ifBlank { null }) }) {
                         Icon(Icons.Default.FilterList, contentDescription = "Filter")
                     }
                 }
@@ -91,19 +135,87 @@ fun MotherScreen(onNavigateToDetail: (String) -> Unit) { // [修改] 增加回�
             SearchBar(
                 value = searchText,
                 onValueChange = { searchText = it },
+                onSearch = {
+                    viewModel.fetchTreeList(keyword = searchText.ifBlank { null })
+                },
                 modifier = Modifier.padding(16.dp)
             )
 
-            // 列表内容
-            LazyColumn(
-                contentPadding = PaddingValues(bottom = 80.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.padding(horizontal = 16.dp)
-            ) {
-                items(trees.size) { index ->
-                    val tree = trees[index]
-                    MotherTreeCard(tree) {
-                        onNavigateToDetail(tree.code) // [修改] 调用跳转
+            when {
+                isLoading && treeList.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = AgGreenPrimary)
+                    }
+                }
+                treeList.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.Park,
+                                contentDescription = null,
+                                tint = Color.LightGray,
+                                modifier = Modifier.size(64.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("暂无母树数据", color = Color.Gray, fontSize = 16.sp)
+                        }
+                    }
+                }
+                else -> {
+                    val listState = rememberLazyListState()
+
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    ) {
+                        items(
+                            items = treeList,
+                            key = { it.mothertreeId }
+                        ) { tree ->
+                            MotherTreeCard(
+                                tree = tree,
+                                onClick = { onNavigateToDetail(tree.mothertreeId) },
+                                onQrCodeClick = { qrCodeContent = tree.mothertreeQrcode }
+                            )
+                        }
+
+                        // 加载更多指示器
+                        if (isLoadingMore) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = AgGreenPrimary,
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            }
+                        }
+
+                        // 加载更多按钮
+                        if (hasMore && !isLoadingMore) {
+                            item {
+                                TextButton(
+                                    onClick = { viewModel.loadMore() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("加载更多", color = AgGreenPrimary)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -112,7 +224,14 @@ fun MotherScreen(onNavigateToDetail: (String) -> Unit) { // [修改] 增加回�
 }
 
 @Composable
-fun SearchBar(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
+fun SearchBar(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val focusManager = LocalFocusManager.current
+
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -130,12 +249,18 @@ fun SearchBar(value: String, onValueChange: (String) -> Unit, modifier: Modifier
             unfocusedContainerColor = Color.White
         ),
         singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(
+            onSearch = {
+                onSearch()
+                focusManager.clearFocus()
+            }
+        )
     )
 }
 
 @Composable
-fun MotherTreeCard(tree: MotherTree, onClick: () -> Unit) {
+fun MotherTreeCard(tree: MotherTreeItem, onClick: () -> Unit, onQrCodeClick: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(12.dp),
@@ -148,7 +273,7 @@ fun MotherTreeCard(tree: MotherTree, onClick: () -> Unit) {
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 左侧：图片/图标
+            // 左侧：图标
             Box(
                 modifier = Modifier
                     .size(60.dp)
@@ -168,10 +293,9 @@ fun MotherTreeCard(tree: MotherTree, onClick: () -> Unit) {
             // 中间：信息
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(tree.code, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(tree.mothertreeQrcode, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Spacer(modifier = Modifier.width(8.dp))
-                    // DNA 认证徽章
-                    if (tree.hasDna) {
+                    if (tree.dnaVerified) {
                         Surface(
                             color = Color(0xFFE3F2FD),
                             shape = RoundedCornerShape(4.dp)
@@ -186,31 +310,44 @@ fun MotherTreeCard(tree: MotherTree, onClick: () -> Unit) {
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("品种：${tree.species}", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
-                Text("树龄：${tree.age} | 位置：${tree.location}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text("品种：${tree.subspeciesName}", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
+                Text("树龄：${tree.treeAge}年", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
 
             // 右侧：状态指示
             Column(horizontalAlignment = Alignment.End) {
-                val statusColor = if (tree.status == "正常") AgGreenPrimary else Color.Red
-                Icon(Icons.Default.QrCode2, contentDescription = "QR", tint = Color.Gray)
+                Icon(
+                    Icons.Default.QrCode2,
+                    contentDescription = "QR",
+                    tint = Color.Gray,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clickable { onQrCodeClick() }
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(tree.status, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                val statusText = STATUS_MAP[tree.status] ?: "未知"
+                val statusColor = STATUS_COLORS[tree.status] ?: Color.Gray
+                Text(statusText, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddMotherTreeDialog(onDismiss: () -> Unit) {
-    // [修改] 为满足V10需要补充具体状态变量
-    var qrCode by remember { mutableStateOf("") }
-    var dnaBarcode by remember { mutableStateOf("") }
+fun AddMotherTreeDialog(
+    subspeciesList: List<Subspecies>,
+    onDismiss: () -> Unit,
+    onSubmit: (MotherTreeCreateRequest) -> Unit
+) {
     var subspeciesId by remember { mutableStateOf("") }
     var treeAge by remember { mutableStateOf("") }
     var longitude by remember { mutableStateOf("") }
     var latitude by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf("") }
+    var subspeciesExpanded by remember { mutableStateOf(false) }
+
+    val selectedSubspecies = subspeciesList.find { it.enterpriseSubspeciesId.toString() == subspeciesId }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -224,46 +361,68 @@ fun AddMotherTreeDialog(onDismiss: () -> Unit) {
             ) {
                 Text("新增母树档案", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AgGreenPrimary)
 
-                // [修改] 增加 verticalScroll 防止字段过多导致屏幕装不下
                 Column(
-                    modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    OutlinedTextField(
-                        value = qrCode, onValueChange = { qrCode = it },
-                        label = { Text("母树二维码") },
-                        placeholder = { Text("自动生成或扫码") },
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = { Icon(Icons.Default.QrCodeScanner, null) } // 保留扫描功能
-                    )
-
-                    OutlinedTextField(
-                        value = dnaBarcode, onValueChange = { dnaBarcode = it }, // [新增]
-                        label = { Text("母树DNA条形码") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = subspeciesId, onValueChange = { subspeciesId = it },
-                        label = { Text("母树品种细分") }, // [修改] (原“品种细分”改成“母树品种细分”)
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = treeAge, onValueChange = { treeAge = it },
-                        label = { Text("母树树龄") }, // [修改] (原“树龄”改成“母树树龄”)
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    // [修改] 将原来的“经纬度”拆分成单独的经度和纬度
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(value = longitude, onValueChange = { longitude = it }, label = { Text("经度") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(value = latitude, onValueChange = { latitude = it }, label = { Text("纬度") }, modifier = Modifier.weight(1f))
+                    // 品种选择下拉
+                    ExposedDropdownMenuBox(
+                        expanded = subspeciesExpanded,
+                        onExpandedChange = { subspeciesExpanded = !subspeciesExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedSubspecies?.subspeciesName ?: "",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("母树品种细分") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = subspeciesExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = subspeciesExpanded,
+                            onDismissRequest = { subspeciesExpanded = false }
+                        ) {
+                            subspeciesList.forEach { subspecies ->
+                                DropdownMenuItem(
+                                    text = { Text("${subspecies.subspeciesName} (${subspecies.subspeciesCode})") },
+                                    onClick = {
+                                        subspeciesId = subspecies.enterpriseSubspeciesId.toString()
+                                        subspeciesExpanded = false
+                                    }
+                                )
+                            }
+                        }
                     }
 
                     OutlinedTextField(
-                        value = photoUrl, onValueChange = { photoUrl = it }, // [新增]
-                        label = { Text("母树照片地址") },
+                        value = treeAge, onValueChange = { treeAge = it },
+                        label = { Text("母树树龄") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(
+                            value = longitude, onValueChange = { longitude = it },
+                            label = { Text("经度") },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                        )
+                        OutlinedTextField(
+                            value = latitude, onValueChange = { latitude = it },
+                            label = { Text("纬度") },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = photoUrl, onValueChange = { photoUrl = it },
+                        label = { Text("母树照片地址（多个用逗号分隔）") },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -274,10 +433,84 @@ fun AddMotherTreeDialog(onDismiss: () -> Unit) {
                 ) {
                     TextButton(onClick = onDismiss) { Text("取消", color = Color.Gray) }
                     Button(
-                        onClick = onDismiss,
+                        onClick = {
+                            val sid = subspeciesId.toIntOrNull()
+                            if (sid == null) return@Button
+                            val photoUrls = photoUrl.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                            onSubmit(
+                                MotherTreeCreateRequest(
+                                    subspeciesId = sid,
+                                    treeAge = treeAge,
+                                    longitude = longitude,
+                                    latitude = latitude,
+                                    photoUrl = photoUrls
+                                )
+                            )
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = AgGreenPrimary)
                     ) { Text("保存") }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 二维码展示弹窗：将 mothertree_qrcode 字符串生成二维码图片并居中显示
+ */
+@Composable
+fun QrCodeDialog(content: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    // 在后台线程生成二维码，避免主线程卡顿
+    LaunchedEffect(content) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            qrBitmap = QrCodeGenerator.generate(content, 512)
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("母树二维码", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = AgGreenPrimary)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(260.dp)
+                        .background(Color.White),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val bitmap = qrBitmap
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "QR Code",
+                            modifier = Modifier.size(260.dp)
+                        )
+                    } else {
+                        CircularProgressIndicator(color = AgGreenPrimary, modifier = Modifier.size(32.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = content,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+                TextButton(onClick = onDismiss) { Text("关闭") }
             }
         }
     }
