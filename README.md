@@ -1,16 +1,22 @@
-# CXSYSYS
+# 沉香溯源系统 (CXSYSYS)
 
 #### 介绍
-沉香溯源系统 App
+沉香种植全流程溯源管理 App，涵盖母树管理、幼苗培育、苗木定植、农事作业、采收香木等环节。
 
-#### 技术栈
-- 开发语言: 100% Kotlin
-- UI 框架: Jetpack Compose (完全弃用传统的 XML 布局)
-- 架构思想: 单 Activity 架构 (Single Activity Architecture) + 声明式 UI
-- 网络请求: Retrofit2 + OkHttp4 + Gson
-- 扫码库: CameraX + ZXing
-- 版本管理: 基于 Git Tag 自动生成（详见下方「版本号管理」章节）
+---
 
+## 技术栈
+
+| 类别 | 技术选型 |
+|------|----------|
+| 开发语言 | 100% Kotlin |
+| UI 框架 | Jetpack Compose + Material3 (BOM 2024.09.00) |
+| 架构模式 | 单 Activity + MVVM (ViewModel + StateFlow) |
+| 网络请求 | Retrofit2 + OkHttp4 + Gson |
+| 认证方式 | JWT (自定义 `token` header) |
+| 图片加载 | Coil |
+| 扫码 | CameraX + ZXing |
+| 版本管理 | 基于 Git Tag 自动生成 |
 
 ---
 
@@ -95,117 +101,150 @@
 
 ---
 
-### 📋 版本号变化示例
-
-假设当前最新 tag 是 `v1.0.0`：
-
-| 操作 | versionName | versionCode |
-|------|-------------|-------------|
-| 打完 tag `v1.0.0` 后立即打包 | `1.0.0` | `42` |
-| 改了 1 个 commit，还没打新 tag | `1.0.0+build.1.a3f7b2c` | `43` |
-| 又改了 2 个 commit | `1.0.0+build.3.d8e9f01` | `45` |
-| 打了新 tag `v1.1.0` 后打包 | `1.1.0` | `46` |
-
----
-
-### ❓ 常见问题
-
-**Q: 忘记打 tag 会怎样？**
-A: 版本号会显示为 `1.0.0+build.N.xxxxxxx`，带构建后缀，功能完全正常，只是不够好看。记得下次发版前补上 tag。
-
-**Q: 可以手动指定版本号吗？**
-A: 可以。直接改 `app/build.gradle.kts` 里 defaultConfig 中的 versionCode/versionName 就行。但不推荐，因为容易忘记更新。
-
-**Q: versionCode 为什么用 commit 数而不是自己写数字？**
-A: 因为 Android 要求 versionCode 只增不减。commit 数天然递增，永远不会冲突或回退。
-
-
----
-
-## 📂 项目目录架构及重点文件说明
+## 📂 项目目录架构
 
 项目根目录和构建配置（`build.gradle.kts`, `settings.gradle.kts` 等）遵循标准的 Android 项目结构。
-下面重点说明应用核心代码路径：**`app/src/main/java/com/example/cxsysys/`**
-
-### `com.example.cxsysys/` 架构概览
-
-遵循现代 Android 推荐架构，按功能职责分层：
+应用核心代码路径：**`app/src/main/java/com/example/cxsysys/`**
 
 ```text
 com.example.cxsysys/
-├── api/           ← 网络接口层 (Retrofit service)
-├── model/         ← 数据模型层 (Data class, 请求/响应实体)
-├── repository/    ← 数据仓库层 (处理数据来源，当前暂空或按需使用)
-├── ui/            ← UI 展示层 (Compose 页面、组件、主题)
-├── utils/         ← 工具类层 (单例工具、拓展函数)
-├── viewmodel/     ← 逻辑状态层 (Jetpack ViewModel, 桥接 UI 与数据)
-└── MainActivity.kt ← 唯一 Activity 宿主
+├── MainActivity.kt         ← 唯一 Activity 宿主
+├── api/                    ← 网络接口层
+│   ├── PlantingApiService.kt   种植/母树/作业相关接口
+│   └── AuthApiService.kt        认证登录接口
+├── model/                  ← 数据模型层
+│   ├── PlantingModels.kt       种植+母树数据模型
+│   ├── Plantation.kt           种植园/大棚/苗床模型
+│   └── AuthModels.kt           认证请求/响应模型
+├── ui/                     ← UI 展示层 (Compose)
+│   ├── MainScreen.kt           导航图 + 底部Tab
+│   ├── theme/                  主题/颜色/字体
+│   ├── components/             可复用组件 (扫码、表单验证等)
+│   └── screens/                各业务页面
+│       ├── home/                 工作台
+│       ├── mother/               母树管理
+│       ├── children/            幼苗管理
+│       ├── plantation/          苗木管理 + 农事作业录入
+│       └── mine/                个人中心
+├── utils/                  ← 工具类层
+│   ├── RetrofitClient.kt       网络客户端 + JWT拦截器
+│   ├── TokenManager.kt         Token持久化管理
+│   ├── QrCodeAnalyzer.kt       扫码图像分析器
+│   └── QrCodeGenerator.kt      二维码生成器
+└── viewmodel/              ← 逻辑状态层
+    ├── PlantingViewModel.kt     苗木管理
+    ├── MotherTreeViewModel.kt   母树管理
+    ├── SaplingViewModel.kt      幼苗管理
+    ├── AuthViewModel.kt         认证状态
+    └── ...                      各作业录入ViewModel
 ```
-
-### 重点目录与文件说明
-
-#### 1. `MainActivity.kt`
-- **作用**：应用的单一 Activity 入口。
-- **职责**：设置整个应用的 Compose 根节点，初始化整体主题 (`CXSYSYSTheme`)，并加载根路由 (`MainScreen`)。
-
-#### 2. `ui/` 层
-这里包含所有的界面呈现逻辑，完全由 Jetpack Compose 构建。
-
-**`ui/MainScreen.kt`**
-- 主入口路由配置，包含 `NavHost` 导航图和 `BottomNavigation` (底部导航栏)。连接四大底部模块（工作台、幼苗、苗木、我的）。
-
-**`ui/theme/`**
-- 定义全局的 UI 样式，包括 `Theme.kt` (亮色/暗色模式配置)、`Color.kt` (颜色常量，如 `AgGreenPrimary`) 和 `Type.kt` (排版规范)。
-
-**`ui/components/`**
-- 存放可复用的基础 UI 组件，例如 `ScannerScreen` (真实扫码界面组件)、`TopScanCard` (顶部扫码卡片)、`DualModeIdentifierField` 等，用于在各个页面中组合复用。
-
-**`ui/screens/`** (页面目录，按业务模块划分)
-
-*   **`home/` (工作台模块)**
-    *   `HomeScreen.kt`: 首页/工作台页面，展示天气以及所有农事作业和资源管理的网格入口。
-*   **`children/` (幼苗与苗木模块)**
-    *   `ChildrenScreen.kt` & `ChildrenDetailScreen.kt`: 幼苗档案管理列表及详情。
-    *   `PlantingScreen.kt` & `PlantDetailScreen.kt`: 苗木档案管理列表及详情。
-*   **`mother/` (母树模块)**
-    *   `MotherScreen.kt` & `MotherDetailScreen.kt`: 母树资源库列表页及详情。
-*   **`mine/` (我的模块)**
-    *   `MineScreen.kt`: 个人中心页面。
-*   **`plantation/` (农事作业与录入模块 - 重点)**
-    该目录下包含所有来自“工作台”的表单录入页面，涉及真实扫码和 API 数据提交：
-    *   `AgInputManagerScreen.kt`: 药肥入库及供应商信息录入。根据 `mode` 参数区分 ("supplier", "pesticide", "fertilizer")。
-    *   `SaplingEntryScreen.kt`: 幼苗培育录入页。
-    *   `PlantingEntryScreen.kt`: 苗木定植录入页。
-    *   `IrrigationEntryScreen.kt`: 灌溉记录录入页 (涉及种植园/大棚/苗床 API 级联选择)。
-    *   `FertilizerEntryScreen.kt`: 施肥作业录入页。
-    *   `PesticideEntryScreen.kt`: 施药信息录入页。
-    *   `DiseasePestEntryScreen.kt`: 病虫害信息录入页。
-    *   `GrowthEntryScreen.kt`: 生长记录录入页。
-    *   `PruningEntryScreen.kt`: 剪枝信息录入页。
-    *   `PunchEntryScreen.kt`: 打孔结香录入页。
-    *   `HarvestEntryScreen.kt`: 采收香木录入页。
-
-#### 3. `api/` 层
-- 存放与后端接口交互的定义。
-- `PlantingApiService.kt`: 使用 Retrofit 定义了网络请求的方法，比如 `@GET("/api/v1/misc/weather")`, `@GET("/plantationList")`, 及各种作业提交的 `@POST` 请求。
-
-#### 4. `model/` 层
-- `Plantation.kt`, `PlantingModels.kt` 等：存放 Kotlin Data Class。包括 API 请求实体 (Request) 和响应实体 (Response)。
-
-#### 5. `viewmodel/` 层
-- **核心逻辑枢纽**：每个主要的 `Screen` (尤其是 `plantation/` 下的表单页) 对应一个 ViewModel (如 `SaplingViewModel`, `IrrigationViewModel` 等)。
-- **职责**：使用 Kotlin Coroutines (协程) 调用 `api/` 层获取数据，并将状态通过 `StateFlow` 暴露给 `ui/` 层进行响应式刷新，处理了加载中 (`isLoading`)、成功 (`submitSuccess`) 和失败提示 (`errorMsg`) 等逻辑。
-
-#### 6. `utils/` 层
-- `RetrofitClient.kt`: 单例配置，封装了 OkHttpClient 和 Retrofit 实例，统一配置全局的 Base URL (如 `https://dbcx.org.cn`)。
-- `QrCodeAnalyzer.kt`: 配合 CameraX 和 ZXing 使用的图像分析器，专门负责从相机帧中解析二维码字符串。
-
 
 ---
 
-#### 参与贡献
+## 🧩 功能模块
 
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
+### 底部 Tab 页面
+
+| Tab | 模块 | 功能 |
+|-----|------|------|
+| 工作台 | HomeScreen | 天气展示 + 所有农事作业/资源管理入口网格 |
+| 母树 | MotherScreen → MotherDetailScreen | 母树列表（搜索+分页）→ 详情（照片+编辑+状态变更） |
+| 幼苗 | ChildrenScreen → ChildrenDetailScreen | 幼苗档案列表 → 详情 |
+| 苗木 | PlantingScreen → PlantDetailScreen | 苗木档案列表 → 详情 + 农事记录 |
+| 我的 | MineScreen | 个人中心 → 6个次级页面 |
+
+### 农事作业录入（从工作台进入）
+
+| 页面 | 功能 |
+|------|------|
+| SaplingEntryScreen | 幼苗培育录入 |
+| PlantingEntryScreen | 苗木定植录入 |
+| GrowthEntryScreen | 生长记录录入 |
+| FertilizerEntryScreen | 施肥作业录入 |
+| PesticideEntryScreen | 施药信息录入 |
+| DiseasePestEntryScreen | 病虫害信息录入 |
+| IrrigationEntryScreen | 灌溉记录录入 |
+| PruningEntryScreen | 剪枝信息录入 |
+| PunchEntryScreen | 打孔结香录入 |
+| HarvestEntryScreen | 采收香木录入 |
+| AgInputManagerScreen | 供应商/农药/肥料信息录入（按 mode 切换） |
+
+### 个人中心次级页面
+
+| 页面 | 功能 | 状态 |
+|------|------|------|
+| ProfileInfoScreen | 个人信息查看/编辑 | 占位，接口待对接 |
+| EnterpriseScreen | 企业管理 + 成员管理 | 占位，接口待对接 |
+| ChangePasswordScreen | 修改密码 | 占位，接口待对接 |
+| SettingsScreen | 通知/同步/位置开关 + 缓存/备份/语言/主题 | 占位，接口待对接 |
+| HelpFeedbackScreen | 帮助FAQ + 意见反馈 | 占位，接口待对接 |
+| AboutScreen | 版本信息 + 开发者/版权 | 完整功能 |
+
+---
+
+## 🔗 API 接口
+
+### 认证
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/smsCode` | POST | 获取短信验证码 |
+| `/login/sms` | POST | 手机验证码登录 |
+| `/login/password` | POST | 账号密码登录 |
+| `/user` | GET | 获取用户信息 |
+
+> 认证方式：JWT Token，通过自定义 `token` header 传递（非标准 `Authorization: Bearer`）
+
+### 母树管理
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/mothertreeList` | GET | 母树列表（支持 keyword 搜索 + lastid 分页） |
+| `/mothertrees/{id}` | GET | 母树详情 |
+| `/mothertree` | POST | 新增母树 |
+| `/mothertrees/{id}` | PUT | 修改信息 / 变更状态 |
+
+### 苗木管理
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/plantationList` | GET | 种植园列表 |
+| `/plant/{plantId}` | GET | 苗木详情 |
+| `/plant/{plantId}/records` | GET | 苗木农事记录 |
+
+---
+
+## ⚙️ 开发配置
+
+### Java 版本
+AGP 8.13+ 需要 Java 17+，项目配置使用 Java 21（Zulu 发行版）。
+
+### 超级管理员 Token
+`gradle.properties` 中 `enableSuperToken=true` 时自动注入超级管理员 Token，免去开发阶段反复登录。生产构建应设为 `false`。
+
+### 后端仓库
+- Gitee: https://gitee.com/mrbanana16/agarwood-plantingApi.git
+
+---
+
+## 🏗️ 编译与运行
+
+```bash
+# 编译 Debug APK
+./gradlew :app:assembleDebug
+
+# 仅编译 Kotlin（快速验证代码）
+./gradlew :app:compileDebugKotlin
+
+# 编译 Release APK（需签名配置）
+./gradlew :app:assembleRelease
+```
+
+---
+
+## 参与贡献
+
+1. Fork 本仓库
+2. 新建 Feat_xxx 分支
+3. 提交代码
+4. 新建 Pull Request
