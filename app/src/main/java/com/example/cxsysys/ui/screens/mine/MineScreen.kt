@@ -38,7 +38,13 @@ import com.example.cxsysys.viewmodel.LoginMethod
 
 @Composable
 fun MineScreen(
-    authViewModel: AuthViewModel = viewModel()
+    authViewModel: AuthViewModel = viewModel(),
+    onNavigateToProfileInfo: () -> Unit = {},
+    onNavigateToEnterprise: () -> Unit = {},
+    onNavigateToChangePassword: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToHelpFeedback: () -> Unit = {},
+    onNavigateToAbout: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val authState by authViewModel.authState.collectAsState()
@@ -85,7 +91,13 @@ fun MineScreen(
                 authState = authState as AuthState.LoggedIn,
                 onLogout = { authViewModel.logout() },
                 versionName = versionName,
-                versionCode = versionCode
+                versionCode = versionCode,
+                onNavigateToProfileInfo = onNavigateToProfileInfo,
+                onNavigateToEnterprise = onNavigateToEnterprise,
+                onNavigateToChangePassword = onNavigateToChangePassword,
+                onNavigateToSettings = onNavigateToSettings,
+                onNavigateToHelpFeedback = onNavigateToHelpFeedback,
+                onNavigateToAbout = onNavigateToAbout
             )
         }
         is AuthState.Error -> {
@@ -443,7 +455,13 @@ private fun UserProfileScreen(
     authState: AuthState.LoggedIn,
     onLogout: () -> Unit,
     versionName: String,
-    versionCode: String
+    versionCode: String,
+    onNavigateToProfileInfo: () -> Unit = {},
+    onNavigateToEnterprise: () -> Unit = {},
+    onNavigateToChangePassword: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToHelpFeedback: () -> Unit = {},
+    onNavigateToAbout: () -> Unit = {}
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
@@ -554,19 +572,22 @@ private fun UserProfileScreen(
                 MenuItemRow(
                     icon = Icons.Default.Person,
                     title = "个人信息",
-                    subtitle = "查看和编辑个人资料"
+                    subtitle = "查看和编辑个人资料",
+                    onClick = onNavigateToProfileInfo
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
                 MenuItemRow(
                     icon = Icons.Default.Business,
                     title = "企业管理",
-                    subtitle = "企业ID: ${authState.enterpriseId}"
+                    subtitle = "企业ID: ${authState.enterpriseId}",
+                    onClick = onNavigateToEnterprise
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
                 MenuItemRow(
                     icon = Icons.Default.Lock,
                     title = "修改密码",
-                    subtitle = "定期修改密码保障安全"
+                    subtitle = "定期修改密码保障安全",
+                    onClick = onNavigateToChangePassword
                 )
             }
         }
@@ -584,19 +605,22 @@ private fun UserProfileScreen(
                 MenuItemRow(
                     icon = Icons.Default.Settings,
                     title = "设置",
-                    subtitle = "应用设置与偏好"
+                    subtitle = "应用设置与偏好",
+                    onClick = onNavigateToSettings
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
                 MenuItemRow(
                     icon = Icons.Default.Help,
                     title = "帮助与反馈",
-                    subtitle = "常见问题与意见反馈"
+                    subtitle = "常见问题与意见反馈",
+                    onClick = onNavigateToHelpFeedback
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
                 MenuItemRow(
                     icon = Icons.Default.Info,
                     title = "关于",
-                    subtitle = "版本 $versionName"
+                    subtitle = "版本 $versionName",
+                    onClick = onNavigateToAbout
                 )
             }
         }

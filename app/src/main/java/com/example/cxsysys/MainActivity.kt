@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
             enabled = BuildConfig.ENABLE_SUPER_TOKEN,
             token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMiIsInVzZXJJZCI6MTIsInVzZXJuYW1lIjoic3VwZXJwbGFudGluZyIsImVudGVycHJpc2VJZCI6MSwiaWF0IjoxNzc4ODUwMDAwLCJleHAiOjI1MzQwMjI3MTk5OX0.TKSoJJNqlGrAKbFM3GCsmN29MQMz12iL55hTOkl7dMc"
         )
-
+22
         enableEdgeToEdge() // 启用全面屏
         setContent {
             CXSYSYSTheme {

@@ -30,6 +30,12 @@ import com.example.cxsysys.ui.screens.children.PlantingScreen
 import com.example.cxsysys.ui.screens.children.PlantDetailScreen
 import com.example.cxsysys.ui.screens.home.HomeScreen
 import com.example.cxsysys.ui.screens.mine.MineScreen
+import com.example.cxsysys.ui.screens.mine.ProfileInfoScreen
+import com.example.cxsysys.ui.screens.mine.EnterpriseScreen
+import com.example.cxsysys.ui.screens.mine.ChangePasswordScreen
+import com.example.cxsysys.ui.screens.mine.SettingsScreen
+import com.example.cxsysys.ui.screens.mine.HelpFeedbackScreen
+import com.example.cxsysys.ui.screens.mine.AboutScreen
 import com.example.cxsysys.ui.screens.mother.MotherScreen
 import com.example.cxsysys.ui.screens.mother.MotherDetailScreen
 import com.example.cxsysys.ui.screens.plantation.*
@@ -63,6 +69,14 @@ const val ROUTE_HARVEST_ADD = "harvest_entry"         // 采收香木
 const val ROUTE_AG_INPUT_SUPPLIER = "ag_input_supplier"     // 供应商录入
 const val ROUTE_AG_INPUT_PESTICIDE = "ag_input_pesticide"   // 农药录入
 const val ROUTE_AG_INPUT_FERTILIZER = "ag_input_fertilizer" // 肥料录入
+
+// 个人中心次级页面路由
+const val ROUTE_PROFILE_INFO = "profile_info"         // 个人信息
+const val ROUTE_ENTERPRISE = "enterprise"             // 企业管理
+const val ROUTE_CHANGE_PASSWORD = "change_password"   // 修改密码
+const val ROUTE_SETTINGS = "settings"                 // 设置
+const val ROUTE_HELP_FEEDBACK = "help_feedback"       // 帮助与反馈
+const val ROUTE_ABOUT = "about"                       // 关于
 
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     data object Home : BottomNavItem(ROUTE_HOME, "工作台", Icons.Default.Home)
@@ -150,7 +164,16 @@ fun MainScreen() {
                     onNavigateToDetail = { plantId -> navController.navigate("plant_detail/$plantId") }
                 )
             }
-            composable(ROUTE_MINE) { MineScreen() }
+            composable(ROUTE_MINE) {
+                MineScreen(
+                    onNavigateToProfileInfo = { navController.navigate(ROUTE_PROFILE_INFO) },
+                    onNavigateToEnterprise = { navController.navigate(ROUTE_ENTERPRISE) },
+                    onNavigateToChangePassword = { navController.navigate(ROUTE_CHANGE_PASSWORD) },
+                    onNavigateToSettings = { navController.navigate(ROUTE_SETTINGS) },
+                    onNavigateToHelpFeedback = { navController.navigate(ROUTE_HELP_FEEDBACK) },
+                    onNavigateToAbout = { navController.navigate(ROUTE_ABOUT) }
+                )
+            }
 
             // --- 农事作业录入页面 ---
             composable(ROUTE_SAPLING_ENTRY) { SaplingEntryScreen(onBackClick = { navController.popBackStack() }) }
@@ -173,6 +196,26 @@ fun MainScreen() {
             }
             composable(ROUTE_AG_INPUT_FERTILIZER) {
                 AgInputManagerScreen(mode = "fertilizer", onBackClick = { navController.popBackStack() })
+            }
+
+            // --- 个人中心次级页面 ---
+            composable(ROUTE_PROFILE_INFO) {
+                ProfileInfoScreen(onBackClick = { navController.popBackStack() })
+            }
+            composable(ROUTE_ENTERPRISE) {
+                EnterpriseScreen(onBackClick = { navController.popBackStack() })
+            }
+            composable(ROUTE_CHANGE_PASSWORD) {
+                ChangePasswordScreen(onBackClick = { navController.popBackStack() })
+            }
+            composable(ROUTE_SETTINGS) {
+                SettingsScreen(onBackClick = { navController.popBackStack() })
+            }
+            composable(ROUTE_HELP_FEEDBACK) {
+                HelpFeedbackScreen(onBackClick = { navController.popBackStack() })
+            }
+            composable(ROUTE_ABOUT) {
+                AboutScreen(onBackClick = { navController.popBackStack() })
             }
 
             // --- 详情页面 ---
