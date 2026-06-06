@@ -27,10 +27,10 @@ import com.example.cxsysys.model.MotherTreeDetail
 import com.example.cxsysys.model.MotherTreeUpdateRequest
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
+import com.example.cxsysys.viewmodel.DictViewModel
 import com.example.cxsysys.viewmodel.MotherTreeViewModel
 
-// 母树状态码映射
-private val STATUS_MAP = mapOf(0 to "正常", 1 to "冻结", 2 to "注销/死亡")
+// 母树状态颜色映射（标签从数据字典获取，颜色按值索引）
 private val STATUS_COLORS = mapOf(0 to AgGreenPrimary, 1 to Color(0xFFFFA000), 2 to Color.Red)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,10 +38,12 @@ private val STATUS_COLORS = mapOf(0 to AgGreenPrimary, 1 to Color(0xFFFFA000), 2
 fun MotherDetailScreen(motherTreeId: String, onBackClick: () -> Unit) {
     val context = LocalContext.current
     val viewModel: MotherTreeViewModel = viewModel()
+    val dictViewModel: DictViewModel = viewModel()
     val treeDetail by viewModel.treeDetail.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMsg by viewModel.errorMsg.collectAsState()
     val submitSuccess by viewModel.submitSuccess.collectAsState()
+    val dictCache by dictViewModel.dictCache.collectAsState()
 
     // 解析 ID
     val treeIdInt = motherTreeId.toIntOrNull() ?: 0
@@ -51,6 +53,7 @@ fun MotherDetailScreen(motherTreeId: String, onBackClick: () -> Unit) {
         if (treeIdInt > 0) {
             viewModel.fetchTreeDetail(treeIdInt)
         }
+        dictViewModel.preloadDicts("mothertree_status")
     }
 
     // 错误提示
@@ -137,6 +140,7 @@ fun MotherDetailScreen(motherTreeId: String, onBackClick: () -> Unit) {
             if (showStatusDialog) {
                 StatusChangeDialog(
                     currentStatus = detail.status,
+                    dictViewModel = dictViewModel,
                     onDismiss = { showStatusDialog = false },
                     onConfirm = { statusCode ->
                         viewModel.updateMotherTreeStatus(detail.mothertreeId, statusCode.toString())
@@ -194,7 +198,7 @@ fun MotherDetailScreen(motherTreeId: String, onBackClick: () -> Unit) {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = STATUS_MAP[detail.status] ?: "未知",
+                                            text = dictViewModel.getLabel("mothertree_status", detail.status),
                                             color = STATUS_COLORS[detail.status] ?: Color.Gray,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
@@ -386,17 +390,19 @@ private fun EditMotherTreeDialog(
 @Composable
 private fun StatusChangeDialog(
     currentStatus: Int,
+    dictViewModel: DictViewModel,
     onDismiss: () -> Unit,
     onConfirm: (Int) -> Unit
 ) {
     var selectedStatus by remember { mutableIntStateOf(currentStatus) }
+    val statusMap = dictViewModel.getStatusMap("mothertree_status")
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("变更母树状态") },
         text = {
             Column {
-                STATUS_MAP.forEach { (key, value) ->
+                statusMap.forEach { (key, value) ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier

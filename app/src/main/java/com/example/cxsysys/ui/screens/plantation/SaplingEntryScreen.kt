@@ -53,6 +53,11 @@ fun SaplingEntryScreen(
     // 表单验证状态
     val validationState = rememberFormValidationState()
 
+    // 字典 ViewModel
+    val dictViewModel: com.example.cxsysys.viewmodel.DictViewModel = viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
+    LaunchedEffect(Unit) { dictViewModel.preloadDicts("generation_way") }
+
     // 观察 ViewModel 状态
     val greenhouseList by viewModel.greenhouseList.collectAsState()
     val seedbedList by viewModel.seedbedList.collectAsState()
@@ -86,7 +91,7 @@ fun SaplingEntryScreen(
     val greenhouseOptions = greenhouseList.map { it.greenhouseCode }
     val seedbedOptions = seedbedList.map { "${it.seedbedCode} (空闲)" }
     val subspeciesOptions = subspeciesList.map { it.subspeciesName }
-    val generationWayOptions = listOf("嫁接", "扦插", "圈枝", "组培", "其他")
+    val generationWayOptions = dictViewModel.getOptions("generation_way").ifEmpty { listOf("嫁接", "扦插", "圈枝", "组培", "其他") }
 
     // --- 表单状态 ---
     var greenhouse_name by remember { mutableStateOf("") }

@@ -207,4 +207,16 @@ interface PlantingApiService {
         @Path("id") id: Int,
         @Body request: MotherTreeUpdateRequest
     ): BaseResponse<Any>
+
+    // ========== 数据字典接口 ==========
+
+    @GET("dict/{dict_type}")
+    suspend fun getDict(
+        @Path("dict_type") dictType: String
+    ): BaseResponse<DictType>
+
+    @GET("dict/batch")
+    suspend fun getDictBatch(
+        @Query("dict_types") dictTypes: String
+    ): BaseResponse<List<DictType>>
 }

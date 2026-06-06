@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cxsysys.viewmodel.AgInputViewModel
+import com.example.cxsysys.viewmodel.DictViewModel
 import com.example.cxsysys.viewmodel.SubmitState
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
@@ -123,12 +124,18 @@ fun AgInputManagerScreen(mode: String, onBackClick: () -> Unit) {
 @Composable
 fun SupplierEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputViewModel = viewModel()) {
     val context = LocalContext.current
+    val dictViewModel: DictViewModel = viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("1-肥料供应商") }
-    val typeOptions = listOf("1-肥料供应商", "2-农药供应商", "3-肥料农药供应商")
+    val typeOptions = dictViewModel.getOptions("supplier_type").ifEmpty { listOf("1-肥料供应商", "2-农药供应商", "3-肥料农药供应商") }
     val validationState = rememberFormValidationState()
+
+    LaunchedEffect(Unit) {
+        dictViewModel.preloadDicts("supplier_type")
+    }
 
     val submitState by viewModel.submitState.collectAsState()
 
@@ -497,15 +504,18 @@ fun PesticideInfoEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputViewM
 fun FertilizerInfoEntryContent(onSaveSuccess: () -> Unit, viewModel: AgInputViewModel = viewModel()) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+    val dictViewModel: DictViewModel = viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
 
     val supplierList by viewModel.supplierList.collectAsState()
     val supplierOptions = supplierList.map { it.supplierName }
     
     LaunchedEffect(Unit) {
         viewModel.fetchFertilizerSuppliers()
+        dictViewModel.preloadDicts("fertilizer_type")
     }
 
-    val typeOptions = listOf("有机肥", "复合肥", "水溶肥", "缓释肥", "其他")
+    val typeOptions = dictViewModel.getOptions("fertilizer_type").ifEmpty { listOf("有机肥", "复合肥", "水溶肥", "缓释肥", "其他") }
     val validationState = rememberFormValidationState()
 
     var supplierName by remember { mutableStateOf("") }

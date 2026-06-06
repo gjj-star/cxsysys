@@ -38,6 +38,7 @@ import java.util.Date
 import java.util.Locale
 
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cxsysys.viewmodel.DictViewModel
 import com.example.cxsysys.viewmodel.PunchViewModel
 import com.example.cxsysys.viewmodel.SubmitState
 
@@ -67,6 +68,11 @@ fun PunchEntryScreen(
     // 表单验证状态
     val validationState = rememberFormValidationState()
 
+    // 字典 ViewModel
+    val dictViewModel: DictViewModel = viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
+    LaunchedEffect(Unit) { dictViewModel.preloadDicts("time_slot") }
+
     // --- 表单状态 (对应 V10 数据库字段) ---
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1
     var inputMode by remember { mutableIntStateOf(1) }
@@ -87,7 +93,7 @@ fun PunchEntryScreen(
 
     // time_slot varchar(10) 打孔时段 (6-8时，9-11时，12-14时，15-17时，18-20时)
     var time_slot by remember { mutableStateOf("9-11时") }
-    val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时")
+    val timeSlotOptions = dictViewModel.getOptions("time_slot").ifEmpty { listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时") }
 
     // 结香规格字段
     var hole_depth by remember { mutableStateOf("") }      // hole_depth 平均孔深 (cm)

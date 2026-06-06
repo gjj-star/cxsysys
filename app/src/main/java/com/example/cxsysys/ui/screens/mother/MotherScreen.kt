@@ -38,10 +38,10 @@ import com.example.cxsysys.model.Subspecies
 import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.theme.BgGray
 import com.example.cxsysys.utils.QrCodeGenerator
+import com.example.cxsysys.viewmodel.DictViewModel
 import com.example.cxsysys.viewmodel.MotherTreeViewModel
 
-// 母树状态码映射
-private val STATUS_MAP = mapOf(0 to "正常", 1 to "冻结", 2 to "注销/死亡")
+// 母树状态颜色映射（标签从数据字典获取，颜色按值索引）
 private val STATUS_COLORS = mapOf(0 to AgGreenPrimary, 1 to Color(0xFFFFA000), 2 to Color.Red)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,6 +49,7 @@ private val STATUS_COLORS = mapOf(0 to AgGreenPrimary, 1 to Color(0xFFFFA000), 2
 fun MotherScreen(onNavigateToDetail: (Int) -> Unit) {
     val context = LocalContext.current
     val viewModel: MotherTreeViewModel = viewModel()
+    val dictViewModel: DictViewModel = viewModel()
     val treeList by viewModel.treeList.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -56,6 +57,7 @@ fun MotherScreen(onNavigateToDetail: (Int) -> Unit) {
     val errorMsg by viewModel.errorMsg.collectAsState()
     val submitSuccess by viewModel.submitSuccess.collectAsState()
     val subspeciesList by viewModel.subspeciesList.collectAsState()
+    val dictCache by dictViewModel.dictCache.collectAsState()
 
     var searchText by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -65,6 +67,7 @@ fun MotherScreen(onNavigateToDetail: (Int) -> Unit) {
     LaunchedEffect(Unit) {
         viewModel.fetchTreeList()
         viewModel.fetchSubspeciesList()
+        dictViewModel.preloadDicts("mothertree_status")
     }
 
     // 错误提示
@@ -182,6 +185,7 @@ fun MotherScreen(onNavigateToDetail: (Int) -> Unit) {
                         ) { tree ->
                             MotherTreeCard(
                                 tree = tree,
+                                statusLabel = dictViewModel.getLabel("mothertree_status", tree.status),
                                 onClick = { onNavigateToDetail(tree.mothertreeId) },
                                 onQrCodeClick = { qrCodeContent = tree.mothertreeQrcode }
                             )
@@ -260,7 +264,7 @@ fun SearchBar(
 }
 
 @Composable
-fun MotherTreeCard(tree: MotherTreeItem, onClick: () -> Unit, onQrCodeClick: () -> Unit) {
+fun MotherTreeCard(tree: MotherTreeItem, statusLabel: String, onClick: () -> Unit, onQrCodeClick: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(12.dp),
@@ -325,9 +329,8 @@ fun MotherTreeCard(tree: MotherTreeItem, onClick: () -> Unit, onQrCodeClick: () 
                         .clickable { onQrCodeClick() }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                val statusText = STATUS_MAP[tree.status] ?: "未知"
                 val statusColor = STATUS_COLORS[tree.status] ?: Color.Gray
-                Text(statusText, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text(statusLabel, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
         }
     }

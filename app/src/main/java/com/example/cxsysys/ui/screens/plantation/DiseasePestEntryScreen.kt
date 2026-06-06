@@ -69,6 +69,11 @@ fun DiseasePestEntryScreen(
     // 表单验证状态
     val validationState = rememberFormValidationState()
 
+    // DictViewModel 字典数据
+    val dictViewModel: com.example.cxsysys.viewmodel.DictViewModel = viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
+    LaunchedEffect(Unit) { dictViewModel.preloadDicts("disease_pest_type") }
+
     // --- 表单状态 ---
     // 0: 按苗木个别录入 (默认), 1: 按地块批量录入
     var inputMode by remember { mutableStateOf(0) }
@@ -86,7 +91,7 @@ fun DiseasePestEntryScreen(
     var description by remember { mutableStateOf("") }
 
     // 虫害复选框状态
-    val diseasePestTypes = listOf("蚜虫", "白粉虱", "螨虫", "叶斑病", "屌丝虫", "炭疽病", "卷叶虫", "黄野螟", "枯萎病", "天牛", "根结线虫", "根腐病", "其他")
+    val diseasePestTypes = dictViewModel.getOptions("disease_pest_type").ifEmpty { listOf("蚜虫", "白粉虱", "螨虫", "叶斑病", "屌丝虫", "炭疽病", "卷叶虫", "黄野螟", "枯萎病", "天牛", "根结线虫", "根腐病", "其他") }
     val selectedPests = remember { mutableStateListOf<String>() }
     var hasPestError by remember { mutableStateOf(false) }
 

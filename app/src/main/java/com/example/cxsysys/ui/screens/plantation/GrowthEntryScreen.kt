@@ -73,6 +73,11 @@ fun GrowthEntryScreen(
     // 表单验证状态
     val validationState = rememberFormValidationState()
 
+    // --- 字典 ViewModel ---
+    val dictViewModel: com.example.cxsysys.viewmodel.DictViewModel = viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
+    LaunchedEffect(Unit) { dictViewModel.preloadDicts("growth_straightness") }
+
     // --- 表单状态 ---
     var inputMode by remember { mutableIntStateOf(0) } // 0-个别录入(苗木), 1-批量录入(地块)
 
@@ -97,7 +102,7 @@ fun GrowthEntryScreen(
     var plantQuantity by remember { mutableStateOf("") }
 
     var straightness by remember { mutableStateOf("") }
-    val straightnessOptions = listOf("1 级：通直", "2 级：轻度弯曲", "3 级：严重弯曲")
+    val straightnessOptions = dictViewModel.getOptions("growth_straightness").ifEmpty { listOf("1 级：通直", "2 级：轻度弯曲", "3 级：严重弯曲") }
 
     var remark by remember { mutableStateOf("") }
 

@@ -86,6 +86,11 @@ fun PesticideEntryScreen(
     // 表单验证状态
     val validationState = rememberFormValidationState()
 
+    // 数据字典
+    val dictViewModel: com.example.cxsysys.viewmodel.DictViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
+    LaunchedEffect(Unit) { dictViewModel.preloadDicts("time_slot", "pesticide_method") }
+
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1 (大部分情境为批量)
     var inputMode by remember { mutableIntStateOf(1) }
@@ -108,7 +113,7 @@ fun PesticideEntryScreen(
 
     // 施药时段
     var pesticide_time by remember { mutableStateOf("9-11时") }
-    val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时")
+    val timeSlotOptions = dictViewModel.getOptions("time_slot").ifEmpty { listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时") }
 
     // 剂量与浓度字段
     var dosage_ml_per_plant by remember { mutableStateOf("") } // 单株用量（ml）
@@ -123,7 +128,7 @@ fun PesticideEntryScreen(
     var isScanning by remember { mutableStateOf(false) }
 
     var showSelectPesticideDialog by remember { mutableStateOf(false) }
-    val methodOptions = listOf("喷雾", "灌根", "涂抹", "喷粉", "其他")
+    val methodOptions = dictViewModel.getOptions("pesticide_method").ifEmpty { listOf("喷雾", "灌根", "涂抹", "喷粉", "其他") }
 
     // 真实扫码状态
     var showScanner by remember { mutableStateOf(false) }

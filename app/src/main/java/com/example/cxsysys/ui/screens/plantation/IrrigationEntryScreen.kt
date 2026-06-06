@@ -39,6 +39,7 @@ import java.util.Locale
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cxsysys.viewmodel.IrrigationViewModel
 import com.example.cxsysys.viewmodel.SubmitState
+import com.example.cxsysys.viewmodel.DictViewModel
 
 // 引入公共组件
 import com.example.cxsysys.ui.components.TopScanCard
@@ -70,6 +71,11 @@ fun IrrigationEntryScreen(
     // 表单验证状态
     val validationState = rememberFormValidationState()
 
+    // 字典 ViewModel
+    val dictViewModel: DictViewModel = viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
+    LaunchedEffect(Unit) { dictViewModel.preloadDicts("time_slot", "irrigation_region", "irrigation_method") }
+
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量记录。默认为1
     var inputMode by remember { mutableIntStateOf(1) }
@@ -85,7 +91,7 @@ fun IrrigationEntryScreen(
     val plantationOptions = plantationList.map { it.plantationName }
 
     var region_type by remember { mutableStateOf("") }
-    val regionTypeOptions = listOf("地块", "大棚")
+    val regionTypeOptions = dictViewModel.getOptions("irrigation_region").ifEmpty { listOf("地块", "大棚") }
 
     var regionQrCode by remember { mutableStateOf("") }
     var regionSelfCode by remember { mutableStateOf("") }
@@ -118,10 +124,10 @@ fun IrrigationEntryScreen(
     var irrigation_date by remember { mutableStateOf(dateFormat.format(Date())) }
 
     var time_slot by remember { mutableStateOf("9-11时") }
-    val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时")
+    val timeSlotOptions = dictViewModel.getOptions("time_slot").ifEmpty { listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时") }
 
     var irrigation_method by remember { mutableStateOf("滴灌") }
-    val methodOptions = listOf("滴灌", "喷灌", "浇灌", "漫灌", "水肥一体化", "其他")
+    val methodOptions = dictViewModel.getOptions("irrigation_method").ifEmpty { listOf("滴灌", "喷灌", "浇灌", "漫灌", "水肥一体化", "其他") }
 
     var remark by remember { mutableStateOf("") }
 

@@ -520,3 +520,23 @@ data class MotherTreeUpdateRequest(
     val latitude: Double? = null,
     @SerializedName("photo_url") val photoUrl: List<String>? = null
 )
+
+// ========== 数据字典模型 ==========
+
+// 字典数据项
+data class DictData(
+    @SerializedName("data_id") val dataId: Int,
+    @SerializedName("data_value") val dataValue: String,
+    @SerializedName("data_label") val dataLabel: String,
+    @SerializedName("data_sort") val dataSort: Int
+)
+
+// 字典类型（含数据项列表）
+data class DictType(
+    @SerializedName("type_id") val typeId: Int,
+    val type: String,
+    @SerializedName("type_name") val typeName: String,
+    @SerializedName("type_remark") val typeRemark: String? = null,
+    @SerializedName("type_sort") val typeSort: Int,
+    @SerializedName("dict_data") val dictData: List<DictData>
+)

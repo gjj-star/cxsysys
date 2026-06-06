@@ -58,6 +58,11 @@ fun PlantingEntryScreen(
     // 表单验证状态
     val validationState = rememberFormValidationState()
 
+    // 字典 ViewModel
+    val dictViewModel: com.example.cxsysys.viewmodel.DictViewModel = viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
+    LaunchedEffect(Unit) { dictViewModel.preloadDicts("generation_way") }
+
     val subspeciesList by viewModel.subspeciesList.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMsg by viewModel.errorMsg.collectAsState()
@@ -106,7 +111,7 @@ fun PlantingEntryScreen(
 
     // (V10: generation_way 育苗方法: 嫁接/扦插/圈枝/组培/其他)
     var generationWay by remember { mutableStateOf("嫁接") }
-    val generationWayOptions = listOf("嫁接", "扦插", "圈枝", "组培", "其他")
+    val generationWayOptions = dictViewModel.getOptions("generation_way").ifEmpty { listOf("嫁接", "扦插", "圈枝", "组培", "其他") }
 
     // 种植规格
     var caveDepth by remember { mutableStateOf("") }      // 穴深

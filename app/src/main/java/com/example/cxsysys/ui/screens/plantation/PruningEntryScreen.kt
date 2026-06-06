@@ -64,6 +64,11 @@ fun PruningEntryScreen(
     // 表单验证状态
     val validationState = rememberFormValidationState()
 
+    // 字典 ViewModel
+    val dictViewModel: com.example.cxsysys.viewmodel.DictViewModel = viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
+    LaunchedEffect(Unit) { dictViewModel.preloadDicts("time_slot", "pruning_type", "pruning_tool") }
+
     // --- 表单状态 ---
     // 录入模式：0-个别录入(苗木), 1-批量录入(地块)。默认为1 (大部分情境为批量)
     var inputMode by remember { mutableIntStateOf(1) }
@@ -82,13 +87,13 @@ fun PruningEntryScreen(
 
     // 选项数据状态
     var time_slot by remember { mutableStateOf("9-11时") }
-    val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时")
+    val timeSlotOptions = dictViewModel.getOptions("time_slot").ifEmpty { listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时") }
 
     var pruning_type by remember { mutableStateOf("疏剪") }
-    val typeOptions = listOf("短截", "疏剪", "抹芽", "造型")
+    val typeOptions = dictViewModel.getOptions("pruning_type").ifEmpty { listOf("短截", "疏剪", "抹芽", "造型") }
 
     var tool_type by remember { mutableStateOf("手剪") }
-    val toolOptions = listOf("手剪", "高枝剪", "电锯", "其他")
+    val toolOptions = dictViewModel.getOptions("pruning_tool").ifEmpty { listOf("手剪", "高枝剪", "电锯", "其他") }
 
     var disinfect_method by remember { mutableStateOf("酒精") }
     val disinfectOptions = listOf("酒精", "火焰", "次氯酸", "其他")

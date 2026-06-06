@@ -113,9 +113,16 @@ fun FertilizerEntryScreen(
 
     var showSelectFertilizerDialog by remember { mutableStateOf(false) }
 
-    // 选项数据
-    val timeSlotOptions = listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时", "其他")
-    val methodOptions = listOf("穴施", "沟施", "撒施", "环状施肥", "放射状施肥", "打洞填埋", "滴灌", "浇灌", "水肥一体化", "叶面施肥", "涂枝干", "其他")
+    // 选项数据（优先从数据字典获取，无数据时回退到本地硬编码）
+    val dictViewModel: com.example.cxsysys.viewmodel.DictViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val dictCache by dictViewModel.dictCache.collectAsState()
+    val timeSlotOptions = dictViewModel.getOptions("time_slot").ifEmpty { listOf("6-8时", "9-11时", "12-14时", "15-17时", "18-20时", "其他") }
+    val methodOptions = dictViewModel.getOptions("fertilizer_method").ifEmpty { listOf("穴施", "沟施", "撒施", "环状施肥", "放射状施肥", "打洞填埋", "滴灌", "浇灌", "水肥一体化", "叶面施肥", "涂枝干", "其他") }
+
+    // 预加载数据字典
+    LaunchedEffect(Unit) {
+        dictViewModel.preloadDicts("time_slot", "fertilizer_method")
+    }
 
     // 真实扫码界面
     if (showScanner) {
