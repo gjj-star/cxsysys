@@ -47,6 +47,8 @@ private const val TEMP_DK = "地块二维码"
 @Composable
 fun HomeScreen(
     onNavigateToModule: (String) -> Unit,
+    isLoggedIn: Boolean,
+    onLoginRequired: () -> Unit,
     homeViewModel: HomeViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -71,6 +73,14 @@ fun HomeScreen(
     var showAgInputDialog by remember { mutableStateOf(false) }
     // [新增] 控制二维码生成弹窗状态 (用于控制二维码生成卡片显示)
     var showQrDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isLoggedIn) {
+        if (!isLoggedIn) {
+            showPestDialog = false
+            showAgInputDialog = false
+            showQrDialog = false
+        }
+    }
 
     // 定义功能模块数据
     val actionItems = listOf(
@@ -378,7 +388,9 @@ fun HomeScreen(
         ) {
             items(actionItems) { item ->
                 ActionCard(item) {
-                    when (item.routeId) {
+                    if (!isLoggedIn) {
+                        onLoginRequired()
+                    } else when (item.routeId) {
                         "disease_dialog" -> showPestDialog = true
                         "ag_input_dialog" -> showAgInputDialog = true
                         // [新增] 拦截二维码生成点击

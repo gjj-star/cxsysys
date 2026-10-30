@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 
 import com.example.printerfeature.BuildConfig;
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -46,17 +47,19 @@ public final class PrinterApiClient {
     private static PrinterApiService createService() {
         HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
         loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+        loggingInterceptor.redactHeader("token");
 
         OkHttpClient okHttpClient = new OkHttpClient.Builder()
-                .addInterceptor(loggingInterceptor)
                 .addInterceptor(chain -> {
                     Request.Builder builder = chain.request().newBuilder();
                     String token = getAuthToken();
-                    if (!token.isEmpty()) {
-                        builder.header("token", token);
+                    if (token.trim().isEmpty()) {
+                        throw new IOException("请先登录");
                     }
+                    builder.header("token", token);
                     return chain.proceed(builder.build());
                 })
+                .addInterceptor(loggingInterceptor)
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)

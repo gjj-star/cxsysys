@@ -114,8 +114,9 @@ class AuthViewModel : ViewModel() {
      * 处理登录成功：保存 token 和用户信息到本地
      */
     private fun handleLoginSuccess(loginResponse: LoginResponse) {
-        val token = loginResponse.token ?: return
-        val userInfo = loginResponse.userInfo ?: return
+        val token = loginResponse.token
+        require(!token.isNullOrBlank()) { "登录失败，未获取到登录凭证" }
+        val userInfo = requireNotNull(loginResponse.userInfo) { "登录失败，未获取到用户信息" }
 
         // 保存 token
         TokenManager.saveToken(token)

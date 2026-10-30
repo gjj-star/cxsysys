@@ -2,6 +2,8 @@ package com.example.cxsysys.utils
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * JWT Token 管理器
@@ -25,27 +27,32 @@ object TokenManager {
     private const val KEY_DEBUG_SUPER_TOKEN = "debug_super_token"
 
     private lateinit var prefs: SharedPreferences
+    private val _loginState = MutableStateFlow(false)
+    val loginState = _loginState.asStateFlow()
 
     /**
      * 初始化（在 Application 或 MainActivity 中调用一次）
      */
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        _loginState.value = isLoggedIn()
     }
 
     // ========== Token 操作 ==========
 
     fun saveToken(token: String) {
         prefs.edit().putString(KEY_TOKEN, token).apply()
+        _loginState.value = isLoggedIn()
     }
 
     fun getToken(): String? = prefs.getString(KEY_TOKEN, null)
 
     fun clearToken() {
         prefs.edit().remove(KEY_TOKEN).apply()
+        _loginState.value = false
     }
 
-    fun isLoggedIn(): Boolean = getToken() != null
+    fun isLoggedIn(): Boolean = !getToken().isNullOrBlank()
 
     fun applyDebugSuperToken(enabled: Boolean, token: String) {
         if (enabled) {
@@ -111,5 +118,6 @@ object TokenManager {
      */
     fun clearAll() {
         prefs.edit().clear().apply()
+        _loginState.value = false
     }
 }

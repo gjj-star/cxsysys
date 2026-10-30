@@ -16,6 +16,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NamedNavArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -23,6 +26,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 // 引入主题色
 import com.example.cxsysys.ui.theme.AgGreenPrimary
+import com.example.cxsysys.ui.components.LoginRequiredDialog
+import com.example.cxsysys.ui.components.LoginRequiredScreen
+import com.example.cxsysys.utils.TokenManager
 // 引入各个页面组件
 import com.example.cxsysys.ui.screens.children.ChildrenScreen
 import com.example.cxsysys.ui.screens.children.ChildrenDetailScreen
@@ -93,6 +99,44 @@ fun MainScreen() {
     val currentRoute = navBackStackEntry?.destination?.route
     val context = LocalContext.current
 
+    val isLoggedIn by TokenManager.loginState.collectAsState()
+    var showLoginDialog by remember { mutableStateOf(false) }
+    val navigateToLogin: () -> Unit = {
+        showLoginDialog = false
+        navController.navigate(ROUTE_MINE) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    fun NavGraphBuilder.protectedComposable(
+        route: String,
+        arguments: List<NamedNavArgument> = emptyList(),
+        content: @Composable (NavBackStackEntry) -> Unit
+    ) {
+        composable(route = route, arguments = arguments) { entry ->
+            if (isLoggedIn) {
+                content(entry)
+            } else {
+                val title = when (route) {
+                    ROUTE_MOTHER -> "母树档案"
+                    ROUTE_CHILDREN -> "幼苗档案"
+                    ROUTE_PLANTING -> "苗木档案"
+                    else -> "种植信息"
+                }
+                LoginRequiredScreen(title = title, onLogin = navigateToLogin)
+            }
+        }
+    }
+
+    if (showLoginDialog && !isLoggedIn) {
+        LoginRequiredDialog(
+            onDismiss = { showLoginDialog = false },
+            onLogin = navigateToLogin
+        )
+    }
+
     Scaffold(
         bottomBar = {
             val mainRoutes = listOf(ROUTE_HOME, ROUTE_MOTHER, ROUTE_CHILDREN, ROUTE_PLANTING, ROUTE_MINE)
@@ -139,8 +183,12 @@ fun MainScreen() {
             // --- 底部Tab页面 ---
             composable(ROUTE_HOME) {
                 HomeScreen(
+                    isLoggedIn = isLoggedIn,
+                    onLoginRequired = { showLoginDialog = true },
                     onNavigateToModule = { routeId ->
-                        try {
+                        if (!TokenManager.isLoggedIn()) {
+                            showLoginDialog = true
+                        } else try {
                             navController.navigate(routeId)
                         } catch (e: Exception) {
                             Toast.makeText(context, "页面 $routeId 开发中", Toast.LENGTH_SHORT).show()
@@ -148,18 +196,18 @@ fun MainScreen() {
                     }
                 )
             }
-            composable(ROUTE_MOTHER) {
+            protectedComposable(ROUTE_MOTHER) {
                 MotherScreen(
                     onNavigateToDetail = { motherId -> navController.navigate("mother_detail/$motherId") }
                 )
             }
-            composable(ROUTE_CHILDREN) {
+            protectedComposable(ROUTE_CHILDREN) {
                 ChildrenScreen(
                     // [只修改这里] 传入 seedbedId
                     onNavigateToDetail = { seedbedId -> navController.navigate("sapling_detail/$seedbedId") }
                 )
             }
-            composable(ROUTE_PLANTING) {
+            protectedComposable(ROUTE_PLANTING) {
                 PlantingScreen(
                     onNavigateToDetail = { plantId -> navController.navigate("plant_detail/$plantId") }
                 )
@@ -176,50 +224,50 @@ fun MainScreen() {
             }
 
             // --- 农事作业录入页面 ---
-            composable(ROUTE_SAPLING_ENTRY) { SaplingEntryScreen(onBackClick = { navController.popBackStack() }) }
-            composable(ROUTE_PLANTING_ENTRY) { PlantingEntryScreen(onBackClick = { navController.popBackStack() }) }
-            composable(ROUTE_GROWTH_ENTRY) { GrowthEntryScreen(onBackClick = { navController.popBackStack() }) }
-            composable(ROUTE_FERTILIZER_ENTRY) { FertilizerEntryScreen(onBackClick = { navController.popBackStack() }) }
-            composable(ROUTE_DISEASE_PEST_ENTRY) { DiseasePestEntryScreen(onBackClick = { navController.popBackStack() }) }
-            composable(ROUTE_PESTICIDE_ENTRY) { PesticideEntryScreen(onBackClick = { navController.popBackStack() }) }
-            composable(ROUTE_IRRIGATION_ENTRY) { IrrigationEntryScreen(onBackClick = { navController.popBackStack() }) }
-            composable(ROUTE_PRUNING_ENTRY) { PruningEntryScreen(onBackClick = { navController.popBackStack() }) }
-            composable(ROUTE_PUNCH_ADD) { PunchEntryScreen(onBackClick = { navController.popBackStack() }) }
-            composable(ROUTE_HARVEST_ADD) { HarvestEntryScreen(onBackClick = { navController.popBackStack() }) }
+            protectedComposable(ROUTE_SAPLING_ENTRY) { SaplingEntryScreen(onBackClick = { navController.popBackStack() }) }
+            protectedComposable(ROUTE_PLANTING_ENTRY) { PlantingEntryScreen(onBackClick = { navController.popBackStack() }) }
+            protectedComposable(ROUTE_GROWTH_ENTRY) { GrowthEntryScreen(onBackClick = { navController.popBackStack() }) }
+            protectedComposable(ROUTE_FERTILIZER_ENTRY) { FertilizerEntryScreen(onBackClick = { navController.popBackStack() }) }
+            protectedComposable(ROUTE_DISEASE_PEST_ENTRY) { DiseasePestEntryScreen(onBackClick = { navController.popBackStack() }) }
+            protectedComposable(ROUTE_PESTICIDE_ENTRY) { PesticideEntryScreen(onBackClick = { navController.popBackStack() }) }
+            protectedComposable(ROUTE_IRRIGATION_ENTRY) { IrrigationEntryScreen(onBackClick = { navController.popBackStack() }) }
+            protectedComposable(ROUTE_PRUNING_ENTRY) { PruningEntryScreen(onBackClick = { navController.popBackStack() }) }
+            protectedComposable(ROUTE_PUNCH_ADD) { PunchEntryScreen(onBackClick = { navController.popBackStack() }) }
+            protectedComposable(ROUTE_HARVEST_ADD) { HarvestEntryScreen(onBackClick = { navController.popBackStack() }) }
 
             // 药肥基础信息录入页面
-            composable(ROUTE_AG_INPUT_SUPPLIER) {
+            protectedComposable(ROUTE_AG_INPUT_SUPPLIER) {
                 AgInputManagerScreen(mode = "supplier", onBackClick = { navController.popBackStack() })
             }
-            composable(ROUTE_AG_INPUT_PESTICIDE) {
+            protectedComposable(ROUTE_AG_INPUT_PESTICIDE) {
                 AgInputManagerScreen(mode = "pesticide", onBackClick = { navController.popBackStack() })
             }
-            composable(ROUTE_AG_INPUT_FERTILIZER) {
+            protectedComposable(ROUTE_AG_INPUT_FERTILIZER) {
                 AgInputManagerScreen(mode = "fertilizer", onBackClick = { navController.popBackStack() })
             }
 
             // --- 个人中心次级页面 ---
-            composable(ROUTE_PROFILE_INFO) {
+            protectedComposable(ROUTE_PROFILE_INFO) {
                 ProfileInfoScreen(onBackClick = { navController.popBackStack() })
             }
-            composable(ROUTE_ENTERPRISE) {
+            protectedComposable(ROUTE_ENTERPRISE) {
                 EnterpriseScreen(onBackClick = { navController.popBackStack() })
             }
-            composable(ROUTE_CHANGE_PASSWORD) {
+            protectedComposable(ROUTE_CHANGE_PASSWORD) {
                 ChangePasswordScreen(onBackClick = { navController.popBackStack() })
             }
-            composable(ROUTE_SETTINGS) {
+            protectedComposable(ROUTE_SETTINGS) {
                 SettingsScreen(onBackClick = { navController.popBackStack() })
             }
-            composable(ROUTE_HELP_FEEDBACK) {
+            protectedComposable(ROUTE_HELP_FEEDBACK) {
                 HelpFeedbackScreen(onBackClick = { navController.popBackStack() })
             }
-            composable(ROUTE_ABOUT) {
+            protectedComposable(ROUTE_ABOUT) {
                 AboutScreen(onBackClick = { navController.popBackStack() })
             }
 
             // --- 详情页面 ---
-            composable(
+            protectedComposable(
                 route = ROUTE_PLANT_DETAIL,
                 arguments = listOf(navArgument("plantId") { type = NavType.StringType })
             ) { backStackEntry ->
@@ -227,7 +275,7 @@ fun MainScreen() {
                 PlantDetailScreen(plantId = plantId, onBackClick = { navController.popBackStack() })
             }
 
-            composable(
+            protectedComposable(
                 route = ROUTE_SAPLING_DETAIL,
                 // [只修改这里] 接收参数名改为 seedbedId
                 arguments = listOf(navArgument("seedbedId") { type = NavType.StringType })
@@ -236,7 +284,7 @@ fun MainScreen() {
                 ChildrenDetailScreen(seedbedId = seedbedId, onBackClick = { navController.popBackStack() })
             }
 
-            composable(
+            protectedComposable(
                 route = ROUTE_MOTHER_DETAIL,
                 arguments = listOf(navArgument("motherId") { type = NavType.StringType })
             ) { backStackEntry ->
@@ -244,7 +292,7 @@ fun MainScreen() {
                 MotherDetailScreen(motherTreeId = motherId, onBackClick = { navController.popBackStack() })
             }
             // ... existing code ...
-            composable("pesticide_entry") { // 你的实际路由名称可能略有不同
+            protectedComposable("pesticide_entry") { // 你的实际路由名称可能略有不同
                 PesticideEntryScreen(
                     onBackClick = { navController.popBackStack() },
                     // [新增] 传入具体的导航行为，跳转至农药入库页
@@ -253,7 +301,7 @@ fun MainScreen() {
                     }
                 )
             }
-            composable("fertilizer_entry") {
+            protectedComposable("fertilizer_entry") {
                 FertilizerEntryScreen(
                     onBackClick = { navController.popBackStack() },
                     // [新增] 传入具体的导航行为，跳转至肥料入库页

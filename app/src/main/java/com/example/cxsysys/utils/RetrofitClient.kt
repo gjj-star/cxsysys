@@ -2,7 +2,6 @@ package com.example.cxsysys.utils
 
 import com.example.cxsysys.api.AuthApiService
 import com.example.cxsysys.api.WeatherApiService
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -18,6 +17,7 @@ object RetrofitClient {
     private val loggingInterceptor by lazy {
         HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
+            redactHeader("token")
         }
     }
 
@@ -27,20 +27,7 @@ object RetrofitClient {
      * 自动从 TokenManager 读取 token 并注入自定义 "token" header。
      * 后端使用自定义 header 名 "token"（非标准 Authorization: Bearer）。
      */
-    private val authInterceptor = Interceptor { chain ->
-        val originalRequest = chain.request()
-        val token = TokenManager.getToken()
-
-        val newRequest = if (!token.isNullOrEmpty()) {
-            originalRequest.newBuilder()
-                .header("token", token)
-                .build()
-        } else {
-            originalRequest
-        }
-
-        chain.proceed(newRequest)
-    }
+    private val authInterceptor = BusinessAuthInterceptor { TokenManager.getToken() }
 
     private val weatherOkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -53,8 +40,8 @@ object RetrofitClient {
 
     private val businessOkHttpClient by lazy {
         OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
             .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
