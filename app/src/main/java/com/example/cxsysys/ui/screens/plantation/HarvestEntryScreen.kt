@@ -82,7 +82,9 @@ fun HarvestEntryScreen(
     var harvest_date by remember { mutableStateOf(dateFormat.format(Date())) }
 
     // 采收信息
-    var weight by remember { mutableStateOf("") } // 采收重量
+    var harvestWeight by remember { mutableStateOf("") } // 采收重量
+
+    var treeWeight by remember { mutableStateOf("") }
 
     var remark by remember { mutableStateOf("") }
 
@@ -166,17 +168,27 @@ fun HarvestEntryScreen(
                             mapOf(
                                 "identifier" to identifierValue,
                                 "recordDate" to harvest_date,
-                                "weight" to weight
+                                "treeWeight" to treeWeight,
+                                "harvestWeight" to harvestWeight
                             )
                         )
 
                         if (isValid) {
+                            val parsedTreeWeight = treeWeight.toDoubleOrNull()
+                            val parsedHarvestWeight = harvestWeight.toDoubleOrNull()
+                            if (parsedTreeWeight == null || !parsedTreeWeight.isFinite() ||
+                                parsedHarvestWeight == null || !parsedHarvestWeight.isFinite()
+                            ) {
+                                Toast.makeText(context, "请输入有效的重量数值", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
                             viewModel.submitHarvest(
                                 fieldCode = if (inputMode == 1 && isSelfCodeMode) fieldSelfCode else null,
                                 fieldQrcode = if (inputMode == 1 && !isSelfCodeMode) fieldQrCode else null,
                                 plantQrcode = if (inputMode == 0) plantQrCode else null,
                                 harvestDate = harvest_date,
-                                harvestWeight = weight.toDoubleOrNull() ?: 0.0
+                                harvestWeight = parsedHarvestWeight,
+                                treeWeight = parsedTreeWeight
                             )
                         } else {
                             Toast.makeText(context, "请补全必填信息", Toast.LENGTH_SHORT).show()
@@ -341,10 +353,22 @@ fun HarvestEntryScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     // 采收重量
                     ValidatedOutlinedTextField(
-                        value = weight,
-                        onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) weight = it },
-                        label = "采收重量",
-                        fieldKey = "weight",
+                        value = treeWeight,
+                        onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) treeWeight = it },
+                        label = "香木重量",
+                        fieldKey = "treeWeight",
+                        validationState = validationState,
+                        isRequired = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        trailingIcon = { Text("g/克", color = Color.Gray, modifier = Modifier.padding(end = 12.dp)) }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ValidatedOutlinedTextField(
+                        value = harvestWeight,
+                        onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) harvestWeight = it },
+                        label = "沉香重量",
+                        fieldKey = "harvestWeight",
                         validationState = validationState,
                         isRequired = true,
                         modifier = Modifier.fillMaxWidth(),

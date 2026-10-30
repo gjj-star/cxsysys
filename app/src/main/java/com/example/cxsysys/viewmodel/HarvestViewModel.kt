@@ -21,7 +21,8 @@ class HarvestViewModel : ViewModel() {
         fieldQrcode: String?,
         plantQrcode: String?,
         harvestDate: String,
-        harvestWeight: Double
+        harvestWeight: Double,
+        treeWeight: Double
     ) {
         viewModelScope.launch {
             _submitState.value = SubmitState.Loading
@@ -31,7 +32,8 @@ class HarvestViewModel : ViewModel() {
                     fieldQrcode = fieldQrcode,
                     plantQrcode = plantQrcode,
                     harvestDate = harvestDate,
-                    harvestWeight = harvestWeight
+                    harvestWeight = harvestWeight,
+                    treeWeight = treeWeight
                 )
                 
                 val response = apiService.submitHarvest(request)

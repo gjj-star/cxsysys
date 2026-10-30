@@ -466,7 +466,8 @@ data class HarvestRequest(
     @SerializedName("field_qrcode") val fieldQrcode: String? = null,
     @SerializedName("plant_qrcode") val plantQrcode: String? = null,
     @SerializedName("harvest_date") val harvestDate: String,
-    @SerializedName("harvest_weight") val harvestWeight: Double
+    @SerializedName("harvest_weight") val harvestWeight: Double,
+    @SerializedName("tree_weight") val treeWeight: Double
 )
 
 // ========== 母树管理模型 ==========
