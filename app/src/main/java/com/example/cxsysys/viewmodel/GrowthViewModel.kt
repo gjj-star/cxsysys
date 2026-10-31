@@ -1,5 +1,7 @@
 package com.example.cxsysys.viewmodel
 
+import com.example.cxsysys.utils.toUserMessage
+import com.example.cxsysys.utils.orErrorMessage
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -61,7 +63,7 @@ class GrowthViewModel : ViewModel() {
                         if ((uploadResponse.code == 0 || uploadResponse.code == 200) && uploadResponse.data != null) {
                             uploadedUrls.add(uploadResponse.data.fileUrl)
                         } else {
-                            throw Exception("图片上传失败: ${uploadResponse.message}")
+                            throw IllegalStateException(uploadResponse.message.orErrorMessage("图片上传失败"))
                         }
                     }
                 }
@@ -85,11 +87,11 @@ class GrowthViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _submitSuccess.value = true
                 } else {
-                    _errorMessage.value = response.message ?: "提交失败"
+                    _errorMessage.value = response.message.orErrorMessage("提交失败")
                     _submitSuccess.value = false
                 }
             } catch (e: Exception) {
-                _errorMessage.value = "网络错误: ${e.message}"
+                _errorMessage.value = e.toUserMessage("网络错误")
                 _submitSuccess.value = false
             } finally {
                 _isLoading.value = false

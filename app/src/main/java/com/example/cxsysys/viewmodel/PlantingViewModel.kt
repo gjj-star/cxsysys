@@ -1,5 +1,7 @@
 package com.example.cxsysys.viewmodel
 
+import com.example.cxsysys.utils.toUserMessage
+import com.example.cxsysys.utils.orErrorMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cxsysys.model.*
@@ -93,19 +95,19 @@ class PlantingViewModel : ViewModel() {
                 if (subResponse.code == 0 || subResponse.code == 200) {
                     _subspeciesList.value = subResponse.data ?: emptyList()
                 } else {
-                    _errorMsg.value = subResponse.message
+                    _errorMsg.value = subResponse.message.orErrorMessage("请求失败，请稍后重试")
                 }
 
                 val fieldResponse = api.getFieldList()
                 if (fieldResponse.code == 0 || fieldResponse.code == 200) {
                     _fieldList.value = fieldResponse.data ?: emptyList()
                 } else {
-                    _errorMsg.value = fieldResponse.message
+                    _errorMsg.value = fieldResponse.message.orErrorMessage("请求失败，请稍后重试")
                 }
 
                 fetchPlantList()
             } catch (e: Exception) {
-                _errorMsg.value = "加载初始数据失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("加载初始数据失败")
             } finally {
                 _isLoading.value = false
             }
@@ -129,10 +131,10 @@ class PlantingViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _plantList.value = response.data ?: emptyList()
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "获取苗木列表失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("获取苗木列表失败")
             } finally {
                 _isLoading.value = false
             }
@@ -152,10 +154,10 @@ class PlantingViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _stageRecordList.value = response.data ?: emptyList()
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "阶段记录搜索失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("阶段记录搜索失败")
             } finally {
                 _isLoading.value = false
             }
@@ -171,7 +173,7 @@ class PlantingViewModel : ViewModel() {
                 if (detailResponse.code == 0 || detailResponse.code == 200) {
                     _plantDetail.value = detailResponse.data
                 } else {
-                    _errorMsg.value = detailResponse.message
+                    _errorMsg.value = detailResponse.message.orErrorMessage("请求失败，请稍后重试")
                 }
 
                 val farmingResponse = api.getPlantFarmingList(plantId)
@@ -247,7 +249,7 @@ class PlantingViewModel : ViewModel() {
                     if (r6.code == 0 || r6.code == 200) _plantingDetail.value = r6.data?.firstOrNull()
                 } catch (e: Exception) { }
             } catch (e: Exception) {
-                _errorMsg.value = "获取详情数据失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("获取详情数据失败")
             } finally {
                 _isLoading.value = false
             }
@@ -262,10 +264,10 @@ class PlantingViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _submitSuccess.value = true
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "提交失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("提交失败")
             } finally {
                 _isLoading.value = false
             }

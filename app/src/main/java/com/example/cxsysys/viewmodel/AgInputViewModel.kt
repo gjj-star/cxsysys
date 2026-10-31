@@ -1,5 +1,7 @@
 package com.example.cxsysys.viewmodel
 
+import com.example.cxsysys.utils.orErrorMessage
+import com.example.cxsysys.utils.toUserMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cxsysys.api.PlantingApiService
@@ -41,10 +43,10 @@ class AgInputViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _submitState.value = SubmitState.Success
                 } else {
-                    _submitState.value = SubmitState.Error(response.message ?: "提交失败")
+                    _submitState.value = SubmitState.Error(response.message.orErrorMessage("提交失败"))
                 }
             } catch (e: Exception) {
-                _submitState.value = SubmitState.Error(e.message ?: "网络错误")
+                _submitState.value = SubmitState.Error(e.toUserMessage("网络错误"))
             }
         }
     }
@@ -117,10 +119,10 @@ class AgInputViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _submitState.value = SubmitState.Success
                 } else {
-                    _submitState.value = SubmitState.Error(response.message ?: "提交失败")
+                    _submitState.value = SubmitState.Error(response.message.orErrorMessage("提交失败"))
                 }
             } catch (e: Exception) {
-                _submitState.value = SubmitState.Error(e.message ?: "网络错误")
+                _submitState.value = SubmitState.Error(e.toUserMessage("网络错误"))
             }
         }
     }
@@ -169,27 +171,22 @@ class AgInputViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _submitState.value = SubmitState.Success
                 } else {
-                    _submitState.value = SubmitState.Error(response.message ?: "提交失败")
+                    _submitState.value = SubmitState.Error(response.message.orErrorMessage("提交失败"))
                 }
             } catch (e: Exception) {
-                _submitState.value = SubmitState.Error(e.message ?: "网络错误")
+                _submitState.value = SubmitState.Error(e.toUserMessage("网络错误"))
             }
         }
     }
 
     private suspend fun uploadSingleFile(file: File?): String? {
         if (file == null || !file.exists()) return null
-        return try {
-            val requestFile = file.asRequestBody(MultipartBody.FORM)
-            val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
-            val uploadResponse = apiService.uploadFile(body)
-            if ((uploadResponse.code == 0 || uploadResponse.code == 200) && uploadResponse.data != null) {
-                uploadResponse.data.fileUrl
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            null
+        val requestFile = file.asRequestBody(MultipartBody.FORM)
+        val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
+        val uploadResponse = apiService.uploadFile(body)
+        if ((uploadResponse.code == 0 || uploadResponse.code == 200) && uploadResponse.data != null) {
+            return uploadResponse.data.fileUrl
         }
+        throw IllegalStateException(uploadResponse.message.orErrorMessage("图片上传失败"))
     }
 }

@@ -1,5 +1,7 @@
 package com.example.cxsysys.viewmodel
 
+import com.example.cxsysys.utils.toUserMessage
+import com.example.cxsysys.utils.orErrorMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cxsysys.model.*
@@ -45,17 +47,17 @@ class SaplingViewModel : ViewModel() {
                 if (ghResponse.code == 0 || ghResponse.code == 200) {
                     _greenhouseList.value = ghResponse.data ?: emptyList()
                 } else {
-                    _errorMsg.value = ghResponse.message
+                    _errorMsg.value = ghResponse.message.orErrorMessage("请求失败，请稍后重试")
                 }
 
                 val subResponse = api.getSubspeciesList()
                 if (subResponse.code == 0 || subResponse.code == 200) {
                     _subspeciesList.value = subResponse.data ?: emptyList()
                 } else {
-                    _errorMsg.value = subResponse.message
+                    _errorMsg.value = subResponse.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "加载初始数据失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("加载初始数据失败")
             } finally {
                 _isLoading.value = false
             }
@@ -71,10 +73,10 @@ class SaplingViewModel : ViewModel() {
                     // 过滤出空闲状态的苗床 status = 0
                     _seedbedList.value = response.data?.filter { it.status == 0 } ?: emptyList()
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "加载苗床失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("加载苗床失败")
             } finally {
                 _isLoading.value = false
             }
@@ -89,10 +91,10 @@ class SaplingViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _submitSuccess.value = true
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "提交失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("提交失败")
             } finally {
                 _isLoading.value = false
             }

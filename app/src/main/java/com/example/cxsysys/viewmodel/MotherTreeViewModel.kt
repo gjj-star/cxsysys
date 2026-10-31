@@ -1,5 +1,7 @@
 package com.example.cxsysys.viewmodel
 
+import com.example.cxsysys.utils.toUserMessage
+import com.example.cxsysys.utils.orErrorMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cxsysys.api.PlantingApiService
@@ -63,10 +65,10 @@ class MotherTreeViewModel : ViewModel() {
                     _treeList.value = data?.list ?: emptyList()
                     _hasMore.value = data?.hasMore ?: false
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "获取母树列表失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("获取母树列表失败")
             } finally {
                 _isLoading.value = false
             }
@@ -94,10 +96,10 @@ class MotherTreeViewModel : ViewModel() {
                     _treeList.value = _treeList.value + newList
                     _hasMore.value = data?.hasMore ?: false
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "加载更多失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("加载更多失败")
             } finally {
                 _isLoadingMore.value = false
             }
@@ -115,10 +117,10 @@ class MotherTreeViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _treeDetail.value = response.data?.firstOrNull()
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "获取母树详情失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("获取母树详情失败")
             } finally {
                 _isLoading.value = false
             }
@@ -137,7 +139,7 @@ class MotherTreeViewModel : ViewModel() {
                     _subspeciesList.value = response.data ?: emptyList()
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "获取品种列表失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("获取品种列表失败")
             }
         }
     }
@@ -155,10 +157,10 @@ class MotherTreeViewModel : ViewModel() {
                     // 刷新列表
                     fetchTreeList(keyword = currentKeyword)
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "新增母树失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("新增母树失败")
             } finally {
                 _isLoading.value = false
             }
@@ -178,10 +180,10 @@ class MotherTreeViewModel : ViewModel() {
                     // 刷新详情
                     fetchTreeDetail(id)
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "修改母树失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("修改母树失败")
             } finally {
                 _isLoading.value = false
             }
@@ -200,10 +202,10 @@ class MotherTreeViewModel : ViewModel() {
                     _submitSuccess.value = true
                     fetchTreeDetail(id)
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "状态变更失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("状态变更失败")
             } finally {
                 _isLoading.value = false
             }

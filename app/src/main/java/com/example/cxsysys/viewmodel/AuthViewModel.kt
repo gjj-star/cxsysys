@@ -1,5 +1,7 @@
 package com.example.cxsysys.viewmodel
 
+import com.example.cxsysys.utils.toUserMessage
+import com.example.cxsysys.utils.orErrorMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cxsysys.model.*
@@ -220,13 +222,13 @@ class AuthViewModel : ViewModel() {
                 } else {
                     _formState.value = _formState.value.copy(
                         isSendingSms = false,
-                        errorMessage = response.message.ifEmpty { "发送验证码失败" }
+                        errorMessage = response.message.orErrorMessage("发送验证码失败")
                     )
                 }
             } catch (e: Exception) {
                 _formState.value = _formState.value.copy(
                     isSendingSms = false,
-                    errorMessage = "发送验证码失败: ${e.message}"
+                    errorMessage = e.toUserMessage("发送验证码失败")
                 )
             }
         }
@@ -279,13 +281,13 @@ class AuthViewModel : ViewModel() {
                 } else {
                     _formState.value = state.copy(
                         isLoggingIn = false,
-                        errorMessage = response.message.ifEmpty { "登录失败" }
+                        errorMessage = response.message.orErrorMessage("登录失败")
                     )
                 }
             } catch (e: Exception) {
                 _formState.value = state.copy(
                     isLoggingIn = false,
-                    errorMessage = "登录失败: ${e.message}"
+                    errorMessage = e.toUserMessage("登录失败")
                 )
             }
         }
@@ -324,13 +326,13 @@ class AuthViewModel : ViewModel() {
                 } else {
                     _formState.value = state.copy(
                         isLoggingIn = false,
-                        errorMessage = response.message.ifEmpty { "登录失败" }
+                        errorMessage = response.message.orErrorMessage("登录失败")
                     )
                 }
             } catch (e: Exception) {
                 _formState.value = state.copy(
                     isLoggingIn = false,
-                    errorMessage = "登录失败: ${e.message}"
+                    errorMessage = e.toUserMessage("登录失败")
                 )
             }
         }

@@ -31,6 +31,7 @@ import com.example.printerfeature.data.LabelTemplates;
 import com.example.printerfeature.data.MockLabelRepository;
 import com.example.printerfeature.data.PrinterApiClient;
 import com.example.printerfeature.data.PrinterApiModels;
+import com.example.printerfeature.data.ApiErrorMessages;
 import com.example.printerfeature.data.PrinterApiService;
 import com.example.printerfeature.model.FieldLabelData;
 import com.example.printerfeature.model.GreenhouseLabelData;
@@ -328,7 +329,7 @@ public class MainActivity extends ComponentActivity {
                 plantationsLoading = false;
                 PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantationOption>> body = response.body();
                 if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
-                    toastApiError("种植园列表", body);
+                    toastApiError("种植园列表", body, response);
                     return;
                 }
                 List<PlantationData> next = new ArrayList<>();
@@ -353,7 +354,7 @@ public class MainActivity extends ComponentActivity {
             @Override
             public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantationOption>>> call, Throwable t) {
                 plantationsLoading = false;
-                toast("种植园列表加载失败：" + t.getMessage());
+                toast(ApiErrorMessages.fromThrowable(t, "种植园列表加载失败"));
             }
         });
     }
@@ -367,7 +368,7 @@ public class MainActivity extends ComponentActivity {
                 plantBlocksLoading = false;
                 PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>> body = response.body();
                 if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
-                    toastApiError("地块列表", body);
+                    toastApiError("地块列表", body, response);
                     return;
                 }
                 List<PlantBlockData> next = new ArrayList<>();
@@ -391,7 +392,7 @@ public class MainActivity extends ComponentActivity {
             @Override
             public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>>> call, Throwable t) {
                 plantBlocksLoading = false;
-                toast("地块列表加载失败：" + t.getMessage());
+                toast(ApiErrorMessages.fromThrowable(t, "地块列表加载失败"));
             }
         });
     }
@@ -405,7 +406,7 @@ public class MainActivity extends ComponentActivity {
                 greenhousesLoading = false;
                 PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhouseOption>> body = response.body();
                 if (!response.isSuccessful() || body == null || !body.isSuccessful() || body.data == null) {
-                    toastApiError("大棚列表", body);
+                    toastApiError("大棚列表", body, response);
                     return;
                 }
                 List<GreenhouseLabelData> next = new ArrayList<>();
@@ -432,7 +433,7 @@ public class MainActivity extends ComponentActivity {
             @Override
             public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhouseOption>>> call, Throwable t) {
                 greenhousesLoading = false;
-                toast("大棚列表加载失败：" + t.getMessage());
+                toast(ApiErrorMessages.fromThrowable(t, "大棚列表加载失败"));
             }
         });
     }
@@ -454,22 +455,13 @@ public class MainActivity extends ComponentActivity {
         return builder.toString();
     }
 
-    private void toastApiError(String name, PrinterApiModels.ApiResponse<?> body) {
-        String message = body == null || body.message == null || body.message.trim().isEmpty()
-                ? "接口返回异常"
-                : body.message;
-        toast(name + "加载失败：" + message);
+    private void toastApiError(String name, PrinterApiModels.ApiResponse<?> body, Response<?> response) {
+        String message = ApiErrorMessages.fromResponse(response, body == null ? null : body.message, name + "加载失败，请稍后重试");
+        toast(message);
     }
 
     private void showPrintDataErrorDialog(PrinterApiModels.ApiResponse<?> body, Response<?> response) {
-        String message;
-        if (body != null && body.message != null && !body.message.trim().isEmpty()) {
-            message = body.message.trim();
-        } else if (response != null && !response.message().trim().isEmpty()) {
-            message = response.message().trim();
-        } else {
-            message = "接口返回异常";
-        }
+        String message = ApiErrorMessages.fromResponse(response, body == null ? null : body.message, "获取打印数据失败，请稍后重试");
         new AlertDialog.Builder(this)
                 .setTitle("获取打印数据失败")
                 .setMessage(message)
@@ -581,7 +573,7 @@ public class MainActivity extends ComponentActivity {
             public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldOption>>> call, Throwable t) {
                 hideLoading();
                 tvDataCount.setText("地块信息加载失败，请稍后重试");
-                toast("地块列表加载失败：" + t.getMessage());
+                toast(ApiErrorMessages.fromThrowable(t, "地块列表加载失败"));
             }
         });
     }
@@ -618,7 +610,7 @@ public class MainActivity extends ComponentActivity {
                     public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> call, Throwable t) {
                         hideLoading();
                         updateDataUI();
-                        toast("苗木标签数据加载失败：" + t.getMessage());
+                        toast(ApiErrorMessages.fromThrowable(t, "苗木标签数据加载失败"));
                     }
                 });
     }
@@ -1325,7 +1317,7 @@ public class MainActivity extends ComponentActivity {
                     public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> call, Throwable t) {
                         hideLoading();
                         updateDataUI();
-                        toast("苗木标签数据加载失败：" + t.getMessage());
+                        toast(ApiErrorMessages.fromThrowable(t, "苗木标签数据加载失败"));
                     }
                 });
     }
@@ -1381,7 +1373,7 @@ public class MainActivity extends ComponentActivity {
                     public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>>> call, Throwable t) {
                         hideLoading();
                         updateDataUI();
-                        toast("地块标签数据加载失败：" + t.getMessage());
+                        toast(ApiErrorMessages.fromThrowable(t, "地块标签数据加载失败"));
                     }
                 });
     }
@@ -1447,7 +1439,7 @@ public class MainActivity extends ComponentActivity {
                     public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>>> call, Throwable t) {
                         hideLoading();
                         updateDataUI();
-                        toast("大棚标签数据加载失败：" + t.getMessage());
+                        toast(ApiErrorMessages.fromThrowable(t, "大棚标签数据加载失败"));
                     }
                 });
     }
@@ -1493,7 +1485,7 @@ public class MainActivity extends ComponentActivity {
                     public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>>> call, Throwable t) {
                         hideLoading();
                         updateDataUI();
-                        toast("苗床标签数据加载失败：" + t.getMessage());
+                        toast(ApiErrorMessages.fromThrowable(t, "苗床标签数据加载失败"));
                     }
                 });
     }
@@ -1957,7 +1949,7 @@ public class MainActivity extends ComponentActivity {
                     @Override
                     public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.PlantPrintData>>> call, Throwable t) {
                         hideLoading();
-                        toast("苗木补打数据获取失败：" + t.getMessage());
+                        toast(ApiErrorMessages.fromThrowable(t, "苗木补打数据获取失败"));
                     }
                 });
     }
@@ -1987,7 +1979,7 @@ public class MainActivity extends ComponentActivity {
                     @Override
                     public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.FieldPrintData>>> call, Throwable t) {
                         hideLoading();
-                        toast("地块补打数据获取失败：" + t.getMessage());
+                        toast(ApiErrorMessages.fromThrowable(t, "地块补打数据获取失败"));
                     }
                 });
     }
@@ -2017,7 +2009,7 @@ public class MainActivity extends ComponentActivity {
                     @Override
                     public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.GreenhousePrintData>>> call, Throwable t) {
                         hideLoading();
-                        toast("大棚补打数据获取失败：" + t.getMessage());
+                        toast(ApiErrorMessages.fromThrowable(t, "大棚补打数据获取失败"));
                     }
                 });
     }
@@ -2047,7 +2039,7 @@ public class MainActivity extends ComponentActivity {
                     @Override
                     public void onFailure(Call<PrinterApiModels.ApiResponse<List<PrinterApiModels.SeedbedPrintData>>> call, Throwable t) {
                         hideLoading();
-                        toast("苗床补打数据获取失败：" + t.getMessage());
+                        toast(ApiErrorMessages.fromThrowable(t, "苗床补打数据获取失败"));
                     }
                 });
     }

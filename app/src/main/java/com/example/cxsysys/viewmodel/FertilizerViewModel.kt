@@ -1,5 +1,7 @@
 package com.example.cxsysys.viewmodel
 
+import com.example.cxsysys.utils.toUserMessage
+import com.example.cxsysys.utils.orErrorMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cxsysys.model.Fertilizer
@@ -37,10 +39,10 @@ class FertilizerViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _fertilizers.value = response.data ?: emptyList()
                 } else {
-                    _error.value = response.message
+                    _error.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _error.value = "网络请求失败: ${e.message}"
+                _error.value = e.toUserMessage("网络请求失败")
             } finally {
                 _isLoading.value = false
             }
@@ -81,10 +83,10 @@ class FertilizerViewModel : ViewModel() {
                 if (response.code == 0 || response.code == 200) {
                     _submitSuccess.value = true
                 } else {
-                    _error.value = response.message
+                    _error.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _error.value = "提交失败: ${e.message}"
+                _error.value = e.toUserMessage("提交失败")
             } finally {
                 _isLoading.value = false
             }

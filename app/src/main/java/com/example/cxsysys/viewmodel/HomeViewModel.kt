@@ -1,5 +1,6 @@
 package com.example.cxsysys.viewmodel
 
+import com.example.cxsysys.utils.toUserMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cxsysys.model.WeatherResponse
@@ -29,7 +30,7 @@ class HomeViewModel : ViewModel() {
                 val response = RetrofitClient.api.getWeather(adcode)
                 _weatherData.value = response
             } catch (e: Exception) {
-                _errorMessage.value = e.message ?: "网络请求失败"
+                _errorMessage.value = e.toUserMessage("网络请求失败")
             } finally {
                 _isLoading.value = false
             }

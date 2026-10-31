@@ -1,5 +1,7 @@
 package com.example.cxsysys.viewmodel
 
+import com.example.cxsysys.utils.orErrorMessage
+import com.example.cxsysys.utils.toUserMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cxsysys.api.PlantingApiService
@@ -46,10 +48,10 @@ class PunchViewModel : ViewModel() {
                 if (response.code == 200) {
                     _submitState.value = SubmitState.Success
                 } else {
-                    _submitState.value = SubmitState.Error(response.message ?: "提交失败")
+                    _submitState.value = SubmitState.Error(response.message.orErrorMessage("提交失败"))
                 }
             } catch (e: Exception) {
-                _submitState.value = SubmitState.Error(e.message ?: "网络错误")
+                _submitState.value = SubmitState.Error(e.toUserMessage("网络错误"))
             }
         }
     }

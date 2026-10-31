@@ -1,5 +1,7 @@
 package com.example.cxsysys.viewmodel
 
+import com.example.cxsysys.utils.toUserMessage
+import com.example.cxsysys.utils.orErrorMessage
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.cxsysys.api.PlantingApiService
@@ -77,10 +79,10 @@ class DictViewModel : ViewModel() {
                     }
                     _dictCache.value = newMap
                 } else {
-                    _errorMsg.value = response.message
+                    _errorMsg.value = response.message.orErrorMessage("请求失败，请稍后重试")
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "加载字典数据失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("加载字典数据失败")
             } finally {
                 _isLoading.value = false
             }
@@ -103,7 +105,7 @@ class DictViewModel : ViewModel() {
                     _dictCache.value = newMap
                 }
             } catch (e: Exception) {
-                _errorMsg.value = "加载字典 $dictType 失败: ${e.message}"
+                _errorMsg.value = e.toUserMessage("加载字典 $dictType 失败")
             }
         }
     }
