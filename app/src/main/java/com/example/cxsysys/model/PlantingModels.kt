@@ -505,7 +505,7 @@ data class MotherTreeDetail(
 
 // 新增母树请求体（POST /mothertree）
 data class MotherTreeCreateRequest(
-    @SerializedName("subspecies_id") val subspeciesId: Int,
+    @SerializedName("enterprise_subspecies_id") val enterpriseSubspeciesId: Int,
     @SerializedName("tree_age") val treeAge: String,
     @SerializedName("longitude") val longitude: String,
     @SerializedName("latitude") val latitude: String,
@@ -515,7 +515,7 @@ data class MotherTreeCreateRequest(
 // 修改母树信息请求体（PUT /mothertrees/{id}）
 data class MotherTreeUpdateRequest(
     val status: String? = null,
-    @SerializedName("subspecies_id") val subspeciesId: Int? = null,
+    @SerializedName("enterprise_subspecies_id") val enterpriseSubspeciesId: Int? = null,
     @SerializedName("tree_age") val treeAge: Int? = null,
     val longitude: Double? = null,
     val latitude: Double? = null,

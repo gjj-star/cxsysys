@@ -1,5 +1,6 @@
 package com.example.cxsysys.utils
 
+import com.example.cxsysys.BuildConfig
 import com.example.cxsysys.api.AuthApiService
 import com.example.cxsysys.api.WeatherApiService
 import okhttp3.OkHttpClient
@@ -12,7 +13,7 @@ object RetrofitClient {
 
     private const val WEATHER_BASE_URL = "https://uapis.cn/"
     // 业务接口的 Base URL，注意末尾必须有 '/'
-    private const val BUSINESS_BASE_URL = "https://dbcx.org.cn/plantingApi/"
+    private const val BUSINESS_BASE_URL = BuildConfig.BUSINESS_BASE_URL
 
     private val loggingInterceptor by lazy {
         HttpLoggingInterceptor().apply {

@@ -27,6 +27,7 @@ android {
         versionCode = version["versionCode"]!!.toInt()
         versionName = version["versionName"]!!
         buildConfigField("boolean", "ENABLE_PRINTER_MODULE", enablePrinterModule.toString())
+        buildConfigField("String", "BUSINESS_BASE_URL", "\"${rootProject.extra["BUSINESS_BASE_URL"]}\"")
 
         // 超级管理员 token 调试开关
         val enableSuperToken = providers

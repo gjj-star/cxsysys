@@ -343,14 +343,14 @@ fun AddMotherTreeDialog(
     onDismiss: () -> Unit,
     onSubmit: (MotherTreeCreateRequest) -> Unit
 ) {
-    var subspeciesId by remember { mutableStateOf("") }
+    var enterpriseSubspeciesId by remember { mutableStateOf("") }
     var treeAge by remember { mutableStateOf("") }
     var longitude by remember { mutableStateOf("") }
     var latitude by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf("") }
     var subspeciesExpanded by remember { mutableStateOf(false) }
 
-    val selectedSubspecies = subspeciesList.find { it.enterpriseSubspeciesId.toString() == subspeciesId }
+    val selectedSubspecies = subspeciesList.find { it.enterpriseSubspeciesId.toString() == enterpriseSubspeciesId }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -393,7 +393,7 @@ fun AddMotherTreeDialog(
                                 DropdownMenuItem(
                                     text = { Text("${subspecies.subspeciesName} (${subspecies.subspeciesCode})") },
                                     onClick = {
-                                        subspeciesId = subspecies.enterpriseSubspeciesId.toString()
+                                        enterpriseSubspeciesId = subspecies.enterpriseSubspeciesId.toString()
                                         subspeciesExpanded = false
                                     }
                                 )
@@ -437,12 +437,12 @@ fun AddMotherTreeDialog(
                     TextButton(onClick = onDismiss) { Text("取消", color = Color.Gray) }
                     Button(
                         onClick = {
-                            val sid = subspeciesId.toIntOrNull()
+                            val sid = enterpriseSubspeciesId.toIntOrNull()
                             if (sid == null) return@Button
                             val photoUrls = photoUrl.split(",").map { it.trim() }.filter { it.isNotBlank() }
                             onSubmit(
                                 MotherTreeCreateRequest(
-                                    subspeciesId = sid,
+                                    enterpriseSubspeciesId = sid,
                                     treeAge = treeAge,
                                     longitude = longitude,
                                     latitude = latitude,

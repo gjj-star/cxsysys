@@ -1,6 +1,7 @@
 package com.example.cxsysys.api
 
 import com.example.cxsysys.model.*
+import com.example.cxsysys.utils.AllowAnonymous
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -19,6 +20,7 @@ interface AuthApiService {
      * @param request 包含手机号和使用场景
      * @return 发送结果
      */
+    @AllowAnonymous
     @POST("auth/smsCode")
     suspend fun sendSmsCode(@Body request: SendSmsCodeRequest): BaseResponse<Any>
 
@@ -28,6 +30,7 @@ interface AuthApiService {
      * @param request 手机号和验证码
      * @return 登录结果，包含 token、过期时间和用户信息
      */
+    @AllowAnonymous
     @POST("auth/login/sms")
     suspend fun loginBySms(@Body request: SmsLoginRequest): BaseResponse<LoginResponse>
 
@@ -37,6 +40,7 @@ interface AuthApiService {
      * @param request 账号和密码
      * @return 登录结果，包含 token、过期时间和用户信息
      */
+    @AllowAnonymous
     @POST("auth/login/password")
     suspend fun loginByPassword(@Body request: PasswordLoginRequest): BaseResponse<LoginResponse>
 

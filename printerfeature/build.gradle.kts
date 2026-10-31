@@ -12,12 +12,7 @@ android {
     defaultConfig {
         minSdk = 21
 
-        val printerApiBaseUrl = providers
-            .gradleProperty("printerApiBaseUrl")
-            .orElse("https://dbcx.org.cn/plantingApi")
-            .get()
-
-        buildConfigField("String", "PRINTER_API_BASE_URL", "\"$printerApiBaseUrl\"")
+        buildConfigField("String", "BUSINESS_BASE_URL", "\"${rootProject.extra["BUSINESS_BASE_URL"]}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

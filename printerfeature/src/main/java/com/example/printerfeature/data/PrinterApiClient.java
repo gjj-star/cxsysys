@@ -66,19 +66,11 @@ public final class PrinterApiClient {
                 .build();
 
         return new Retrofit.Builder()
-                .baseUrl(normalizeBaseUrl(BuildConfig.PRINTER_API_BASE_URL))
+                .baseUrl(BuildConfig.BUSINESS_BASE_URL)
                 .client(okHttpClient)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
                 .create(PrinterApiService.class);
-    }
-
-    private static String normalizeBaseUrl(String baseUrl) {
-        if (baseUrl == null || baseUrl.trim().isEmpty()) {
-            return "https://dbcx.org.cn/plantingApi/";
-        }
-        String trimmed = baseUrl.trim();
-        return trimmed.endsWith("/") ? trimmed : trimmed + "/";
     }
 
     private static String getAuthToken() {
