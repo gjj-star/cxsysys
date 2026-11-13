@@ -35,6 +35,8 @@ import com.example.cxsysys.ui.theme.BgGray
 import com.example.cxsysys.viewmodel.AuthState
 import com.example.cxsysys.viewmodel.AuthViewModel
 import com.example.cxsysys.viewmodel.LoginMethod
+import com.example.cxsysys.ui.components.UserAvatar
+import com.example.cxsysys.utils.TokenManager
 
 @Composable
 fun MineScreen(
@@ -49,6 +51,13 @@ fun MineScreen(
     val context = LocalContext.current
     val authState by authViewModel.authState.collectAsState()
     val formState by authViewModel.formState.collectAsState()
+    val isLoggingOut by authViewModel.isLoggingOut.collectAsState()
+    val sessionVersion by TokenManager.sessionVersion.collectAsState()
+    val userId = (authState as? AuthState.LoggedIn)?.userId
+
+    LaunchedEffect(userId, sessionVersion) {
+        if (userId != null) authViewModel.refreshProfile()
+    }
 
     // 错误提示处理
     LaunchedEffect(formState.errorMessage) {
@@ -89,7 +98,11 @@ fun MineScreen(
         is AuthState.LoggedIn -> {
             UserProfileScreen(
                 authState = authState as AuthState.LoggedIn,
-                onLogout = { authViewModel.logout() },
+                sessionVersion = sessionVersion,
+                onLogout = {
+                    if (sessionVersion == TokenManager.sessionVersion.value) authViewModel.logout()
+                },
+                isLoggingOut = isLoggingOut,
                 versionName = versionName,
                 versionCode = versionCode,
                 onNavigateToProfileInfo = onNavigateToProfileInfo,
@@ -453,7 +466,9 @@ private fun LoginMethodTab(
 @Composable
 private fun UserProfileScreen(
     authState: AuthState.LoggedIn,
+    sessionVersion: Long,
     onLogout: () -> Unit,
+    isLoggingOut: Boolean,
     versionName: String,
     versionCode: String,
     onNavigateToProfileInfo: () -> Unit = {},
@@ -463,7 +478,7 @@ private fun UserProfileScreen(
     onNavigateToHelpFeedback: () -> Unit = {},
     onNavigateToAbout: () -> Unit = {}
 ) {
-    var showLogoutDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember(sessionVersion) { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
     // 退出确认弹窗
@@ -518,11 +533,12 @@ private fun UserProfileScreen(
                         .background(Color.White.copy(alpha = 0.2f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
+                    UserAvatar(
+                        avatarUrl = authState.avatarUrl,
+                        userId = authState.userId,
+                        modifier = Modifier.fillMaxSize(),
+                        iconTint = Color.White,
+                        iconSize = 48.dp
                     )
                 }
 
@@ -530,14 +546,15 @@ private fun UserProfileScreen(
 
                 // 用户名
                 Text(
-                    text = authState.realName ?: authState.userName ?: "用户",
+                    text = authState.realName?.takeIf { it.isNotBlank() }
+                        ?: authState.userName?.takeIf { it.isNotBlank() } ?: "用户",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
 
                 // 手机号
-                authState.phoneNumber?.let { phone ->
+                authState.phoneNumber?.takeIf { it.isNotBlank() }?.let { phone ->
                     Text(
                         text = phone,
                         fontSize = 14.sp,
@@ -579,7 +596,8 @@ private fun UserProfileScreen(
                 MenuItemRow(
                     icon = Icons.Default.Business,
                     title = "企业管理",
-                    subtitle = "企业ID: ${authState.enterpriseId}",
+                    subtitle = authState.enterpriseName?.takeIf { it.isNotBlank() }
+                        ?: "企业ID: ${authState.enterpriseId}",
                     onClick = onNavigateToEnterprise
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF0F0F0))
@@ -639,11 +657,20 @@ private fun UserProfileScreen(
                 containerColor = Color.White,
                 contentColor = Color(0xFFE53935)
             ),
+            enabled = !isLoggingOut,
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp)
         ) {
-            Icon(Icons.Default.Logout, contentDescription = null)
+            if (isLoggingOut) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Color(0xFFE53935),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(Icons.Default.Logout, contentDescription = null)
+            }
             Spacer(modifier = Modifier.width(8.dp))
-            Text("退出登录", fontSize = 16.sp)
+            Text(if (isLoggingOut) "退出中..." else "退出登录", fontSize = 16.sp)
         }
 
         Spacer(modifier = Modifier.height(24.dp))

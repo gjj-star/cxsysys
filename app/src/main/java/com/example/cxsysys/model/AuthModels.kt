@@ -31,6 +31,17 @@ data class PasswordLoginRequest(
     @SerializedName("password") val password: String
 )
 
+data class ChangePasswordRequest(
+    @SerializedName("old_password") val oldPassword: String,
+    @SerializedName("new_password") val newPassword: String,
+    @SerializedName("confirm_password") val confirmPassword: String
+)
+
+data class UserRole(
+    @SerializedName("role_id") val roleId: Int? = null,
+    @SerializedName("role_name") val roleName: String? = null
+)
+
 /**
  * 登录响应数据（嵌套结构）
  *
@@ -58,5 +69,8 @@ data class UserInfo(
     @SerializedName("avatar_url") val avatarUrl: String? = null,
     @SerializedName("enterprise_id") val enterpriseId: Int? = null,
     @SerializedName("dept_id") val deptId: Int? = null,
-    @SerializedName("super_admin") val superAdmin: Boolean = false
+    @SerializedName("super_admin") val superAdmin: Boolean = false,
+    @SerializedName("enterprise_name") val enterpriseName: String? = null,
+    @SerializedName("roles") val roles: List<UserRole> = emptyList(),
+    @SerializedName("status") val status: Int? = null
 )

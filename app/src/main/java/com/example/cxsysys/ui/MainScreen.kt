@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.NavGraphBuilder
@@ -29,6 +30,7 @@ import com.example.cxsysys.ui.theme.AgGreenPrimary
 import com.example.cxsysys.ui.components.LoginRequiredDialog
 import com.example.cxsysys.ui.components.LoginRequiredScreen
 import com.example.cxsysys.utils.TokenManager
+import com.example.cxsysys.viewmodel.AuthViewModel
 // 引入各个页面组件
 import com.example.cxsysys.ui.screens.children.ChildrenScreen
 import com.example.cxsysys.ui.screens.children.ChildrenDetailScreen
@@ -98,6 +100,8 @@ fun MainScreen() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val context = LocalContext.current
+    val authViewModel: AuthViewModel = viewModel()
+    val notice by authViewModel.notice.collectAsState()
 
     val isLoggedIn by TokenManager.loginState.collectAsState()
     var showLoginDialog by remember { mutableStateOf(false) }
@@ -107,6 +111,26 @@ fun MainScreen() {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
+        }
+    }
+
+    LaunchedEffect(notice) {
+        notice?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            authViewModel.clearNotice()
+        }
+    }
+
+    LaunchedEffect(isLoggedIn, currentRoute) {
+        val personalRoutes = setOf(
+            ROUTE_PROFILE_INFO, ROUTE_ENTERPRISE, ROUTE_CHANGE_PASSWORD,
+            ROUTE_SETTINGS, ROUTE_HELP_FEEDBACK, ROUTE_ABOUT
+        )
+        if (!isLoggedIn && !TokenManager.isLoggedIn() && currentRoute in personalRoutes) {
+            navController.navigate(ROUTE_MINE) {
+                popUpTo(ROUTE_MINE) { inclusive = false }
+                launchSingleTop = true
+            }
         }
     }
 
@@ -214,6 +238,7 @@ fun MainScreen() {
             }
             composable(ROUTE_MINE) {
                 MineScreen(
+                    authViewModel = authViewModel,
                     onNavigateToProfileInfo = { navController.navigate(ROUTE_PROFILE_INFO) },
                     onNavigateToEnterprise = { navController.navigate(ROUTE_ENTERPRISE) },
                     onNavigateToChangePassword = { navController.navigate(ROUTE_CHANGE_PASSWORD) },
@@ -248,13 +273,23 @@ fun MainScreen() {
 
             // --- 个人中心次级页面 ---
             protectedComposable(ROUTE_PROFILE_INFO) {
-                ProfileInfoScreen(onBackClick = { navController.popBackStack() })
+                ProfileInfoScreen(
+                    onBackClick = { navController.popBackStack() },
+                    authViewModel = authViewModel
+                )
             }
             protectedComposable(ROUTE_ENTERPRISE) {
                 EnterpriseScreen(onBackClick = { navController.popBackStack() })
             }
             protectedComposable(ROUTE_CHANGE_PASSWORD) {
-                ChangePasswordScreen(onBackClick = { navController.popBackStack() })
+                ChangePasswordScreen(
+                    onBackClick = {
+                        if (navController.currentDestination?.route == ROUTE_CHANGE_PASSWORD) {
+                            navController.popBackStack()
+                        }
+                    },
+                    authViewModel = authViewModel
+                )
             }
             protectedComposable(ROUTE_SETTINGS) {
                 SettingsScreen(onBackClick = { navController.popBackStack() })

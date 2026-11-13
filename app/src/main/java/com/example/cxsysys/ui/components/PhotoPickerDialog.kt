@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.AlertDialog
@@ -97,7 +98,10 @@ fun PhotoSourcePickerDialog(
     visible: Boolean,
     onDismiss: () -> Unit,
     onTakePhoto: () -> Unit,
-    onPickImages: () -> Unit
+    onPickImages: () -> Unit,
+    title: String = "添加照片",
+    pickImagesSubtitle: String = "从相册中选择一张或多张已有图片",
+    onClearPhoto: (() -> Unit)? = null
 ) {
     if (!visible) return
 
@@ -106,7 +110,7 @@ fun PhotoSourcePickerDialog(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "添加照片",
+                    text = title,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF263238)
                 )
@@ -132,7 +136,7 @@ fun PhotoSourcePickerDialog(
                 PhotoSourceOption(
                     icon = Icons.Default.PhotoLibrary,
                     title = "选取图片",
-                    subtitle = "从相册中选择一张或多张已有图片",
+                    subtitle = pickImagesSubtitle,
                     tint = Color(0xFF1976D2),
                     background = Color(0xFFEAF2FD),
                     onClick = {
@@ -140,6 +144,19 @@ fun PhotoSourcePickerDialog(
                         onPickImages()
                     }
                 )
+                if (onClearPhoto != null) {
+                    PhotoSourceOption(
+                        icon = Icons.Default.DeleteOutline,
+                        title = "清除头像",
+                        subtitle = "恢复默认头像",
+                        tint = Color(0xFFE53935),
+                        background = Color(0xFFFFEBEE),
+                        onClick = {
+                            onDismiss()
+                            onClearPhoto()
+                        }
+                    )
+                }
             }
         },
         confirmButton = {},
