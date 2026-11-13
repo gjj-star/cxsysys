@@ -149,7 +149,11 @@ interface PlantingApiService {
     // ========== 通用文件上传接口 ==========
     @retrofit2.http.Multipart
     @POST("upload")
-    suspend fun uploadFile(@retrofit2.http.Part file: okhttp3.MultipartBody.Part): UploadResponse
+    suspend fun uploadFile(
+        @retrofit2.http.Part file: okhttp3.MultipartBody.Part,
+        @retrofit2.http.Part("type") type: okhttp3.RequestBody? = null,
+        @retrofit2.http.Tag session: com.example.cxsysys.utils.BusinessSession? = null
+    ): UploadResponse
 
     // ========== 录入提交接口 ==========
 

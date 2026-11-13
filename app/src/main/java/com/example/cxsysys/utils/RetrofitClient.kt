@@ -17,7 +17,8 @@ object RetrofitClient {
 
     private val loggingInterceptor by lazy {
         HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            // 登录响应包含 token，改密请求包含密码，均不记录正文。
+            level = HttpLoggingInterceptor.Level.BASIC
             redactHeader("token")
         }
     }

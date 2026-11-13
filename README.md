@@ -173,9 +173,9 @@ com.example.cxsysys/
 
 | 页面 | 功能 | 状态 |
 |------|------|------|
-| ProfileInfoScreen | 个人信息查看/编辑 | 占位，接口待对接 |
-| EnterpriseScreen | 企业管理 + 成员管理 | 占位，接口待对接 |
-| ChangePasswordScreen | 修改密码 | 占位，接口待对接 |
+| ProfileInfoScreen | 查看个人资料、更换/清除本人头像 | 已接入；姓名、手机、用户名等只读 |
+| EnterpriseScreen | 企业信息 + 成员只读列表 | 已接入，支持成员游标分页 |
+| ChangePasswordScreen | 修改密码 | 已接入；普通账号成功后重新登录 |
 | SettingsScreen | 通知/同步/位置开关 + 缓存/备份/语言/主题 | 占位，接口待对接 |
 | HelpFeedbackScreen | 帮助FAQ + 意见反馈 | 占位，接口待对接 |
 | AboutScreen | 版本信息 + 开发者/版权 | 完整功能 |
@@ -188,12 +188,29 @@ com.example.cxsysys/
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| `/smsCode` | POST | 获取短信验证码 |
-| `/login/sms` | POST | 手机验证码登录 |
-| `/login/password` | POST | 账号密码登录 |
+| `/auth/smsCode` | POST | 获取短信验证码 |
+| `/auth/login/sms` | POST | 手机验证码登录 |
+| `/auth/login/password` | POST | 账号密码登录 |
 | `/user` | GET | 获取用户信息 |
 
 > 认证方式：JWT Token，通过自定义 `token` header 传递（非标准 `Authorization: Bearer`）
+
+### 个人中心
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/user` | GET | 刷新当前用户资料，并同步“我的”及个人信息页 |
+| `/user` | PUT | 仅设置本人头像；显式 `avatar_url: null` 清除头像 |
+| `/upload` | POST | multipart `file` + `type=avatar`；上传成功即保存头像 |
+| `/files/{relative_path}` | GET | 带 `token` 获取本人文件字节，不允许读取其他成员头像 |
+| `/user/password` | PUT | 旧密码、新密码、确认密码；普通账号成功后清除本地会话 |
+| `/user/enterprise` | GET | 当前企业名称、ID、电话、地址 |
+| `/user/enterprise/memberList` | GET | `lastid` / `limit` 分页，顶层 `hasMore` |
+| `/user/logout` | POST | 先请求注销，再清本地会话；离线退出会提示服务端注销未确认 |
+
+资料页沿用现有卡片布局，“认证状态”改为“账号状态”。头像加载按当前账号隔离，不使用共享图片缓存；改密/登录不记录请求或响应正文。
+
+接口快照与最小适配说明见 [docs/api](docs/api)。帮助/反馈及设置页不在本次接口接入范围。
 
 ### 母树管理
 

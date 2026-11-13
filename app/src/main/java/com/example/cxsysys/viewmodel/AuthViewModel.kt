@@ -1,37 +1,38 @@
 package com.example.cxsysys.viewmodel
 
-import com.example.cxsysys.utils.toUserMessage
-import com.example.cxsysys.utils.orErrorMessage
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cxsysys.api.AuthApiService
+import com.example.cxsysys.api.PlantingApiService
 import com.example.cxsysys.model.*
-import com.example.cxsysys.utils.RetrofitClient
-import com.example.cxsysys.utils.TokenManager
+import com.example.cxsysys.utils.*
+import java.io.File
+import java.io.IOException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import retrofit2.HttpException
 
-/**
- * 登录方式枚举
- */
-enum class LoginMethod {
-    SMS_CODE,      // 手机号 + 验证码
-    PASSWORD       // 手机号/用户名 + 密码
-}
+enum class LoginMethod { SMS_CODE, PASSWORD }
 
-/**
- * 认证状态
- */
 sealed class AuthState {
-    /** 未登录 */
     object NotLoggedIn : AuthState()
-
-    /** 登录中 */
     object Loading : AuthState()
-
-    /** 已登录 */
     data class LoggedIn(
         val userId: Int,
         val userName: String?,
@@ -40,16 +41,14 @@ sealed class AuthState {
         val avatarUrl: String?,
         val enterpriseId: Int,
         val deptId: Int?,
-        val superAdmin: Boolean
+        val superAdmin: Boolean,
+        val enterpriseName: String? = null,
+        val roles: List<UserRole> = emptyList(),
+        val status: Int? = null
     ) : AuthState()
-
-    /** 登录失败 */
     data class Error(val message: String) : AuthState()
 }
 
-/**
- * 登录表单状态
- */
 data class LoginFormState(
     val loginMethod: LoginMethod = LoginMethod.SMS_CODE,
     val phone: String = "",
@@ -63,301 +62,364 @@ data class LoginFormState(
     val errorMessage: String? = null
 )
 
-/**
- * 认证 ViewModel
- *
- * 处理登录相关的业务逻辑，包括：
- * - 手机号 + 验证码登录
- * - 手机号/用户名 + 密码登录
- * - 验证码发送倒计时
- * - JWT Token 管理
- * - 自动登录（从本地恢复登录状态）
- */
-class AuthViewModel : ViewModel() {
+data class ProfileState(
+    val isLoading: Boolean = false,
+    val isSavingAvatar: Boolean = false,
+    val errorMessage: String? = null
+)
 
-    private val authApi = RetrofitClient.authApi
+data class PasswordChangeState(
+    val isSubmitting: Boolean = false,
+    val errorMessage: String? = null,
+    val success: Boolean = false
+)
 
-    // 认证状态
+class AuthViewModel(
+    private val authApi: AuthApiService = RetrofitClient.authApi
+) : ViewModel() {
     private val _authState = MutableStateFlow<AuthState>(AuthState.NotLoggedIn)
-    val authState: StateFlow<AuthState> = _authState.asStateFlow()
-
-    // 登录表单状态
+    val authState = _authState.asStateFlow()
     private val _formState = MutableStateFlow(LoginFormState())
-    val formState: StateFlow<LoginFormState> = _formState.asStateFlow()
+    val formState = _formState.asStateFlow()
+    private val _profileState = MutableStateFlow(ProfileState())
+    val profileState = _profileState.asStateFlow()
+    private val _passwordState = MutableStateFlow(PasswordChangeState())
+    val passwordState = _passwordState.asStateFlow()
+    private val _isLoggingOut = MutableStateFlow(false)
+    val isLoggingOut = _isLoggingOut.asStateFlow()
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice = _notice.asStateFlow()
 
-    companion object {
-        private const val SMS_COUNTDOWN_SECONDS = 60
-    }
+    private var profileJob: Job? = null
+    private var avatarJob: Job? = null
+    private var passwordJob: Job? = null
+    private var loginJob: Job? = null
+    private var smsJob: Job? = null
+    private var countdownJob: Job? = null
+    private var observedSessionVersion = TokenManager.sessionVersion.value
+    private val plantingApi by lazy { RetrofitClient.businessRetrofit.create(PlantingApiService::class.java) }
 
     init {
-        // 启动时尝试从本地恢复登录状态
+        restoreLoginState()
+        viewModelScope.launch {
+            TokenManager.sessionVersion.collect { synchronizeSession() }
+        }
+    }
+
+    private fun UserInfo.toAuthState() = AuthState.LoggedIn(
+        userId = userId ?: 0, userName = userName, realName = realName,
+        phoneNumber = phoneNumber, avatarUrl = avatarUrl, enterpriseId = enterpriseId ?: 0,
+        deptId = deptId, superAdmin = superAdmin, enterpriseName = enterpriseName,
+        roles = roles.orEmpty(), status = status
+    )
+
+    private fun restoreLoginState() {
+        _authState.value = if (TokenManager.isLoggedIn()) TokenManager.getUserInfo().toAuthState()
+            else AuthState.NotLoggedIn
+    }
+
+    private fun synchronizeSession() {
+        val version = TokenManager.sessionVersion.value
+        if (version == observedSessionVersion) return
+        observedSessionVersion = version
+        profileJob?.cancel()
+        avatarJob?.cancel()
+        passwordJob?.cancel()
+        loginJob?.cancel()
+        smsJob?.cancel()
+        countdownJob?.cancel()
+        _profileState.value = ProfileState()
+        _passwordState.value = PasswordChangeState()
+        _formState.value = LoginFormState()
+        _isLoggingOut.value = false
         restoreLoginState()
     }
 
-    /**
-     * 从 TokenManager 恢复登录状态（自动登录）
-     */
-    private fun restoreLoginState() {
-        if (TokenManager.isLoggedIn()) {
-            _authState.value = AuthState.LoggedIn(
-                userId = TokenManager.getUserId(),
-                userName = TokenManager.getUserName(),
-                realName = TokenManager.getRealName(),
-                phoneNumber = TokenManager.getPhoneNumber(),
-                avatarUrl = TokenManager.getAvatarUrl(),
-                enterpriseId = TokenManager.getEnterpriseId(),
-                deptId = TokenManager.getDeptId(),
-                superAdmin = TokenManager.isSuperAdmin()
-            )
+    private fun currentSession(): BusinessSession? = TokenManager.getToken()
+        ?.takeIf { it.isNotBlank() }
+        ?.let { BusinessSession(it, TokenManager.sessionVersion.value) }
+
+    private fun isCurrent(session: BusinessSession) =
+        TokenManager.isCurrentSession(session.token, session.version)
+
+    private fun expireSession(session: BusinessSession) {
+        if (TokenManager.clearIfCurrent(session.token, session.version)) {
+            synchronizeSession()
+            _notice.value = "登录状态已失效，请重新登录"
         }
     }
 
-    /**
-     * 处理登录成功：保存 token 和用户信息到本地
-     */
-    private fun handleLoginSuccess(loginResponse: LoginResponse) {
-        val token = loginResponse.token
-        require(!token.isNullOrBlank()) { "登录失败，未获取到登录凭证" }
-        val userInfo = requireNotNull(loginResponse.userInfo) { "登录失败，未获取到用户信息" }
-
-        // 保存 token
-        TokenManager.saveToken(token)
-        TokenManager.setDebugSuperToken(false)
-
-        // 保存用户信息
-        TokenManager.saveUserInfo(
-            userId = userInfo.userId ?: 0,
-            userName = userInfo.userName,
-            realName = userInfo.realName,
-            phoneNumber = userInfo.phoneNumber,
-            avatarUrl = userInfo.avatarUrl,
-            enterpriseId = userInfo.enterpriseId,
-            deptId = userInfo.deptId,
-            superAdmin = userInfo.superAdmin
-        )
-
-        // 更新 UI 状态
-        _authState.value = AuthState.LoggedIn(
-            userId = userInfo.userId ?: 0,
-            userName = userInfo.userName,
-            realName = userInfo.realName,
-            phoneNumber = userInfo.phoneNumber,
-            avatarUrl = userInfo.avatarUrl,
-            enterpriseId = userInfo.enterpriseId ?: 0,
-            deptId = userInfo.deptId,
-            superAdmin = userInfo.superAdmin
-        )
-
-        // 重置表单
-        _formState.value = LoginFormState()
+    private fun successful(code: Int, message: String?, session: BusinessSession, fallback: String): Boolean {
+        if (code == 401) {
+            expireSession(session)
+            return false
+        }
+        if (code != 0 && code != 200) throw IOException(message.orErrorMessage(fallback))
+        return true
     }
 
-    /**
-     * 切换登录方式
-     */
-    fun switchLoginMethod(method: LoginMethod) {
-        _formState.value = _formState.value.copy(
-            loginMethod = method,
-            errorMessage = null
-        )
+    private fun applyUser(user: UserInfo, session: BusinessSession) {
+        if (!isCurrent(session) || _isLoggingOut.value) return
+        require((user.userId ?: 0) > 0) { "获取用户信息失败，缺少用户标识" }
+        TokenManager.saveUserInfo(user)
+        _authState.value = user.toAuthState()
     }
 
-    /**
-     * 更新手机号
-     */
-    fun updatePhone(phone: String) {
-        _formState.value = _formState.value.copy(phone = phone, errorMessage = null)
+    private suspend fun fetchProfile(session: BusinessSession) {
+        val response = authApi.getCurrentUser(session)
+        if (!isCurrent(session) || _isLoggingOut.value) return
+        if (successful(response.code, response.message, session, "获取个人信息失败")) {
+            applyUser(requireNotNull(response.data) { "获取个人信息失败，未返回用户资料" }, session)
+        }
     }
 
-    /**
-     * 更新验证码
-     */
-    fun updateSmsCode(code: String) {
-        _formState.value = _formState.value.copy(smsCode = code, errorMessage = null)
+    fun refreshProfile() {
+        val session = currentSession() ?: return
+        if (_isLoggingOut.value || _profileState.value.isLoading || _profileState.value.isSavingAvatar) return
+        profileJob?.cancel()
+        _profileState.value = _profileState.value.copy(isLoading = true, errorMessage = null)
+        profileJob = viewModelScope.launch {
+            try {
+                fetchProfile(session)
+            } catch (error: Exception) {
+                profileFailure(error, session, "获取个人信息失败")
+            } finally {
+                if (isCurrent(session)) _profileState.value = _profileState.value.copy(isLoading = false)
+            }
+        }
     }
 
-    /**
-     * 更新账号（手机号或用户名）
-     */
-    fun updateAccount(account: String) {
-        _formState.value = _formState.value.copy(account = account, errorMessage = null)
+    private fun profileFailure(error: Exception, session: BusinessSession, fallback: String) {
+        if (error is CancellationException) throw error
+        if (!isCurrent(session) || _isLoggingOut.value) return
+        if (error is HttpException && error.code() == 401) expireSession(session)
+        else _profileState.value = _profileState.value.copy(errorMessage = error.toUserMessage(fallback))
     }
 
-    /**
-     * 更新密码
-     */
-    fun updatePassword(password: String) {
-        _formState.value = _formState.value.copy(password = password, errorMessage = null)
+    fun uploadAvatar(context: Context, uri: Uri) {
+        val session = currentSession() ?: return
+        if (_isLoggingOut.value || _profileState.value.isSavingAvatar || _passwordState.value.isSubmitting) return
+        profileJob?.cancel()
+        _profileState.value = ProfileState(isSavingAvatar = true)
+        val appContext = context.applicationContext
+        avatarJob = viewModelScope.launch {
+            var image: File? = null
+            try {
+                val mediaType = appContext.contentResolver.getType(uri)?.toMediaTypeOrNull()
+                    ?: "application/octet-stream".toMediaType()
+                image = withContext(Dispatchers.IO) {
+                    val suffix = when (mediaType.subtype) {
+                        "png" -> ".png"
+                        "webp" -> ".webp"
+                        "gif" -> ".gif"
+                        else -> ".jpg"
+                    }
+                    val file = File.createTempFile("avatar_", suffix, appContext.cacheDir)
+                    image = file
+                    try {
+                        val input = appContext.contentResolver.openInputStream(uri)
+                            ?: throw IOException("无法读取所选图片")
+                        input.use { source -> file.outputStream().use { source.copyTo(it) } }
+                        file
+                    } catch (error: Exception) {
+                        file.delete()
+                        throw error
+                    }
+                }
+                if (!isCurrent(session) || _isLoggingOut.value) return@launch
+                val response = plantingApi.uploadFile(
+                    MultipartBody.Part.createFormData("file", image.name, image.asRequestBody(mediaType)),
+                    "avatar".toRequestBody("text/plain".toMediaType()), session
+                )
+                if (!isCurrent(session) || _isLoggingOut.value) return@launch
+                if (successful(response.code, response.message, session, "头像上传失败")) {
+                    val url = requireNotNull(response.data?.fileUrl?.takeIf { it.isNotBlank() }) { "上传未返回头像地址" }
+                    // 上传即已保存；刷新失败也不回退已确认的新头像。
+                    applyUser(TokenManager.getUserInfo().copy(avatarUrl = url), session)
+                    _notice.value = "头像已更新"
+                    fetchProfile(session)
+                }
+            } catch (error: Exception) {
+                profileFailure(error, session, "头像上传失败，请重试")
+            } finally {
+                image?.delete()
+                if (isCurrent(session)) _profileState.value = _profileState.value.copy(isSavingAvatar = false)
+            }
+        }
     }
 
-    /**
-     * 发送短信验证码
-     */
-    fun sendSmsCode() {
-        val phone = _formState.value.phone
+    fun clearAvatar() {
+        val session = currentSession() ?: return
+        if (_isLoggingOut.value || _profileState.value.isSavingAvatar || _passwordState.value.isSubmitting) return
+        profileJob?.cancel()
+        _profileState.value = ProfileState(isSavingAvatar = true)
+        avatarJob = viewModelScope.launch {
+            try {
+                val response = authApi.updateAvatar(avatarUpdateBody(null), session)
+                if (!isCurrent(session) || _isLoggingOut.value) return@launch
+                if (successful(response.code, response.message, session, "清除头像失败")) {
+                    applyUser(requireNotNull(response.data) { "清除头像后未返回用户资料，请刷新" }, session)
+                    _notice.value = "头像已清除"
+                }
+            } catch (error: Exception) {
+                profileFailure(error, session, "清除头像失败")
+            } finally {
+                if (isCurrent(session)) _profileState.value = _profileState.value.copy(isSavingAvatar = false)
+            }
+        }
+    }
 
-        // 验证手机号格式
-        if (!isValidPhone(phone)) {
-            _formState.value = _formState.value.copy(errorMessage = "请输入正确的手机号")
+    fun changePassword(oldPassword: String, newPassword: String, confirmPassword: String) {
+        val session = currentSession() ?: return
+        if (_passwordState.value.isSubmitting || _isLoggingOut.value || _profileState.value.isSavingAvatar) return
+        passwordChangeError(oldPassword, newPassword, confirmPassword)?.let {
+            _passwordState.value = PasswordChangeState(errorMessage = it)
             return
         }
-
-        viewModelScope.launch {
-            _formState.value = _formState.value.copy(isSendingSms = true, errorMessage = null)
-
+        _passwordState.value = PasswordChangeState(isSubmitting = true)
+        passwordJob = viewModelScope.launch {
             try {
-                val response = authApi.sendSmsCode(
-                    SendSmsCodeRequest(phoneNumber = phone, scene = "login")
-                )
-
-                if (response.code == 0 || response.code == 200) {
-                    _formState.value = _formState.value.copy(
-                        smsCodeSent = true,
-                        isSendingSms = false,
-                        smsCountdown = SMS_COUNTDOWN_SECONDS
-                    )
-
-                    // 启动倒计时
-                    startSmsCountdown()
-                } else {
-                    _formState.value = _formState.value.copy(
-                        isSendingSms = false,
-                        errorMessage = response.message.orErrorMessage("发送验证码失败")
-                    )
+                val response = authApi.changePassword(ChangePasswordRequest(oldPassword, newPassword, confirmPassword), session)
+                if (!isCurrent(session) || _isLoggingOut.value) return@launch
+                if (successful(response.code, response.message, session, "修改密码失败")) {
+                    val superAdmin = TokenManager.isSuperAdmin()
+                    if (!superAdmin && TokenManager.clearIfCurrent(session.token, session.version)) synchronizeSession()
+                    _passwordState.value = PasswordChangeState(success = true)
+                    _notice.value = if (superAdmin) "密码修改成功" else "密码已修改，请重新登录"
                 }
-            } catch (e: Exception) {
-                _formState.value = _formState.value.copy(
-                    isSendingSms = false,
-                    errorMessage = e.toUserMessage("发送验证码失败")
-                )
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                if (!isCurrent(session) || _isLoggingOut.value) return@launch
+                if (error is HttpException && error.code() == 401) expireSession(session)
+                else _passwordState.value = PasswordChangeState(errorMessage = error.toUserMessage("修改密码失败"))
+            } finally {
+                if (isCurrent(session)) _passwordState.value = _passwordState.value.copy(isSubmitting = false)
             }
         }
     }
 
-    /**
-     * 验证码倒计时
-     */
-    private fun startSmsCountdown() {
+    fun resetPasswordState() {
+        if (!_passwordState.value.isSubmitting) _passwordState.value = PasswordChangeState()
+    }
+
+    fun logout() {
+        val session = currentSession() ?: return
+        if (_isLoggingOut.value) return
+        _isLoggingOut.value = true
+        profileJob?.cancel()
+        avatarJob?.cancel()
+        passwordJob?.cancel()
         viewModelScope.launch {
-            while (_formState.value.smsCountdown > 0) {
-                delay(1000)
-                _formState.value = _formState.value.copy(
-                    smsCountdown = _formState.value.smsCountdown - 1
-                )
+            var warning: String? = null
+            try {
+                val response = withTimeout(10_000) { authApi.logout(session) }
+                if (response.code !in listOf(0, 200, 401)) warning = response.message.orErrorMessage("注销失败")
+            } catch (_: TimeoutCancellationException) {
+                warning = "请求超时"
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                if (error !is HttpException || error.code() != 401) warning = error.toUserMessage("注销失败")
+            } finally {
+                if (TokenManager.clearIfCurrent(session.token, session.version)) {
+                    synchronizeSession()
+                    _notice.value = if (warning == null) "已退出登录" else "已退出本地登录，服务端注销未确认：$warning"
+                }
+                if (TokenManager.sessionVersion.value == session.version || !TokenManager.isLoggedIn()) {
+                    _isLoggingOut.value = false
+                }
             }
         }
     }
 
-    /**
-     * 手机号 + 验证码登录
-     */
-    fun loginBySms() {
-        val state = _formState.value
-        val phone = state.phone
-        val smsCode = state.smsCode
+    fun clearNotice() { _notice.value = null }
+    fun clearError() { _formState.value = _formState.value.copy(errorMessage = null) }
+    fun switchLoginMethod(method: LoginMethod) { _formState.value = _formState.value.copy(loginMethod = method, errorMessage = null) }
+    fun updatePhone(phone: String) { _formState.value = _formState.value.copy(phone = phone, errorMessage = null) }
+    fun updateSmsCode(code: String) { _formState.value = _formState.value.copy(smsCode = code, errorMessage = null) }
+    fun updateAccount(account: String) { _formState.value = _formState.value.copy(account = account, errorMessage = null) }
+    fun updatePassword(password: String) { _formState.value = _formState.value.copy(password = password, errorMessage = null) }
 
-        // 验证
-        if (!isValidPhone(phone)) {
+    fun sendSmsCode() {
+        val state = _formState.value
+        if (state.isSendingSms || state.smsCountdown > 0) return
+        if (!isValidPhone(state.phone)) {
             _formState.value = state.copy(errorMessage = "请输入正确的手机号")
             return
         }
-        if (smsCode.length < 4) {
+        val token = TokenManager.getToken()
+        val version = TokenManager.sessionVersion.value
+        _formState.value = state.copy(isSendingSms = true, errorMessage = null)
+        smsJob = viewModelScope.launch {
+            try {
+                val response = authApi.sendSmsCode(SendSmsCodeRequest(state.phone))
+                if (!TokenManager.isCurrentSession(token, version)) return@launch
+                if (response.code == 0 || response.code == 200) {
+                    _formState.value = _formState.value.copy(smsCodeSent = true, isSendingSms = false, smsCountdown = 60)
+                    countdownJob?.cancel()
+                    countdownJob = viewModelScope.launch {
+                        while (_formState.value.smsCountdown > 0) {
+                            delay(1000)
+                            _formState.value = _formState.value.copy(smsCountdown = _formState.value.smsCountdown - 1)
+                        }
+                    }
+                } else _formState.value = _formState.value.copy(isSendingSms = false, errorMessage = response.message.orErrorMessage("发送验证码失败"))
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                if (TokenManager.isCurrentSession(token, version)) _formState.value = _formState.value.copy(isSendingSms = false, errorMessage = error.toUserMessage("发送验证码失败"))
+            }
+        }
+    }
+
+    fun loginBySms() {
+        val state = _formState.value
+        if (!isValidPhone(state.phone)) {
+            _formState.value = state.copy(errorMessage = "请输入正确的手机号")
+            return
+        }
+        if (state.smsCode.length < 4) {
             _formState.value = state.copy(errorMessage = "请输入验证码")
             return
         }
-
-        viewModelScope.launch {
-            _formState.value = state.copy(isLoggingIn = true, errorMessage = null)
-
-            try {
-                val response = authApi.loginBySms(
-                    SmsLoginRequest(phoneNumber = phone, smsCode = smsCode)
-                )
-
-                if (response.code == 0 || response.code == 200) {
-                    response.data?.let { loginResponse ->
-                        handleLoginSuccess(loginResponse)
-                    }
-                } else {
-                    _formState.value = state.copy(
-                        isLoggingIn = false,
-                        errorMessage = response.message.orErrorMessage("登录失败")
-                    )
-                }
-            } catch (e: Exception) {
-                _formState.value = state.copy(
-                    isLoggingIn = false,
-                    errorMessage = e.toUserMessage("登录失败")
-                )
-            }
-        }
+        login { authApi.loginBySms(SmsLoginRequest(state.phone, state.smsCode)) }
     }
 
-    /**
-     * 手机号/用户名 + 密码登录
-     */
     fun loginByPassword() {
         val state = _formState.value
-        val account = state.account
-        val password = state.password
-
-        // 验证
-        if (account.isBlank()) {
-            _formState.value = state.copy(errorMessage = "请输入手机号或用户名")
+        if (state.account.isBlank() || state.password.isBlank()) {
+            _formState.value = state.copy(errorMessage = if (state.account.isBlank()) "请输入手机号或用户名" else "请输入密码")
             return
         }
-        if (password.isBlank()) {
-            _formState.value = state.copy(errorMessage = "请输入密码")
-            return
-        }
+        login { authApi.loginByPassword(PasswordLoginRequest(state.account, state.password)) }
+    }
 
-        viewModelScope.launch {
-            _formState.value = state.copy(isLoggingIn = true, errorMessage = null)
-
+    private fun login(request: suspend () -> BaseResponse<LoginResponse>) {
+        if (_formState.value.isLoggingIn) return
+        val token = TokenManager.getToken()
+        val version = TokenManager.sessionVersion.value
+        _formState.value = _formState.value.copy(isLoggingIn = true, errorMessage = null)
+        _notice.value = null
+        loginJob = viewModelScope.launch {
             try {
-                val response = authApi.loginByPassword(
-                    PasswordLoginRequest(account = account, password = password)
-                )
-
-                if (response.code == 0 || response.code == 200) {
-                    response.data?.let { loginResponse ->
-                        handleLoginSuccess(loginResponse)
-                    }
-                } else {
-                    _formState.value = state.copy(
-                        isLoggingIn = false,
-                        errorMessage = response.message.orErrorMessage("登录失败")
-                    )
-                }
-            } catch (e: Exception) {
-                _formState.value = state.copy(
-                    isLoggingIn = false,
-                    errorMessage = e.toUserMessage("登录失败")
-                )
+                val response = request()
+                if (!TokenManager.isCurrentSession(token, version)) return@launch
+                if (response.code != 0 && response.code != 200) throw IOException(response.message.orErrorMessage("登录失败"))
+                val data = requireNotNull(response.data) { "登录失败，未返回登录信息" }
+                val nextToken = requireNotNull(data.token?.takeIf { it.isNotBlank() }) { "登录失败，未获取到登录凭证" }
+                val user = requireNotNull(data.userInfo) { "登录失败，未获取到用户信息" }
+                require((user.userId ?: 0) > 0) { "登录失败，未获取到用户标识" }
+                TokenManager.saveToken(nextToken)
+                TokenManager.setDebugSuperToken(false)
+                TokenManager.saveUserInfo(user)
+                synchronizeSession()
+                _authState.value = user.toAuthState()
+                _formState.value = LoginFormState()
+                refreshProfile()
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                if (TokenManager.isCurrentSession(token, version)) _formState.value = _formState.value.copy(isLoggingIn = false, errorMessage = error.toUserMessage("登录失败"))
             }
         }
     }
 
-    /**
-     * 退出登录
-     */
-    fun logout() {
-        TokenManager.clearAll()
-        _authState.value = AuthState.NotLoggedIn
-        _formState.value = LoginFormState()
-    }
-
-    /**
-     * 清除错误消息
-     */
-    fun clearError() {
-        _formState.value = _formState.value.copy(errorMessage = null)
-    }
-
-    /**
-     * 验证手机号格式
-     */
-    private fun isValidPhone(phone: String): Boolean {
-        return phone.matches(Regex("^1[3-9]\\d{9}$"))
-    }
+    private fun isValidPhone(phone: String) = phone.matches(Regex("^1[3-9]\\d{9}$"))
 }

@@ -1,0 +1,3539 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "个人中心与头像接口（Apifox 核查快照）",
+    "description": "2026-11-13 从本机已登录 Apifox 项目 cxsysys种植app（7787409，main）导出后筛选的8个操作。排除用户指定忽略的帮助与反馈接口。已移除 token 请求头的测试默认值/示例；其余接口合约保持导出原文。部分描述仍标为“设计文档，待后端实现”，此标签不是线上可用性结论。原始导出未选择环境，servers 为空。本地 BUSINESS_BASE_URL 为 https://dbcx.org.cn/planting/api/v1/。",
+    "version": "1.0.0"
+  },
+  "tags": [],
+  "paths": {
+    "/user": {
+      "get": {
+        "summary": "获取当前用户信息",
+        "deprecated": false,
+        "description": "【设计文档，待后端实现】\n沿用现有接口格式：字段采用 snake_case，响应采用 code、message（查询接口附 data）；成功 code=200，message=success。鉴权沿用项目全局请求头 token 及其现有测试默认值，接口不重复声明或覆盖 token。服务端从 JWT 识别当前用户及所属企业，并校验企业访问权限，无需另传企业标识请求头。\nHTTP 状态码与响应体 code 保持一致：成功 200，参数错误 400，未登录或令牌过期 401，无权访问 403，资源不存在 404，业务冲突 409，服务异常 500。失败返回 JSON code、message、data=null；文件获取成功直接返回文件字节。示例中的企业、用户和联系方式均为演示数据。\n对应“我的”页头部和“个人信息”页；无业务请求参数。姓名、手机、用户名、头像、性别、已脱敏身份证号、所属企业、部门、角色、用户状态及雇佣日期均由此接口返回；不要通过 query 传 token。仅可通过修改资料接口更新头像，其余字段只读。关于页的版本名、构建号、技术框架和版权信息来自本地，无需新增接口。\nGET /user 与修改头像成功后的完整用户信息保持一致；登录响应 user_info 仅返回用于“我的”页展示的精简字段，共有字段的名称、类型和空值约定一致。idcard_number_masked 表示已脱敏身份证号，只展示前3位和后2位，中间字符按原号码长度全部替换为星号；不返回原始身份证号。用户必须有有效部门，且部门所属企业必须与 token 企业一致，否则拒绝访问；其他未登记展示字段按各字段说明返回 null 或空字符串。\n\n### 错误提示与日志\nmessage 为可直接展示的非空中文错误提示，不返回SQL、异常堆栈、token或密码。HTTP状态码与响应体code一致。业务校验统一抛BizException，由全局异常处理器记录接口路径、状态码及与前端完全相同的message；4xx使用WARN，5xx使用ERROR，未预期异常堆栈仅留在后端日志。参数解析、上传及框架异常也采用相同机制。下表列出典型提示，同一状态码可对应多个具体原因，实际message以校验结果为准。\n\n| HTTP / code | 典型 message |\n| --- | --- |\n| 400 | 请求参数不正确 |\n| 401 | token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录 |\n| 403 | 无权访问当前企业，请重新登录 |\n| 404 | 用户不存在 |\n| 409 | 用户状态已变更，请重试 |\n| 500 | 服务器内部异常，请稍后重试 |",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "header",
+            "description": "用户令牌（超级管理员superplanting）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功，字段中文说明见响应结构",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "接口响应",
+                  "description": "接口响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "状态码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "返回信息",
+                      "description": "成功为 success；失败为可展示的中文错误信息"
+                    },
+                    "data": {
+                      "type": "object",
+                      "title": "当前用户信息",
+                      "description": "当前用户信息",
+                      "properties": {
+                        "user_id": {
+                          "type": "integer",
+                          "title": "用户ID",
+                          "description": "当前登录用户的唯一标识"
+                        },
+                        "user_name": {
+                          "type": "string",
+                          "title": "用户名",
+                          "description": "登录账号，只读，不允许通过个人资料接口修改"
+                        },
+                        "real_name": {
+                          "type": "string",
+                          "title": "真实姓名",
+                          "description": "未填写时返回 null，前端显示用户名作为备用名称",
+                          "nullable": true
+                        },
+                        "phone_number": {
+                          "type": "string",
+                          "title": "手机号",
+                          "description": "绑定的十一位手机号；当前页面仅展示，修改须单独验证，不由资料接口修改",
+                          "nullable": true
+                        },
+                        "idcard_number_masked": {
+                          "type": "string",
+                          "title": "身份证号（已脱敏）",
+                          "description": "已脱敏身份证号，仅展示前3位和后2位，中间字符按原号码长度全部替换为星号；未登记返回空字符串。禁止返回完整号码。",
+                          "pattern": "^$|^[0-9]{3}\\*+[0-9][0-9Xx]$"
+                        },
+                        "avatar_url": {
+                          "type": "string",
+                          "title": "头像图片地址",
+                          "description": "无头像返回 null，前端显示默认头像",
+                          "nullable": true
+                        },
+                        "gender": {
+                          "type": "string",
+                          "title": "性别（中文）",
+                          "description": "性别中文展示值，例如男、女；未登记时返回空字符串"
+                        },
+                        "enterprise_id": {
+                          "type": "integer",
+                          "title": "所属企业ID",
+                          "description": "当前登录企业标识，与登录返回 enterprise_id 保持一致"
+                        },
+                        "enterprise_name": {
+                          "type": "string",
+                          "title": "所属企业名称",
+                          "description": "所属企业名称",
+                          "nullable": true
+                        },
+                        "dept_id": {
+                          "type": "integer",
+                          "title": "部门ID",
+                          "description": "未分配部门时返回 null",
+                          "nullable": true
+                        },
+                        "dept_name": {
+                          "type": "string",
+                          "title": "部门中文名称",
+                          "description": "部门中文名称；未分配部门时与 dept_id 一同返回 null",
+                          "nullable": true
+                        },
+                        "super_admin": {
+                          "type": "boolean",
+                          "title": "是否为超级管理员",
+                          "description": "是否为超级管理员"
+                        },
+                        "roles": {
+                          "type": "array",
+                          "title": "当前企业角色列表",
+                          "description": "当前企业角色列表",
+                          "items": {
+                            "type": "object",
+                            "title": "角色信息",
+                            "description": "角色信息",
+                            "properties": {
+                              "role_id": {
+                                "type": "integer",
+                                "title": "角色ID",
+                                "description": "角色ID"
+                              },
+                              "role_name": {
+                                "type": "string",
+                                "title": "角色中文名称",
+                                "description": "角色中文名称"
+                              }
+                            },
+                            "required": [
+                              "role_id",
+                              "role_name"
+                            ]
+                          }
+                        },
+                        "status": {
+                          "type": "integer",
+                          "title": "用户状态代码",
+                          "description": "用户状态代码：0 停用，1 正常；状态仅供展示，鉴权仍由服务端校验",
+                          "enum": [
+                            0,
+                            1
+                          ]
+                        },
+                        "employment_date": {
+                          "type": "string",
+                          "title": "雇佣日期",
+                          "description": "雇佣日期，格式 YYYY-MM-DD；未登记时返回空字符串",
+                          "pattern": "^$|^\\d{4}-\\d{2}-\\d{2}$"
+                        }
+                      },
+                      "required": [
+                        "user_id",
+                        "user_name",
+                        "real_name",
+                        "phone_number",
+                        "avatar_url",
+                        "enterprise_id",
+                        "enterprise_name",
+                        "dept_id",
+                        "super_admin",
+                        "roles",
+                        "status",
+                        "dept_name",
+                        "gender",
+                        "idcard_number_masked",
+                        "employment_date"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 200,
+                      "message": "success",
+                      "data": {
+                        "user_id": 1001,
+                        "user_name": "zhangsan",
+                        "real_name": "张三",
+                        "phone_number": "13800000000",
+                        "idcard_number_masked": "110*************34",
+                        "avatar_url": "https://example.com/demo/avatar.png",
+                        "gender": "男",
+                        "enterprise_id": 1,
+                        "enterprise_name": "示例沉香种植企业",
+                        "dept_id": 10,
+                        "dept_name": "种植部",
+                        "super_admin": false,
+                        "roles": [
+                          {
+                            "role_id": 2,
+                            "role_name": "普通成员"
+                          }
+                        ],
+                        "status": 1,
+                        "employment_date": "2026-01-15"
+                      }
+                    }
+                  },
+                  "2": {
+                    "summary": "未登记可选资料示例",
+                    "value": {
+                      "code": 200,
+                      "message": "success",
+                      "data": {
+                        "user_id": 1001,
+                        "user_name": "zhangsan",
+                        "real_name": null,
+                        "phone_number": null,
+                        "idcard_number_masked": "",
+                        "avatar_url": null,
+                        "gender": "",
+                        "enterprise_id": 1,
+                        "enterprise_name": "示例沉香种植企业",
+                        "dept_id": null,
+                        "dept_name": null,
+                        "super_admin": false,
+                        "roles": [],
+                        "status": 1,
+                        "employment_date": ""
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "请求参数不正确",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 400
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：请求参数不正确",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 400,
+                  "message": "请求参数不正确",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "请先登录或重新登录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 401
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "4": {
+                    "summary": "401：token不能为空",
+                    "value": {
+                      "code": 401,
+                      "message": "token不能为空",
+                      "data": null
+                    }
+                  },
+                  "5": {
+                    "summary": "401：token已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token已过期，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "6": {
+                    "summary": "401：token无效，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "7": {
+                    "summary": "401：token无效或已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效或已过期，请重新登录",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "403": {
+            "description": "无权访问当前企业",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 403
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：无权访问当前企业，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 403,
+                  "message": "无权访问当前企业，请重新登录",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 404
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户不存在",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 404,
+                  "message": "用户不存在",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "409": {
+            "description": "业务状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 409
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户状态已变更，请重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 409,
+                  "message": "用户状态已变更，请重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "500": {
+            "description": "服务异常，请稍后重试",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 500
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：服务器内部异常，请稍后重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 500,
+                  "message": "服务器内部异常，请稍后重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      },
+      "put": {
+        "summary": "修改个人资料",
+        "deprecated": false,
+        "description": "【设计文档，待后端实现】\n沿用现有接口格式：字段采用 snake_case，响应采用 code、message（查询接口附 data）；成功 code=200，message=success。鉴权沿用项目全局请求头 token 及其现有测试默认值，接口不重复声明或覆盖 token。服务端从 JWT 识别当前用户及所属企业，并校验企业访问权限，无需另传企业标识请求头。\nHTTP 状态码与响应体 code 保持一致：成功 200，参数错误 400，未登录或令牌过期 401，无权访问 403，资源不存在 404，业务冲突 409，服务异常 500。失败返回 JSON code、message、data=null；文件获取成功直接返回文件字节。示例中的企业、用户和联系方式均为演示数据。\n对应个人资料编辑及头像入口。仅允许 avatar_url，必须提交该字段；avatar_url=null 清除头像。头像先复用 POST /upload（multipart/form-data，file 和 type=avatar）上传；上传成功即同步写入 sys_user.photo_url。PUT /user 仍允许使用本人上传的头像链接或 null 清除头像，服务端验证文件归属及图片类型；不另建重复上传接口。姓名、手机号、用户名、身份证号、性别、企业、部门、角色、用户状态及雇佣日期均不允许在此修改；越权字段应拒绝。成功返回最新完整资料，前端刷新本地用户缓存。\nGET /user 与修改头像成功后的完整用户信息保持一致；登录响应 user_info 仅返回用于“我的”页展示的精简字段，共有字段的名称、类型和空值约定一致。idcard_number_masked 表示已脱敏身份证号，只展示前3位和后2位，中间字符按原号码长度全部替换为星号；不返回原始身份证号。用户必须有有效部门，且部门所属企业必须与 token 企业一致，否则拒绝访问；其他未登记展示字段按各字段说明返回 null 或空字符串。\n\n### 错误提示与日志\nmessage 为可直接展示的非空中文错误提示，不返回SQL、异常堆栈、token或密码。HTTP状态码与响应体code一致。业务校验统一抛BizException，由全局异常处理器记录接口路径、状态码及与前端完全相同的message；4xx使用WARN，5xx使用ERROR，未预期异常堆栈仅留在后端日志。参数解析、上传及框架异常也采用相同机制。下表列出典型提示，同一状态码可对应多个具体原因，实际message以校验结果为准。\n\n| HTTP / code | 典型 message |\n| --- | --- |\n| 400 | 请提交头像信息；仅支持修改头像，请勿提交其他资料；头像地址格式不正确；请使用本人上传的头像图片 |\n| 401 | token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录 |\n| 403 | 无权访问当前企业，请重新登录；请使用本人上传的头像图片 |\n| 404 | 用户不存在 |\n| 409 | 用户状态已变更，请重试 |\n| 500 | 服务器内部异常，请稍后重试 |",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "header",
+            "description": "用户令牌（超级管理员superplanting）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "title": "个人资料修改参数",
+                "description": "个人资料修改参数",
+                "properties": {
+                  "avatar_url": {
+                    "type": "string",
+                    "title": "头像地址",
+                    "description": "POST /upload 返回的 data.file_url；传 null 清除头像",
+                    "nullable": true
+                  }
+                },
+                "minProperties": 1,
+                "additionalProperties": false,
+                "required": [
+                  "avatar_url"
+                ]
+              },
+              "examples": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功，字段中文说明见响应结构",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "接口响应",
+                  "description": "接口响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "状态码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "返回信息",
+                      "description": "成功为 success；失败为可展示的中文错误信息"
+                    },
+                    "data": {
+                      "type": "object",
+                      "title": "当前用户信息",
+                      "description": "当前用户信息",
+                      "properties": {
+                        "user_id": {
+                          "type": "integer",
+                          "title": "用户ID",
+                          "description": "当前登录用户的唯一标识"
+                        },
+                        "user_name": {
+                          "type": "string",
+                          "title": "用户名",
+                          "description": "登录账号，只读，不允许通过个人资料接口修改"
+                        },
+                        "real_name": {
+                          "type": "string",
+                          "title": "真实姓名",
+                          "description": "未填写时返回 null，前端显示用户名作为备用名称",
+                          "nullable": true
+                        },
+                        "phone_number": {
+                          "type": "string",
+                          "title": "手机号",
+                          "description": "绑定的十一位手机号；当前页面仅展示，修改须单独验证，不由资料接口修改",
+                          "nullable": true
+                        },
+                        "idcard_number_masked": {
+                          "type": "string",
+                          "title": "身份证号（已脱敏）",
+                          "description": "已脱敏身份证号，仅展示前3位和后2位，中间字符按原号码长度全部替换为星号；未登记返回空字符串。禁止返回完整号码。",
+                          "pattern": "^$|^[0-9]{3}\\*+[0-9][0-9Xx]$"
+                        },
+                        "avatar_url": {
+                          "type": "string",
+                          "title": "头像图片地址",
+                          "description": "无头像返回 null，前端显示默认头像",
+                          "nullable": true
+                        },
+                        "gender": {
+                          "type": "string",
+                          "title": "性别（中文）",
+                          "description": "性别中文展示值，例如男、女；未登记时返回空字符串"
+                        },
+                        "enterprise_id": {
+                          "type": "integer",
+                          "title": "所属企业ID",
+                          "description": "当前登录企业标识，与登录返回 enterprise_id 保持一致"
+                        },
+                        "enterprise_name": {
+                          "type": "string",
+                          "title": "所属企业名称",
+                          "description": "所属企业名称",
+                          "nullable": true
+                        },
+                        "dept_id": {
+                          "type": "integer",
+                          "title": "部门ID",
+                          "description": "未分配部门时返回 null",
+                          "nullable": true
+                        },
+                        "dept_name": {
+                          "type": "string",
+                          "title": "部门中文名称",
+                          "description": "部门中文名称；未分配部门时与 dept_id 一同返回 null",
+                          "nullable": true
+                        },
+                        "super_admin": {
+                          "type": "boolean",
+                          "title": "是否为超级管理员",
+                          "description": "是否为超级管理员"
+                        },
+                        "roles": {
+                          "type": "array",
+                          "title": "当前企业角色列表",
+                          "description": "当前企业角色列表",
+                          "items": {
+                            "type": "object",
+                            "title": "角色信息",
+                            "description": "角色信息",
+                            "properties": {
+                              "role_id": {
+                                "type": "integer",
+                                "title": "角色ID",
+                                "description": "角色ID"
+                              },
+                              "role_name": {
+                                "type": "string",
+                                "title": "角色中文名称",
+                                "description": "角色中文名称"
+                              }
+                            },
+                            "required": [
+                              "role_id",
+                              "role_name"
+                            ]
+                          }
+                        },
+                        "status": {
+                          "type": "integer",
+                          "title": "用户状态代码",
+                          "description": "用户状态代码：0 停用，1 正常；状态仅供展示，鉴权仍由服务端校验",
+                          "enum": [
+                            0,
+                            1
+                          ]
+                        },
+                        "employment_date": {
+                          "type": "string",
+                          "title": "雇佣日期",
+                          "description": "雇佣日期，格式 YYYY-MM-DD；未登记时返回空字符串",
+                          "pattern": "^$|^\\d{4}-\\d{2}-\\d{2}$"
+                        }
+                      },
+                      "required": [
+                        "user_id",
+                        "user_name",
+                        "real_name",
+                        "phone_number",
+                        "avatar_url",
+                        "enterprise_id",
+                        "enterprise_name",
+                        "dept_id",
+                        "super_admin",
+                        "roles",
+                        "status",
+                        "dept_name",
+                        "gender",
+                        "idcard_number_masked",
+                        "employment_date"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 200,
+                      "message": "success",
+                      "data": {
+                        "user_id": 1001,
+                        "user_name": "zhangsan",
+                        "real_name": "张三",
+                        "phone_number": "13800000000",
+                        "idcard_number_masked": "110*************34",
+                        "avatar_url": "https://example.com/demo/avatar.png",
+                        "gender": "男",
+                        "enterprise_id": 1,
+                        "enterprise_name": "示例沉香种植企业",
+                        "dept_id": 10,
+                        "dept_name": "种植部",
+                        "super_admin": false,
+                        "roles": [
+                          {
+                            "role_id": 2,
+                            "role_name": "普通成员"
+                          }
+                        ],
+                        "status": 1,
+                        "employment_date": "2026-01-15"
+                      }
+                    }
+                  },
+                  "2": {
+                    "summary": "未登记可选资料示例",
+                    "value": {
+                      "code": 200,
+                      "message": "success",
+                      "data": {
+                        "user_id": 1001,
+                        "user_name": "zhangsan",
+                        "real_name": null,
+                        "phone_number": null,
+                        "idcard_number_masked": "",
+                        "avatar_url": null,
+                        "gender": "",
+                        "enterprise_id": 1,
+                        "enterprise_name": "示例沉香种植企业",
+                        "dept_id": null,
+                        "dept_name": null,
+                        "super_admin": false,
+                        "roles": [],
+                        "status": 1,
+                        "employment_date": ""
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "请求参数不正确",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 400
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：请提交头像信息；仅支持修改头像，请勿提交其他资料；头像地址格式不正确；请使用本人上传的头像图片",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "3": {
+                    "summary": "400：请提交头像信息",
+                    "value": {
+                      "code": 400,
+                      "message": "请提交头像信息",
+                      "data": null
+                    }
+                  },
+                  "4": {
+                    "summary": "400：仅支持修改头像，请勿提交其他资料",
+                    "value": {
+                      "code": 400,
+                      "message": "仅支持修改头像，请勿提交其他资料",
+                      "data": null
+                    }
+                  },
+                  "5": {
+                    "summary": "400：头像地址格式不正确",
+                    "value": {
+                      "code": 400,
+                      "message": "头像地址格式不正确",
+                      "data": null
+                    }
+                  },
+                  "6": {
+                    "summary": "400：请使用本人上传的头像图片",
+                    "value": {
+                      "code": 400,
+                      "message": "请使用本人上传的头像图片",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "请先登录或重新登录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 401
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "7": {
+                    "summary": "401：token不能为空",
+                    "value": {
+                      "code": 401,
+                      "message": "token不能为空",
+                      "data": null
+                    }
+                  },
+                  "8": {
+                    "summary": "401：token已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token已过期，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "9": {
+                    "summary": "401：token无效，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "10": {
+                    "summary": "401：token无效或已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效或已过期，请重新登录",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "403": {
+            "description": "无权访问当前企业",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 403
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：无权访问当前企业，请重新登录；请使用本人上传的头像图片",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "11": {
+                    "summary": "403：无权访问当前企业，请重新登录",
+                    "value": {
+                      "code": 403,
+                      "message": "无权访问当前企业，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "12": {
+                    "summary": "403：请使用本人上传的头像图片",
+                    "value": {
+                      "code": 403,
+                      "message": "请使用本人上传的头像图片",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 404
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户不存在",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 404,
+                  "message": "用户不存在",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "409": {
+            "description": "业务状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 409
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户状态已变更，请重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 409,
+                  "message": "用户状态已变更，请重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "500": {
+            "description": "服务异常，请稍后重试",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 500
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：服务器内部异常，请稍后重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 500,
+                  "message": "服务器内部异常，请稍后重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/user/password": {
+      "put": {
+        "summary": "修改当前用户密码",
+        "deprecated": false,
+        "description": "【设计文档，待后端实现】\n沿用现有接口格式：字段采用 snake_case，响应采用 code、message（查询接口附 data）；成功 code=200，message=success。鉴权沿用项目全局请求头 token 及其现有测试默认值，接口不重复声明或覆盖 token。服务端从 JWT 识别当前用户及所属企业，并校验企业访问权限，无需另传企业标识请求头。\nHTTP 状态码与响应体 code 保持一致：成功 200，参数错误 400，未登录或令牌过期 401，无权访问 403，资源不存在 404，业务冲突 409，服务异常 500。失败返回 JSON code、message、data=null；文件获取成功直接返回文件字节。示例中的企业、用户和联系方式均为演示数据。\n对应修改密码页的旧密码、新密码、确认新密码。新密码至少6位，UTF-8 编码不超过72字节（BCrypt限制），建议包含字母和数字；两次新密码必须一致，且不得与旧密码相同。旧密码错误返回400；未设置密码的账号拒绝此流程，不跳过旧密码校验。普通用户修改成功后使该用户已有登录令牌失效，前端清除登录态并重新登录；超级管理员保留预置 token，不使其失效。密码仅通过 HTTPS 传输，不记录明文密码，不在响应回传。\n\n### 错误提示与日志\nmessage 为可直接展示的非空中文错误提示，不返回SQL、异常堆栈、token或密码。HTTP状态码与响应体code一致。业务校验统一抛BizException，由全局异常处理器记录接口路径、状态码及与前端完全相同的message；4xx使用WARN，5xx使用ERROR，未预期异常堆栈仅留在后端日志。参数解析、上传及框架异常也采用相同机制。下表列出典型提示，同一状态码可对应多个具体原因，实际message以校验结果为准。\n\n| HTTP / code | 典型 message |\n| --- | --- |\n| 400 | 旧密码不能为空；新密码至少6位；新密码不能超过72字节；两次新密码不一致；账号未设置密码，无法使用此方式修改；旧密码不正确；新密码不能与旧密码相同 |\n| 401 | token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录 |\n| 403 | 无权访问当前企业，请重新登录 |\n| 404 | 用户不存在 |\n| 409 | 用户状态已变更，请重试 |\n| 500 | 服务器内部异常，请稍后重试 |",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "header",
+            "description": "用户令牌（超级管理员superplanting）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "title": "修改密码参数",
+                "description": "修改密码参数",
+                "properties": {
+                  "old_password": {
+                    "type": "string",
+                    "title": "旧密码",
+                    "description": "用于校验当前用户原密码",
+                    "minLength": 1
+                  },
+                  "new_password": {
+                    "type": "string",
+                    "title": "新密码",
+                    "description": "长度至少6位，建议包含字母和数字",
+                    "minLength": 6
+                  },
+                  "confirm_password": {
+                    "type": "string",
+                    "title": "确认新密码",
+                    "description": "必须与 new_password 完全一致",
+                    "minLength": 6
+                  }
+                },
+                "required": [
+                  "old_password",
+                  "new_password",
+                  "confirm_password"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功，字段中文说明见响应结构",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "接口响应",
+                  "description": "接口响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "状态码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "返回信息",
+                      "description": "成功为 success；失败为可展示的中文错误信息"
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "请求参数不正确",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 400
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：旧密码不能为空；新密码至少6位；新密码不能超过72字节；两次新密码不一致；账号未设置密码，无法使用此方式修改；旧密码不正确；新密码不能与旧密码相同",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "2": {
+                    "summary": "400：旧密码不能为空",
+                    "value": {
+                      "code": 400,
+                      "message": "旧密码不能为空",
+                      "data": null
+                    }
+                  },
+                  "3": {
+                    "summary": "400：新密码至少6位",
+                    "value": {
+                      "code": 400,
+                      "message": "新密码至少6位",
+                      "data": null
+                    }
+                  },
+                  "4": {
+                    "summary": "400：新密码不能超过72字节",
+                    "value": {
+                      "code": 400,
+                      "message": "新密码不能超过72字节",
+                      "data": null
+                    }
+                  },
+                  "5": {
+                    "summary": "400：两次新密码不一致",
+                    "value": {
+                      "code": 400,
+                      "message": "两次新密码不一致",
+                      "data": null
+                    }
+                  },
+                  "6": {
+                    "summary": "400：账号未设置密码，无法使用此方式修改",
+                    "value": {
+                      "code": 400,
+                      "message": "账号未设置密码，无法使用此方式修改",
+                      "data": null
+                    }
+                  },
+                  "7": {
+                    "summary": "400：旧密码不正确",
+                    "value": {
+                      "code": 400,
+                      "message": "旧密码不正确",
+                      "data": null
+                    }
+                  },
+                  "8": {
+                    "summary": "400：新密码不能与旧密码相同",
+                    "value": {
+                      "code": 400,
+                      "message": "新密码不能与旧密码相同",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "请先登录或重新登录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 401
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "9": {
+                    "summary": "401：token不能为空",
+                    "value": {
+                      "code": 401,
+                      "message": "token不能为空",
+                      "data": null
+                    }
+                  },
+                  "10": {
+                    "summary": "401：token已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token已过期，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "11": {
+                    "summary": "401：token无效，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "12": {
+                    "summary": "401：token无效或已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效或已过期，请重新登录",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "403": {
+            "description": "无权访问当前企业",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 403
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：无权访问当前企业，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 403,
+                  "message": "无权访问当前企业，请重新登录",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 404
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户不存在",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 404,
+                  "message": "用户不存在",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "409": {
+            "description": "业务状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 409
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户状态已变更，请重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 409,
+                  "message": "用户状态已变更，请重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "500": {
+            "description": "服务异常，请稍后重试",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 500
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：服务器内部异常，请稍后重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 500,
+                  "message": "服务器内部异常，请稍后重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/user/enterprise": {
+      "get": {
+        "summary": "获取当前企业信息",
+        "deprecated": false,
+        "description": "【设计文档，待后端实现】\n沿用现有接口格式：字段采用 snake_case，响应采用 code、message（查询接口附 data）；成功 code=200，message=success。鉴权沿用项目全局请求头 token 及其现有测试默认值，接口不重复声明或覆盖 token。服务端从 JWT 识别当前用户及所属企业，并校验企业访问权限，无需另传企业标识请求头。\nHTTP 状态码与响应体 code 保持一致：成功 200，参数错误 400，未登录或令牌过期 401，无权访问 403，资源不存在 404，业务冲突 409，服务异常 500。失败返回 JSON code、message、data=null；文件获取成功直接返回文件字节。示例中的企业、用户和联系方式均为演示数据。\n对应企业管理页的企业名称、企业ID、联系电话和企业地址。企业范围从当前 token 的 JWT 信息中解析；当前页面仅展示，不设计企业编辑或成员增删权限。\n\n### 错误提示与日志\nmessage 为可直接展示的非空中文错误提示，不返回SQL、异常堆栈、token或密码。HTTP状态码与响应体code一致。业务校验统一抛BizException，由全局异常处理器记录接口路径、状态码及与前端完全相同的message；4xx使用WARN，5xx使用ERROR，未预期异常堆栈仅留在后端日志。参数解析、上传及框架异常也采用相同机制。下表列出典型提示，同一状态码可对应多个具体原因，实际message以校验结果为准。\n\n| HTTP / code | 典型 message |\n| --- | --- |\n| 400 | 请求参数不正确 |\n| 401 | token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录 |\n| 403 | 无权访问当前企业，请重新登录 |\n| 404 | 企业不存在；用户不存在 |\n| 409 | 用户状态已变更，请重试 |\n| 500 | 服务器内部异常，请稍后重试 |",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "header",
+            "description": "用户令牌（超级管理员superplanting）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功，字段中文说明见响应结构",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "接口响应",
+                  "description": "接口响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "状态码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "返回信息",
+                      "description": "成功为 success；失败为可展示的中文错误信息"
+                    },
+                    "data": {
+                      "type": "object",
+                      "title": "当前企业信息",
+                      "description": "当前企业信息",
+                      "properties": {
+                        "enterprise_id": {
+                          "type": "integer",
+                          "title": "企业ID",
+                          "description": "企业ID"
+                        },
+                        "enterprise_name": {
+                          "type": "string",
+                          "title": "企业名称",
+                          "description": "企业名称"
+                        },
+                        "enterprise_type": {
+                          "type": "string",
+                          "title": "企业类型",
+                          "description": "企业类型，取值与业务企业类型定义一致"
+                        },
+                        "phone_number": {
+                          "type": "string",
+                          "title": "联系电话",
+                          "description": "企业联系电话；未设置返回 null",
+                          "nullable": true
+                        },
+                        "address": {
+                          "type": "string",
+                          "title": "企业地址",
+                          "description": "企业完整地址【返回省市区镇+address】；未设置返回 null",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "enterprise_id",
+                        "enterprise_name",
+                        "phone_number",
+                        "address",
+                        "enterprise_type"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": {
+                    "enterprise_id": 1,
+                    "enterprise_name": "示例沉香种植企业",
+                    "phone_number": null,
+                    "address": null,
+                    "enterprise_type": "种植企业"
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "请求参数不正确",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 400
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：请求参数不正确",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 400,
+                  "message": "请求参数不正确",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "请先登录或重新登录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 401
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "3": {
+                    "summary": "401：token不能为空",
+                    "value": {
+                      "code": 401,
+                      "message": "token不能为空",
+                      "data": null
+                    }
+                  },
+                  "4": {
+                    "summary": "401：token已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token已过期，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "5": {
+                    "summary": "401：token无效，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "6": {
+                    "summary": "401：token无效或已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效或已过期，请重新登录",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "403": {
+            "description": "无权访问当前企业",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 403
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：无权访问当前企业，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 403,
+                  "message": "无权访问当前企业，请重新登录",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 404
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：企业不存在；用户不存在",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "8": {
+                    "summary": "404：企业不存在",
+                    "value": {
+                      "code": 404,
+                      "message": "企业不存在",
+                      "data": null
+                    }
+                  },
+                  "9": {
+                    "summary": "404：用户不存在",
+                    "value": {
+                      "code": 404,
+                      "message": "用户不存在",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "409": {
+            "description": "业务状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 409
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户状态已变更，请重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 409,
+                  "message": "用户状态已变更，请重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "500": {
+            "description": "服务异常，请稍后重试",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 500
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：服务器内部异常，请稍后重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 500,
+                  "message": "服务器内部异常，请稍后重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/user/enterprise/memberList": {
+      "get": {
+        "summary": "获取当前企业成员列表",
+        "deprecated": false,
+        "description": "【设计文档，待后端实现】\n沿用现有接口格式：字段采用 snake_case，响应采用 code、message（查询接口附 data）；成功 code=200，message=success。鉴权沿用项目全局请求头 token 及其现有测试默认值，接口不重复声明或覆盖 token。服务端从 JWT 识别当前用户及所属企业，并校验企业访问权限，无需另传企业标识请求头。\nHTTP 状态码与响应体 code 保持一致：成功 200，参数错误 400，未登录或令牌过期 401，无权访问 403，资源不存在 404，业务冲突 409，服务异常 500。失败返回 JSON code、message、data=null；文件获取成功直接返回文件字节。示例中的企业、用户和联系方式均为演示数据。\n对应企业管理页的成员管理占位列表。沿用已有列表接口的 lastid、limit、data 数组及顶层 hasMore 格式；按 user_id 升序，后续请求 lastid 为上次返回最后一个 user_id。默认10条，最多100条；无成员返回 data=[]、hasMore=false。所有本企业正常且未离职的登录用户均可调用，不额外校验角色或细分权限。列表不包含停用或已离职人员：sys_user.status=1，且 leave_date 为空或晚于当前日期（离职当天起排除）。\n成员列表仅返回简要资料，共有字段的名称、类型、空值及角色结构与 GET /user 一致；角色仅含 role_id、role_name，不再返回 role_code。不扩充手机号、身份证号或雇佣资料。\n\n### 错误提示与日志\nmessage 为可直接展示的非空中文错误提示，不返回SQL、异常堆栈、token或密码。HTTP状态码与响应体code一致。业务校验统一抛BizException，由全局异常处理器记录接口路径、状态码及与前端完全相同的message；4xx使用WARN，5xx使用ERROR，未预期异常堆栈仅留在后端日志。参数解析、上传及框架异常也采用相同机制。下表列出典型提示，同一状态码可对应多个具体原因，实际message以校验结果为准。\n\n| HTTP / code | 典型 message |\n| --- | --- |\n| 400 | 分页游标必须大于0；每页数量须为1至100；请求参数不正确 |\n| 401 | token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录 |\n| 403 | 无权访问当前企业，请重新登录 |\n| 404 | 用户不存在 |\n| 409 | 用户状态已变更，请重试 |\n| 500 | 服务器内部异常，请稍后重试 |",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "lastid",
+            "in": "query",
+            "description": "首次不传；加载下一页时传上次列表最后一条成员的 user_id",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "本次加载条数；默认10，范围1至100",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          },
+          {
+            "name": "token",
+            "in": "header",
+            "description": "用户令牌（超级管理员superplanting）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功，字段中文说明见响应结构",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "接口响应",
+                  "description": "接口响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "状态码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "返回信息",
+                      "description": "成功为 success；失败为可展示的中文错误信息"
+                    },
+                    "data": {
+                      "type": "array",
+                      "title": "企业成员列表",
+                      "description": "企业成员列表",
+                      "items": {
+                        "type": "object",
+                        "title": "企业成员",
+                        "description": "企业成员",
+                        "properties": {
+                          "user_id": {
+                            "type": "integer",
+                            "title": "用户ID",
+                            "description": "当前登录用户的唯一标识"
+                          },
+                          "user_name": {
+                            "type": "string",
+                            "title": "用户名",
+                            "description": "登录账号，只读，不允许通过个人资料接口修改"
+                          },
+                          "real_name": {
+                            "type": "string",
+                            "title": "真实姓名",
+                            "description": "未填写时返回 null，前端显示用户名作为备用名称",
+                            "nullable": true
+                          },
+                          "avatar_url": {
+                            "type": "string",
+                            "title": "头像图片地址",
+                            "description": "无头像返回 null，前端显示默认头像",
+                            "nullable": true
+                          },
+                          "dept_id": {
+                            "type": "integer",
+                            "title": "部门ID",
+                            "description": "未分配部门时返回 null",
+                            "nullable": true
+                          },
+                          "roles": {
+                            "type": "array",
+                            "title": "当前企业角色列表",
+                            "description": "当前企业角色列表",
+                            "items": {
+                              "type": "object",
+                              "title": "角色信息",
+                              "description": "角色信息",
+                              "properties": {
+                                "role_id": {
+                                  "type": "integer",
+                                  "title": "角色ID",
+                                  "description": "角色ID"
+                                },
+                                "role_name": {
+                                  "type": "string",
+                                  "title": "角色中文名称",
+                                  "description": "角色中文名称"
+                                }
+                              },
+                              "required": [
+                                "role_id",
+                                "role_name"
+                              ]
+                            }
+                          },
+                          "super_admin": {
+                            "type": "boolean",
+                            "title": "是否为超级管理员",
+                            "description": "是否为超级管理员"
+                          }
+                        },
+                        "required": [
+                          "user_id",
+                          "user_name",
+                          "real_name",
+                          "avatar_url",
+                          "dept_id",
+                          "roles",
+                          "super_admin"
+                        ]
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean",
+                      "title": "是否可继续下滑",
+                      "description": "true 表示还有下一页；false 表示已加载完毕"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data",
+                    "hasMore"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "成功示例",
+                    "value": {
+                      "code": 200,
+                      "message": "success",
+                      "data": [
+                        {
+                          "user_id": 1001,
+                          "user_name": "zhangsan",
+                          "real_name": "张三",
+                          "avatar_url": "https://example.com/demo/avatar.png",
+                          "dept_id": 10,
+                          "roles": [
+                            {
+                              "role_id": 2,
+                              "role_name": "普通成员"
+                            }
+                          ],
+                          "super_admin": false
+                        }
+                      ],
+                      "hasMore": false
+                    }
+                  },
+                  "2": {
+                    "summary": "空成员列表示例",
+                    "value": {
+                      "code": 200,
+                      "message": "success",
+                      "data": [],
+                      "hasMore": false
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "请求参数不正确",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 400
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：分页游标必须大于0；每页数量须为1至100；请求参数不正确",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "3": {
+                    "summary": "400：分页游标必须大于0",
+                    "value": {
+                      "code": 400,
+                      "message": "分页游标必须大于0",
+                      "data": null
+                    }
+                  },
+                  "4": {
+                    "summary": "400：每页数量须为1至100",
+                    "value": {
+                      "code": 400,
+                      "message": "每页数量须为1至100",
+                      "data": null
+                    }
+                  },
+                  "5": {
+                    "summary": "400：请求参数不正确",
+                    "value": {
+                      "code": 400,
+                      "message": "请求参数不正确",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "请先登录或重新登录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 401
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "6": {
+                    "summary": "401：token不能为空",
+                    "value": {
+                      "code": 401,
+                      "message": "token不能为空",
+                      "data": null
+                    }
+                  },
+                  "7": {
+                    "summary": "401：token已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token已过期，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "8": {
+                    "summary": "401：token无效，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "9": {
+                    "summary": "401：token无效或已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效或已过期，请重新登录",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "403": {
+            "description": "无权访问当前企业",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 403
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：无权访问当前企业，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 403,
+                  "message": "无权访问当前企业，请重新登录",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 404
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户不存在",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 404,
+                  "message": "用户不存在",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "409": {
+            "description": "业务状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 409
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户状态已变更，请重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 409,
+                  "message": "用户状态已变更，请重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "500": {
+            "description": "服务异常，请稍后重试",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 500
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：服务器内部异常，请稍后重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "title": "失败数据",
+                      "description": "失败时固定为 null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 500,
+                  "message": "服务器内部异常，请稍后重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/user/logout": {
+      "post": {
+        "summary": "退出当前登录",
+        "deprecated": false,
+        "description": "【注意，超级管理员账号会返回200，但token不会失效，仍可继续使用】\n沿用现有接口格式：字段采用 snake_case，响应采用 code、message（查询接口附 data）；成功 code=200，message=success。鉴权沿用项目全局请求头 token 及其现有测试默认值，接口不重复声明或覆盖 token。服务端从 JWT 识别当前用户及所属企业，并校验企业访问权限，无需另传企业标识请求头。\nHTTP 状态码与响应体 code 保持一致：成功 200，参数错误 400，未登录或令牌过期 401，无权访问 403，资源不存在 404，业务冲突 409，服务异常 500。失败返回 JSON code、message、data=null；文件获取成功直接返回文件字节。示例中的企业、用户和联系方式均为演示数据。\n对应“我的”页确认退出按钮。无业务请求参数；服务端注销当前 token（不影响其他设备的独立登录令牌）；前端清除 TokenManager 缓存并回到登录页。重复注销已失效令牌可返回401，前端同样清理本地登录态。\n超级管理员退出仅由前端清理登录态，后端不修改其预置 token 或有效期。普通用户仅按当前 token 的 MD5 摘要注销对应会话；当前登录实现按用户更新会话，本接口不新增多设备登录机制。\n\n### 错误提示与日志\nmessage 为可直接展示的非空中文错误提示，不返回SQL、异常堆栈、token或密码。HTTP状态码与响应体code一致。业务校验统一抛BizException，由全局异常处理器记录接口路径、状态码及与前端完全相同的message；4xx使用WARN，5xx使用ERROR，未预期异常堆栈仅留在后端日志。参数解析、上传及框架异常也采用相同机制。下表列出典型提示，同一状态码可对应多个具体原因，实际message以校验结果为准。\n\n| HTTP / code | 典型 message |\n| --- | --- |\n| 400 | 请求参数不正确 |\n| 401 | 登录状态已失效；token无效或已过期，请重新登录；token不能为空 |\n| 403 | 无权访问当前企业，请重新登录 |\n| 404 | 用户不存在 |\n| 409 | 用户状态已变更，请重试 |\n| 500 | 服务器内部异常，请稍后重试 |",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "header",
+            "description": "用户令牌（超级管理员superplanting）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功，字段中文说明见响应结构",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "接口响应",
+                  "description": "接口响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "状态码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "返回信息",
+                      "description": "成功为 success；失败为可展示的中文错误信息"
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 200,
+                  "message": "success",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "请求参数不正确",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 400
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：请求参数不正确",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 400,
+                  "message": "请求参数不正确",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "请先登录或重新登录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 401
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：登录状态已失效；token无效或已过期，请重新登录；token不能为空",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "3": {
+                    "summary": "401：登录状态已失效",
+                    "value": {
+                      "code": 401,
+                      "message": "登录状态已失效",
+                      "data": null
+                    }
+                  },
+                  "4": {
+                    "summary": "401：token无效或已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效或已过期，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "5": {
+                    "summary": "401：token不能为空",
+                    "value": {
+                      "code": 401,
+                      "message": "token不能为空",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "403": {
+            "description": "无权访问当前企业",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 403
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：无权访问当前企业，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 403,
+                  "message": "无权访问当前企业，请重新登录",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "资源不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 404
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户不存在",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 404,
+                  "message": "用户不存在",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "409": {
+            "description": "业务状态冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 409
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：用户状态已变更，请重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 409,
+                  "message": "用户状态已变更，请重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "500": {
+            "description": "服务异常，请稍后重试",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "失败响应",
+                  "description": "失败响应",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "错误码",
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx",
+                      "const": 500
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "错误说明",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：服务器内部异常，请稍后重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null",
+                      "description": "无数据时为null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 500,
+                  "message": "服务器内部异常，请稍后重试",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/upload": {
+      "post": {
+        "summary": "通用文件上传接口",
+        "deprecated": false,
+        "description": "用于图片、文档等文件上传。必须通过token请求头鉴权，当前用户ID从token解析；不使用user-enterprise-id。\n普通上传仅提交multipart表单file，保留年月日目录；可选type=avatar验证图片内容，存储于上传根目录avatar/，不使用年月日子目录，文件名前缀为当前用户ID。头像用户须正常、未离职，且部门企业与token企业一致。\n所有文件上传成功都写入sys_oss（url为完整文件链接、creator为token用户ID、create_date为当前时间）；头像同时更新sys_user.photo_url，数据库操作在同一事务中，失败回滚并清理本次文件。读取只允许sys_oss.creator等于当前用户ID，不能只凭头像文件名前缀判断权限。\n链接由file.base-url（完整外部API基础地址）+files/+文件相对路径构成。例如 https://dbcx.org.cn/planting/api/v1/files/avatar/12_0123456789abcdef0123456789abcdef.png。客户端直接使用响应data.file_url，携带token请求通用文件获取接口。链接最大200字符，受sys_oss.url及sys_user.photo_url字段长度约束。历史文件不自动迁移或补填创建者。\nHTTP 状态码与响应体 code 保持一致：成功 200，参数错误 400，未登录或令牌过期 401，无权访问 403，资源不存在 404，业务冲突 409，服务异常 500。失败返回 JSON code、message、data=null；文件获取成功直接返回文件字节。\n\n### 错误提示与日志\nmessage 为可直接展示的非空中文错误提示，不返回SQL、异常堆栈、token或密码。HTTP状态码与响应体code一致。业务校验统一抛BizException，由全局异常处理器记录接口路径、状态码及与前端完全相同的message；4xx使用WARN，5xx使用ERROR，未预期异常堆栈仅留在后端日志。参数解析、上传及框架异常也采用相同机制。下表列出典型提示，同一状态码可对应多个具体原因，实际message以校验结果为准。\n\n| HTTP / code | 典型 message |\n| --- | --- |\n| 400 | 上传文件为空；上传类型不正确；头像必须为图片文件；头像图片格式不支持；头像图片无效；无法读取头像图片；文件路径非法；文件链接过长，请检查文件名及存储域名配置 |\n| 401 | token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录 |\n| 403 | 无权访问当前企业，请重新登录 |\n| 413 | 上传文件过大 |\n| 415 | 请求内容类型不支持 |\n| 500 | 保存文件信息失败；文件写入异常；服务器内部异常，请稍后重试 |",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "header",
+            "description": "用户令牌（超级管理员superplanting）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string",
+                    "description": "上传的文件（二进制流）",
+                    "example": ""
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "avatar"
+                    ],
+                    "description": "不传为普通上传；传 avatar 上传头像并同步更新当前用户头像"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              },
+              "example": {
+                "file": ""
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "title": "状态码",
+                      "const": 200,
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx"
+                    },
+                    "message": {
+                      "type": "string",
+                      "title": "返回信息",
+                      "description": ""
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "file_id": {
+                          "type": "string",
+                          "title": "文件id"
+                        },
+                        "file_name": {
+                          "type": "string",
+                          "title": "文件名"
+                        },
+                        "file_url": {
+                          "type": "string",
+                          "title": "文件链接",
+                          "description": "完整的鉴权文件读取链接，必须携带创建者token访问；公网格式为 域名/planting/api/v1/files/相对路径"
+                        },
+                        "file_size": {
+                          "type": "integer",
+                          "title": "文件大小"
+                        }
+                      },
+                      "required": [
+                        "file_id",
+                        "file_name",
+                        "file_url",
+                        "file_size"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 400,
+                      "description": "与 HTTP 状态码一致"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：上传文件为空；上传类型不正确；头像必须为图片文件；头像图片格式不支持；头像图片无效；无法读取头像图片；文件路径非法；文件链接过长，请检查文件名及存储域名配置"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "1": {
+                    "summary": "400：上传文件为空",
+                    "value": {
+                      "code": 400,
+                      "message": "上传文件为空",
+                      "data": null
+                    }
+                  },
+                  "2": {
+                    "summary": "400：上传类型不正确",
+                    "value": {
+                      "code": 400,
+                      "message": "上传类型不正确",
+                      "data": null
+                    }
+                  },
+                  "3": {
+                    "summary": "400：头像必须为图片文件",
+                    "value": {
+                      "code": 400,
+                      "message": "头像必须为图片文件",
+                      "data": null
+                    }
+                  },
+                  "4": {
+                    "summary": "400：头像图片格式不支持",
+                    "value": {
+                      "code": 400,
+                      "message": "头像图片格式不支持",
+                      "data": null
+                    }
+                  },
+                  "5": {
+                    "summary": "400：头像图片无效",
+                    "value": {
+                      "code": 400,
+                      "message": "头像图片无效",
+                      "data": null
+                    }
+                  },
+                  "6": {
+                    "summary": "400：无法读取头像图片",
+                    "value": {
+                      "code": 400,
+                      "message": "无法读取头像图片",
+                      "data": null
+                    }
+                  },
+                  "7": {
+                    "summary": "400：文件路径非法",
+                    "value": {
+                      "code": 400,
+                      "message": "文件路径非法",
+                      "data": null
+                    }
+                  },
+                  "8": {
+                    "summary": "400：文件链接过长，请检查文件名及存储域名配置",
+                    "value": {
+                      "code": 400,
+                      "message": "文件链接过长，请检查文件名及存储域名配置",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 401,
+                      "description": "与 HTTP 状态码一致"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "9": {
+                    "summary": "401：token不能为空",
+                    "value": {
+                      "code": 401,
+                      "message": "token不能为空",
+                      "data": null
+                    }
+                  },
+                  "10": {
+                    "summary": "401：token已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token已过期，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "11": {
+                    "summary": "401：token无效，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "12": {
+                    "summary": "401：token无效或已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效或已过期，请重新登录",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 403,
+                      "description": "与 HTTP 状态码一致"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：无权访问当前企业，请重新登录"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 403,
+                  "message": "无权访问当前企业，请重新登录",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 413,
+                      "description": "与 HTTP 状态码一致"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：上传文件过大"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 413,
+                  "message": "上传文件过大",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "415": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 415,
+                      "description": "与 HTTP 状态码一致"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：请求内容类型不支持"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 415,
+                  "message": "请求内容类型不支持",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 500,
+                      "description": "与 HTTP 状态码一致"
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：保存文件信息失败；文件写入异常；服务器内部异常，请稍后重试"
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "16": {
+                    "summary": "500：保存文件信息失败",
+                    "value": {
+                      "code": 500,
+                      "message": "保存文件信息失败",
+                      "data": null
+                    }
+                  },
+                  "17": {
+                    "summary": "500：文件写入异常",
+                    "value": {
+                      "code": 500,
+                      "message": "文件写入异常",
+                      "data": null
+                    }
+                  },
+                  "18": {
+                    "summary": "500：服务器内部异常，请稍后重试",
+                    "value": {
+                      "code": 500,
+                      "message": "服务器内部异常，请稍后重试",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/files/{relative_path}": {
+      "get": {
+        "summary": "通用文件获取接口",
+        "deprecated": false,
+        "description": "直接获取当前用户本人上传的文件（含头像），成功返回原始文件内容，不用 ApiResponse 包装。\n公网路径为 https://dbcx.org.cn/planting/api/v1/files/ 后接文件相对路径；后端路径为 /api/v1/files/ 后接相对路径。relative_path 支持多级目录，如 avatar/12_0123456789abcdef0123456789abcdef.png 或 2026/10/31/0123456789abcdef0123456789abcdef.pdf，不能把目录斜杠整体编码为 %2F。\n沿用全局 token 请求头；不接受 query token，不使用 user-enterprise-id。服务端校验 token 后，按完整文件URL和 sys_oss.creator=当前token用户ID 校验归属，再安全读取本地存储文件。同企业其他用户及超级管理员也不得读取他人文件。sys_oss 无记录、creator 为空或不匹配均返回业务code=403；本人有登记但物理文件不存在返回code=404；非法路径返回code=400，缺失/失效token返回code=401。业务失败返回对应 HTTP 状态码和 JSON code/message/data=null，HTTP 状态码必须与 code 一致。禁止绝对路径、目录穿越及符号链接越出上传根目录。\nPOST /upload 成功时写入 sys_oss.url、creator、create_date；type=avatar 还同步写入 sys_user.photo_url，二者同一数据库事务，失败回滚并清理本次文件。历史文件不自动迁移或补填创建者，未登记文件不能读取。\n配置：file.base-url=https://dbcx.org.cn/planting/api/v1/；file.upload-dir 为本机实际目录。本地直连后端时 file.base-url=http://localhost:8089/api/v1/。完整链接由 file.base-url+files/+相对路径组成，sys_oss 保存完整链接；更换域名或前缀前需单独安排既有链接数据迁移，本接口不自动改写历史数据。\n浏览器直接打开URL或普通 img src 不会附带业务token，前端应带 token 请求文件，再用 Blob URL 展示头像，不要把token放进URL。响应禁止共享缓存；NGINX 必须转发到后端鉴权，不能配置上传目录匿名alias或缓存。旧 /files/** 匿名静态映射已移除。\nHTTP 状态码与响应体 code 保持一致：成功 200，参数错误 400，未登录或令牌过期 401，无权访问 403，资源不存在 404，业务冲突 409，服务异常 500。失败返回 JSON code、message、data=null；文件获取成功直接返回文件字节。\n\n### 错误提示与日志\nmessage 为可直接展示的非空中文错误提示，不返回SQL、异常堆栈、token或密码。HTTP状态码与响应体code一致。业务校验统一抛BizException，由全局异常处理器记录接口路径、状态码及与前端完全相同的message；4xx使用WARN，5xx使用ERROR，未预期异常堆栈仅留在后端日志。参数解析、上传及框架异常也采用相同机制。下表列出典型提示，同一状态码可对应多个具体原因，实际message以校验结果为准。\n\n| HTTP / code | 典型 message |\n| --- | --- |\n| 400 | 文件路径非法 |\n| 401 | token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录 |\n| 403 | 无权读取该文件 |\n| 404 | 文件不存在；文件不存在或不可读取 |\n| 500 | 文件读取失败；服务器内部异常，请稍后重试 |",
+        "tags": [],
+        "parameters": [
+          {
+            "name": "relative_path",
+            "in": "path",
+            "description": "上传目录中的多级相对路径，可直接使用上传返回的data.file_url最方便；保留路径中的目录斜杠。",
+            "required": true,
+            "example": "avatar/12_0123456789abcdef0123456789abcdef.png",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "token",
+            "in": "header",
+            "description": "用户令牌（超级管理员superplanting）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "响应体直接为文件字节，不含code/message/data；支持多级相对路径。",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "Content-Type": {
+                "required": true,
+                "description": "按文件类型返回，未知类型 application/octet-stream",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "required": true,
+                "description": "文件字节数",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "required": true,
+                "description": "常见光栅图片 inline；其他类型 attachment，文件名为存储文件名",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "required": true,
+                "description": "private, no-store",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Vary": {
+                "required": true,
+                "description": "token",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "required": true,
+                "description": "nosniff",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "HTTP 状态码与返回体 code 一致，中文 message 可用于提示用户。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 400,
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：文件路径非法",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 400,
+                  "message": "文件路径非法",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "HTTP 状态码与返回体 code 一致，中文 message 可用于提示用户。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 401,
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：token不能为空；token已过期，请重新登录；token无效，请重新登录；token无效或已过期，请重新登录",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "2": {
+                    "summary": "401：token不能为空",
+                    "value": {
+                      "code": 401,
+                      "message": "token不能为空",
+                      "data": null
+                    }
+                  },
+                  "3": {
+                    "summary": "401：token已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token已过期，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "4": {
+                    "summary": "401：token无效，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效，请重新登录",
+                      "data": null
+                    }
+                  },
+                  "5": {
+                    "summary": "401：token无效或已过期，请重新登录",
+                    "value": {
+                      "code": 401,
+                      "message": "token无效或已过期，请重新登录",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "403": {
+            "description": "HTTP 状态码与返回体 code 一致，中文 message 可用于提示用户。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 403,
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：无权读取该文件",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "example": {
+                  "code": 403,
+                  "message": "无权读取该文件",
+                  "data": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "404": {
+            "description": "HTTP 状态码与返回体 code 一致，中文 message 可用于提示用户。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 404,
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：文件不存在；文件不存在或不可读取",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "7": {
+                    "summary": "404：文件不存在",
+                    "value": {
+                      "code": 404,
+                      "message": "文件不存在",
+                      "data": null
+                    }
+                  },
+                  "8": {
+                    "summary": "404：文件不存在或不可读取",
+                    "value": {
+                      "code": 404,
+                      "message": "文件不存在或不可读取",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "500": {
+            "description": "HTTP 状态码与返回体 code 一致，中文 message 可用于提示用户。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "const": 500,
+                      "description": "与 HTTP 状态码一致，成功为200，错误为对应的4xx或5xx"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "直接展示给前端的中文错误提示；同一条message由全局异常处理器记录到后端日志。示例：文件读取失败；服务器内部异常，请稍后重试",
+                      "minLength": 1
+                    },
+                    "data": {
+                      "type": "null"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "data"
+                  ]
+                },
+                "examples": {
+                  "9": {
+                    "summary": "500：文件读取失败",
+                    "value": {
+                      "code": 500,
+                      "message": "文件读取失败",
+                      "data": null
+                    }
+                  },
+                  "10": {
+                    "summary": "500：服务器内部异常，请稍后重试",
+                    "value": {
+                      "code": 500,
+                      "message": "服务器内部异常，请稍后重试",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {},
+    "responses": {},
+    "securitySchemes": {}
+  },
+  "servers": [],
+  "security": []
+}

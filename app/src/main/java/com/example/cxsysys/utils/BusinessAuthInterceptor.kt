@@ -9,7 +9,10 @@ import retrofit2.Invocation
 @Retention(AnnotationRetention.RUNTIME)
 annotation class AllowAnonymous
 
+class BusinessSession(val token: String, val version: Long)
+
 class BusinessAuthInterceptor(
+    private val versionProvider: () -> Long = { TokenManager.sessionVersion.value },
     private val tokenProvider: () -> String?
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -20,6 +23,12 @@ class BusinessAuthInterceptor(
 
         if (token.isNullOrBlank() && !allowsAnonymous) {
             throw IOException("请先登录")
+        }
+
+        request.tag(BusinessSession::class.java)?.let { session ->
+            if (session.token != token || session.version != versionProvider()) {
+                throw IOException("登录状态已变更，请重试")
+            }
         }
 
         val authenticatedRequest = request.newBuilder().apply {
